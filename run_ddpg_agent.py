@@ -118,7 +118,6 @@ def main():
   args = parse_args()
 
   model_type = DDPG
-  env_id = args.env_id + "-v0"
 
   # Set learning rates and optimizer configuration
   actor_lr  = ConstSchedule(args.actor_lr)
@@ -136,10 +135,10 @@ def main():
   action_noise = OrnsteinUhlenbeckNoise(mu=0, sigma=args.sigma, theta=args.theta)
 
   # Get the model directory path and save the arguments for the run
-  model_dir = make_model_dir(model_type, env_id)
+  model_dir = make_model_dir(model_type, args.env_id)
 
   # Create the environment
-  env = make_env(env_id, args.seed, model_dir, args.save_video)
+  env = make_env(args.env_id, args.seed, model_dir, args.save_video)
   env = wrap_deepmind_ddpg(env)
 
   # Set additional arguments
