@@ -1,0 +1,4 @@
+.gym
+trained_models/
+/**/__pycache__
+Notes.md
