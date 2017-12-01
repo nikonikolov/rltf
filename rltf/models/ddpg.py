@@ -50,10 +50,10 @@ class DDPG(Model):
   def build(self):
     
     # Placehodler for the running mode - training or inference
-    # self._training      = tf.placeholder_with_default(True, (), name="training") 
-    self._training      = tf.Variable(True, trainable=False) 
-    self._set_train     = tf.assign(self._training, True,   name="set_train")
-    self._set_eval      = tf.assign(self._training, False,  name="set_eval")
+    self._training      = tf.placeholder_with_default(True, (), name="training") 
+    # self._training      = tf.Variable(True, trainable=False) 
+    # self._set_train     = tf.assign(self._training, True,   name="set_train")
+    # self._set_eval      = tf.assign(self._training, False,  name="set_eval")
 
     self._act_t_ph      = tf.placeholder(tf.float32, [None, self.n_actions],  name="act_t_ph") 
     self._rew_t_ph      = tf.placeholder(tf.float32, [None],                  name="rew_t_ph")
@@ -85,10 +85,10 @@ class DDPG(Model):
 
     action          = actor(obs_t_float,               scope="agent_net/actor")
     actor_critic_q  = critic(obs_t_float, action,      scope="agent_net/critic")
-    act_ph_q        = critic(obs_t_float, act_t_norm,  scope="agent_net/critic")
+    act_samples_q   = critic(obs_t_float, act_t_norm,  scope="agent_net/critic")
 
-    target_action   = actor(obs_t_float,               scope="target_net/actor")
-    target_q        = critic(obs_t_float, action,      scope="target_net/critic")
+    target_act      = actor(obs_tp1_float,              scope="target_net/actor")
+    target_q        = critic(obs_tp1_float, target_act, scope="target_net/critic")
 
     agent_vars      = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
     target_vars     = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
@@ -103,7 +103,7 @@ class DDPG(Model):
 
     # Set the pseudo loss for the policy. Take the negative of the loss for Gradient Ascent
     actor_loss      = -tf.reduce_mean(actor_critic_q)
-    critic_loss     = critic_tf_loss(target_q, act_ph_q)
+    critic_loss     = critic_tf_loss(target_q, act_samples_q)
     critic_loss    += tf.losses.get_regularization_loss(scope="agent_net/critic")
 
     # Build the optimizers
@@ -115,6 +115,7 @@ class DDPG(Model):
 
     a_grad_tensors  = [grad for grad, var in actor_grads]
     c_grad_tensors  = [grad for grad, var in critic_grads]
+    
     # Get the ops for updating the running mean and variance in batch norm layers
     batch_norm_ops  = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     control_deps    = a_grad_tensors + c_grad_tensors + batch_norm_ops
@@ -131,7 +132,7 @@ class DDPG(Model):
 
     # Remember the action tensor. name is needed when restoring the graph
     # self._action    = tf.identity(action, name="action")
-    self._action    = tf.multiply(action + self.act_mean, self.act_std, name="action")
+    self._action    = tf.add(action * self.act_std, self.act_mean, name="action")
 
     # Summaries
     tf.summary.scalar("actor_loss",   actor_loss)
@@ -143,25 +144,22 @@ class DDPG(Model):
   def restore(self, ckpt_path):
     graph, saver    = super()._restore(ckpt_path)
     # Retrieve the Ops for changing between train and eval modes
-    self._set_train = graph.get_operation_by_name("set_train")
-    self._set_eval  = graph.get_operation_by_name("set_eval")
+    # self._set_train = graph.get_operation_by_name("set_train")
+    # self._set_eval  = graph.get_operation_by_name("set_eval")
+    self._training  = graph.get_tensor_by_name("training:0")
+
     return saver
 
 
   def initialize(self, sess):
     """Initialize the model. See Model.initialize()
     """
-    # agent_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
-    # target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
-
-    # target_init = tf_utils.assign_values(self.agent_vars, self.target_vars)
-    # sess.run(target_init)
-
     sess.run(self.init_op)
 
 
   def control_action(self, sess, state):
-    return sess.run(self._action, feed_dict={self._obs_t_ph: state[None,:]})[0]
+    feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
+    return sess.run(self._action, feed_dict=feed_dict)[0]
     # norm_action = sess.run(self.action, feed_dict={self._obs_t_ph: state[None,:]})
     # action      = (norm_action + self.act_mean) * self.act_std
     # return action
