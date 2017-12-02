@@ -1,10 +1,4 @@
 import argparse
-import datetime
-import glob
-import gym
-import numpy as np
-import os
-import random
 import tensorflow as tf
 
 from rltf.agents        import AgentDDPG
@@ -15,36 +9,7 @@ from rltf.optimizers    import OptimizerConf
 from rltf.optimizers    import AdamGradClipOptimizer
 from rltf.schedules     import ConstSchedule
 
-
-def set_global_seeds(i):
-  tf.set_random_seed(i) 
-  np.random.seed(i)
-  random.seed(i)
-
-
-def make_env(env_id, seed, model_dir, no_video, video_freq=None):
-
-  # Set all seeds
-  set_global_seeds(seed)
-
-  env_file = model_dir + "Env.pkl"
-  if os.path.isfile(env_file):
-    return pickle_restore(env_file)
-
-  gym_dir = model_dir + "gym_video"
-  if no_video:
-    video_callable = lambda e_id: False
-  else:
-    if video_freq is None:
-      video_callable = None
-    else:
-      video_callable = lambda e_id: e_id % video_freq == 0
-
-  env = gym.make(env_id)
-  env.seed(seed)
-  env = gym.wrappers.Monitor(env, gym_dir, force=True, video_callable=video_callable)
-
-  return env
+from rltf import run_utils as rltfru
 
 
 def parse_args():
@@ -78,45 +43,8 @@ def parse_args():
   
   if args.grad_clip > 0 and args.huber_loss:
     raise ValueError("Cannot use huber loss and gradient clipping simultaneously")
-  # assert not (args.huber_loss and args.grad_clip > 0)
 
   return args
-
-
-
-def make_model_dir(model_type, env_id):
-  model_name  = model_type.__name__.lower()
-  project_dir = os.path.dirname(os.path.abspath(__file__))
-  model_dir   = os.path.join(project_dir, "trained_models")
-  model_dir   = os.path.join(model_dir,   model_name)
-  model_dir   = os.path.join(model_dir,   env_id)
-
-  # Get the number of existing models
-  pattern     = model_dir + "_m*/"
-  models      = glob.glob(pattern)
-  
-  # Get the number of the new model dir
-  model_dir  += "_m" + str(len(models)+1)
-  model_dir   = os.path.join(model_dir, "")
-
-  # Create the directory for the model
-  os.makedirs(model_dir)
-  
-  return model_dir
-
-
-def log_params(model_dir, params):
-  params = sorted(params, key=lambda tup: tup[0])
-
-  str_sizes = [len(s) for s, _ in params]
-  pad       = max(str_sizes) + 2
-  params    = [(s.ljust(pad), v) for s, v in params]
-
-  with open(os.path.join(model_dir, "params.txt"), 'w') as f:
-    date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    f.write(date + "\n\n")
-    for k, v in params:
-      f.write(k + ": " + str(v) + "\n")
 
 
 def main():
@@ -126,7 +54,7 @@ def main():
   model_type = DDPG
 
   # Get the model directory path and save the arguments for the run
-  model_dir = make_model_dir(model_type, args.env_id)
+  model_dir = rltfru.make_model_dir(model_type, args.env_id)
 
   # Set learning rates and optimizer configuration
   actor_lr  = ConstSchedule(args.actor_lr)
@@ -145,7 +73,7 @@ def main():
 
 
   # Create the environment
-  env = make_env(args.env_id, args.seed, model_dir, args.no_video, args.video_freq)
+  env = rltfru.make_env(args.env_id, args.seed, model_dir, args.no_video, args.video_freq)
   env = wrap_deepmind_ddpg(env)
 
   # Set additional arguments
@@ -181,7 +109,7 @@ def main():
   log_info += agent_config.items()
   log_info += model_kwargs.items()
 
-  log_params(model_dir, log_info)
+  rltfru.log_params(model_dir, log_info)
 
   # Create the agent
   ddpg_agent = AgentDDPG(
