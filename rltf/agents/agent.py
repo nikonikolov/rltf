@@ -58,8 +58,9 @@ class Agent:
 
     self.summary      = None
 
-    self.mean_ep_rew       = -float('nan')
-    self.best_mean_ep_rew  = -float('inf')
+    self.mean_ep_rew      = -float('nan')
+    self.best_ep_rew      = -float('inf')
+    self.best_mean_ep_rew = -float('inf')
 
 
   def build(self):
@@ -155,11 +156,23 @@ class Agent:
 
 
   def _build_log_list(self, log_info):
+
+    def mean_step_time():
+      if hasattr(self, "last_log_time"):
+        self.last_log_time = time.time()
+        return float("nan")
+      time_now  = time.time()
+      mean_time = (time_now - self.last_log_time) / self.log_freq
+      self.last_log_time  = time_now
+      return mean_time
+
     default_info = [
       ("timestep",              "%d", lambda t: t),
       ("episodes",              "%d", lambda t: self.episodes),
       ("mean reward (100 eps)", "%f", lambda t: self.mean_ep_rew),
       ("best mean reward",      "%f", lambda t: self.best_mean_ep_rew),
+      ("best episode reward",   "%f", lambda t: self.best_ep_rew),
+      ("mean step time",        "%f", lambda t: mean_step_time()),
     ]
 
     log_info = default_info + log_info
@@ -182,6 +195,7 @@ class Agent:
     episode_rewards = self.env_monitor.get_episode_rewards()
     if len(episode_rewards) > 0:
       self.mean_ep_rew      = np.mean(episode_rewards[-100:])
+      self.best_ep_rew      = episode_rewards.max()
       self.best_mean_ep_rew = max(self.best_mean_ep_rew, self.mean_ep_rew)
     self.episodes = len(episode_rewards)
 

@@ -31,12 +31,6 @@ class OptimizerConf:
     """
     return self.lr_schedule.value(t)
 
-  # def get_lr_schedule(self):
-  #   return lr_schedule
-
-  # def set_lr_ph(self, lr_ph):
-  #   self.lr_ph = lr_ph
-
 
   def __repr__(self):
     string = self.opt_type.__name__ + '(learn_rate={}'.format(self.lr_schedule)
@@ -44,6 +38,3 @@ class OptimizerConf:
       string += ", {}={}".format(a, v)
     string += ")"
     return string
-    
-    # return self.opt_type.__class__.__name__ + '(learn_rate={}, kwargs={})'.format(
-    #   self.lr_schedule, self.kwargs)

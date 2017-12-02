@@ -63,13 +63,7 @@ def make_model_dir(model_type, env_id):
   """
 
   model_name  = model_type.__name__.lower()
-  # project_dir = os.path.dirname(os.path.abspath(__file__))
-  # project_dir = os.path.dirname(__file__)
-  # project_dir = os.path.join(project_dir, "..")
-  # project_dir = os.path.abspath(project_dir)
-  # model_dir   = os.path.join(project_dir, "trained_models")
   model_dir   = os.path.join(config.MODELS_DIR,   model_name)
-  # model_dir   = os.path.join(model_dir,   model_name)
   model_dir   = os.path.join(model_dir,   env_id)
 
   # Get the number of existing models

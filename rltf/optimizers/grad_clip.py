@@ -16,23 +16,8 @@ class AdamGradClipOptimizer(tf.train.AdamOptimizer):
     self.clip_val = clip_val
 
 
-  # def compute_gradients(self, loss, var_list=None, 
-  #                       gate_gradients=tf.train.Optimizer.GATE_OP,
-  #                       aggregation_method=None, 
-  #                       colocate_gradients_with_ops=False, grad_loss=None):
-
-  #   gradients = super().compute_gradients(
-  #                 loss=loss,
-  #                 var_list=var_list,
-  #                 gate_gradients=gate_gradients,
-  #                 aggregation_method=aggregation_method,
-  #                 colocate_gradients_with_ops=colocate_gradients_with_ops, 
-  #                 grad_loss=grad_loss
-  #               )
   def compute_gradients(self, *args, **kwargs):
-
     gradients = super().compute_gradients(*args, **kwargs)
-
     return self._clip_gradients(gradients)
 
 
