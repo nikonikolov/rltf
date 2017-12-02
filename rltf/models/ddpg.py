@@ -80,6 +80,11 @@ class DDPG(Model):
       obs_t_float       = tf.layers.flatten(self._obs_t_ph)
       obs_tp1_float     = tf.layers.flatten(self._obs_tp1_ph)
 
+      obs_t_float       = tf.layers.batch_normalization(obs_t_float, axis=-1,
+                                                        training=self._training, trainable=False)
+      obs_tp1_float     = tf.layers.batch_normalization(obs_tp1_float, axis=-1,
+                                                        training=self._training, trainable=False)
+
       actor   = self._actor_net
       critic  = self._critic_net
 
@@ -134,11 +139,12 @@ class DDPG(Model):
     # self._action    = tf.identity(action, name="action")
     self._action    = tf.add(action * self.act_std, self.act_mean, name="action")
 
+    # Initialization Op
+    self.init_op    = tf_utils.assign_values(agent_vars, target_vars, name="init_op")
+
     # Summaries
     tf.summary.scalar("actor_loss",   actor_loss)
     tf.summary.scalar("critic_loss",  critic_loss)
-
-    self.init_op  = tf_utils.assign_values(agent_vars, target_vars, name="init_op")
 
 
   def restore(self, ckpt_path):
@@ -147,6 +153,7 @@ class DDPG(Model):
     # self._set_train = graph.get_operation_by_name("set_train")
     # self._set_eval  = graph.get_operation_by_name("set_eval")
     self._training  = graph.get_tensor_by_name("training:0")
+    self.init_op    = graph.get_operation_by_name("init_op")
 
     return saver
 
@@ -160,6 +167,7 @@ class DDPG(Model):
   def control_action(self, sess, state):
     feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
     return sess.run(self._action, feed_dict=feed_dict)[0]
+
     # norm_action = sess.run(self.action, feed_dict={self._obs_t_ph: state[None,:]})
     # action      = (norm_action + self.act_mean) * self.act_std
     # return action

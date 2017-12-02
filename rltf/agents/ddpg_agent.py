@@ -114,10 +114,16 @@ class AgentDDPG(OffPolicyAgent):
     # log_info = []
     # log_info.append(("actor learn rate",  "%f", lambda t: self.actor_opt_conf.lr_value(t)))
     # log_info.append(("critic learn rate", "%f", lambda t: self.critic_opt_conf.lr_value(t)))
+    self.noise = 0
+    def print_noise():
+      ret = self.noise / float(self.log_freq)
+      self.noise = 0
+      return ret
 
     log_info = [
       ( "actor learn rate",  "%f", lambda t: self.actor_opt_conf.lr_value(t)  ),
       ( "critic learn rate", "%f", lambda t: self.critic_opt_conf.lr_value(t) ),
+      ( "average noise",     "%f", lambda t: print_noise() ),
     ]    
 
     super()._build_log_list(log_info)

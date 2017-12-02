@@ -22,7 +22,7 @@ def set_global_seeds(i):
   random.seed(i)
 
 
-def make_env(env_id, seed, model_dir, save_video, video_freq=10000):
+def make_env(env_id, seed, model_dir, no_video, video_freq=None):
 
   # Set all seeds
   set_global_seeds(seed)
@@ -32,10 +32,13 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=10000):
     return pickle_restore(env_file)
 
   gym_dir = model_dir + "gym_video"
-  if save_video:
-    video_callable = lambda e_id: e_id % video_freq == 0
-  else:
+  if no_video:
     video_callable = lambda e_id: False
+  else:
+    if video_freq is None:
+      video_callable = None
+    else:
+      video_callable = lambda e_id: e_id % video_freq == 0
 
   env = gym.make(env_id)
   env.seed(seed)
@@ -47,7 +50,7 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=10000):
 def parse_args():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   # parser.add_argument('--model',        help='network model', choices=["DQN", "C51", "QRDQN", "IQRDQN"], required=True)
-  parser.add_argument('--env-id',       default='Pendulum', type=str,   help='environment ID')
+  parser.add_argument('--env-id',       required=True,  type=str,   help='full environment name')
   
   parser.add_argument('--actor-lr',     default=1e-4,   type=float, help='actor learn rate',)
   parser.add_argument('--critic-lr',    default=1e-3,   type=float, help='critic learn rate')
@@ -63,9 +66,11 @@ def parse_args():
                       help='value to clip gradinets to. If 0, no clipping')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
+  parser.add_argument('--video_freq',   default=500,    type=int,
+                      help='frequency in number of episodes at whcih to record videos')
   parser.add_argument('--huber-loss',   help='use huber_loss',    action="store_true")
   parser.add_argument('--save',         help='save model',        action="store_true")
-  parser.add_argument('--save-video',   help='save gym videos',   action="store_true")
+  parser.add_argument('--no-video',     help='save gym videos',   action="store_true")
 
   
   args = parser.parse_args()
@@ -138,7 +143,7 @@ def main():
   model_dir = make_model_dir(model_type, args.env_id)
 
   # Create the environment
-  env = make_env(args.env_id, args.seed, model_dir, args.save_video)
+  env = make_env(args.env_id, args.seed, model_dir, args.no_video, args.video_freq)
   env = wrap_deepmind_ddpg(env)
 
   # Set additional arguments
@@ -148,8 +153,8 @@ def main():
   agent_config = dict(
     env=env,
     train_freq=1,
-    start_train=50000,
-    max_steps=int(2e8),
+    start_train=1000,
+    max_steps=int(2.5e6),
     batch_size=batch_size,
     model_dir=model_dir,
     save=args.save,

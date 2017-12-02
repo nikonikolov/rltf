@@ -55,8 +55,8 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
   def __init__(self, mu, sigma, theta=0.15, dt=1e-2):
     """
     Args:
-      mu: np.array or int. Noise mean
-      sigma: np.array or int. Wiener noise scale constant. Should have the same shape as mu
+      mu: np.array or scalar. Noise mean
+      sigma: np.array or scalar. Wiener noise scale constant. Should have the same shape as mu
       theta: float. Mean attraction constant
       dt: float. Time constant. Can be interpreted as the time difference 
         between two environent actions
@@ -66,11 +66,11 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     try:
       self.shape = mu.shape
     except AttributeError:
-      mu = float(mu)
+      mu = np.float32(mu)
       try:
         self.shape = sigma.shape
       except AttributeError:
-        sigma = float(sigma)
+        sigma = np.float32(sigma)
         self.shape = None
 
     self.mu     = mu
@@ -87,7 +87,7 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     return self.x
 
   def reset(self):
-    self.x = np.zeros_like(self.mu)
+    self.x = np.zeros_like(self.mu, dtype=np.float32)
 
   def __repr__(self):
     return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={}, theta={})'.format(

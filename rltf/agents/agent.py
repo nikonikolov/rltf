@@ -84,6 +84,9 @@ class Agent:
     all summary operators must have been added.
     """
 
+    # Build the model network
+    self.model.build()
+
     # Create timestep variable and logs placeholders
     with tf.device('/cpu:0'):
       self.mean_ep_rew_ph      = tf.placeholder(tf.float32, shape=(), name="mean_ep_rew_ph")
@@ -101,9 +104,6 @@ class Agent:
     # Set control variables
     self.start_step     = 1
     self.learn_started  = False
-
-    # Build the model network
-    self.model.build()
 
     # Create a session and initialize the model
     self.sess = tf.Session()

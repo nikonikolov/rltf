@@ -30,7 +30,7 @@ def assign_values(source_vars, dest_vars, weight=1.0, name=None):
   if weight == 1.0:
     update_ops    = [d_var.assign(s_var) for s_var, d_var in networks_vars] 
   else:
-    update_ops    = [d_var.assign(weight*s_var + (1-weight)*d_var) for s_var, d_var in networks_vars] 
+    update_ops    = [d_var.assign(weight*s_var + (1.-weight)*d_var) for s_var, d_var in networks_vars]
 
   return tf.group(*update_ops, name=name)
 
