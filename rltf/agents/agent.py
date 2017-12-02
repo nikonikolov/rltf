@@ -6,6 +6,7 @@ import sys
 
 import rltf.env_wrappers.utils as env_utils
 
+
 class Agent:
   """The base class for a Reinforcement Learning agent"""
 
@@ -154,11 +155,12 @@ class Agent:
 
 
   def _build_log_list(self, log_info):
-    default_info = []
-    default_info.append(("timestep",              "%d", lambda t: t))
-    default_info.append(("episodes",              "%d", lambda t: self.episodes))
-    default_info.append(("mean reward (100 eps)", "%f", lambda t: self.mean_ep_rew))
-    default_info.append(("best mean reward",      "%f", lambda t: self.best_mean_ep_rew))
+    default_info = [
+      ("timestep",              "%d", lambda t: t),
+      ("episodes",              "%d", lambda t: self.episodes),
+      ("mean reward (100 eps)", "%f", lambda t: self.mean_ep_rew),
+      ("best mean reward",      "%f", lambda t: self.best_mean_ep_rew),
+    ]
 
     log_info = default_info + log_info
 
@@ -166,6 +168,7 @@ class Agent:
     pad = max(str_sizes) + 2
 
     self.log_list  = [(s.ljust(pad) + ptype, v) for s, ptype, v in log_info]
+    self.log_list  = [("=" * pad, "%s", lambda t: "")] + self.log_list
 
 
   def _log_progress(self, t):
@@ -185,6 +188,7 @@ class Agent:
     if t % self.log_freq == 0 and self.learn_started:
       for s, lambda_v in self.log_list:
         print(s % lambda_v(t))
+      print("\n")
       sys.stdout.flush()
 
       if self.summary:

@@ -2,8 +2,8 @@ import argparse
 import datetime
 import glob
 import gym
-import os
 import numpy as np
+import os
 import random
 import tensorflow as tf
 
@@ -49,9 +49,10 @@ def make_env(env_id, seed, model_dir, no_video, video_freq=None):
 
 def parse_args():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  # parser.add_argument('--model',        help='network model', choices=["DQN", "C51", "QRDQN", "IQRDQN"], required=True)
   parser.add_argument('--env-id',       required=True,  type=str,   help='full environment name')
-  
+  # parser.add_argument('--model',        required=True,  type=str,   help='network model',
+  #                     default="DDPG",   choices=["DDPG", "QRDDPG"])
+
   parser.add_argument('--actor-lr',     default=1e-4,   type=float, help='actor learn rate',)
   parser.add_argument('--critic-lr',    default=1e-3,   type=float, help='critic learn rate')
   parser.add_argument('--tau',          default=0.001,  type=float, help='target soft update weight')
@@ -66,7 +67,7 @@ def parse_args():
                       help='value to clip gradinets to. If 0, no clipping')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
-  parser.add_argument('--video_freq',   default=500,    type=int,
+  parser.add_argument('--video-freq',   default=500,    type=int,
                       help='frequency in number of episodes at whcih to record videos')
   parser.add_argument('--huber-loss',   help='use huber_loss',    action="store_true")
   parser.add_argument('--save',         help='save model',        action="store_true")
@@ -124,6 +125,9 @@ def main():
 
   model_type = DDPG
 
+  # Get the model directory path and save the arguments for the run
+  model_dir = make_model_dir(model_type, args.env_id)
+
   # Set learning rates and optimizer configuration
   actor_lr  = ConstSchedule(args.actor_lr)
   critic_lr = ConstSchedule(args.critic_lr)
@@ -139,8 +143,6 @@ def main():
   # Create the exploration noise
   action_noise = OrnsteinUhlenbeckNoise(mu=0, sigma=args.sigma, theta=args.theta)
 
-  # Get the model directory path and save the arguments for the run
-  model_dir = make_model_dir(model_type, args.env_id)
 
   # Create the environment
   env = make_env(args.env_id, args.seed, model_dir, args.no_video, args.video_freq)
@@ -152,7 +154,7 @@ def main():
   # Set the Agent class keyword arguments
   agent_config = dict(
     env=env,
-    train_freq=1,
+    train_freq=args.train_freq,
     start_train=1000,
     max_steps=int(2.5e6),
     batch_size=batch_size,
@@ -170,14 +172,13 @@ def main():
 
   # Log the parameters for model
   log_info = [
-    ("train_freq",      args.train_freq),
-    ("batch_size",      batch_size),
     ("actor_opt_conf",  actor_opt_conf),
     ("critic_opt_conf", critic_opt_conf),
     ("action_noise",    action_noise),
     ("seed",            args.seed),
     ("extra_info",      args.extra_info),
   ]
+  log_info += agent_config.items()
   log_info += model_kwargs.items()
 
   log_params(model_dir, log_info)

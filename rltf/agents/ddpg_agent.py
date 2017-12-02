@@ -5,18 +5,18 @@ import tensorflow as tf
 from rltf.agents.agent  import OffPolicyAgent
 from rltf.memory        import ReplayBuffer
 
+
 class AgentDDPG(OffPolicyAgent):
 
-
-  def __init__( self,
-                agent_config,
-                model_type,
-                model_kwargs,
-                actor_opt_conf,
-                critic_opt_conf,
-                action_noise,
-                memory_size=int(1e6),
-                obs_hist_len=1,
+  def __init__(self,
+               agent_config,
+               model_type,
+               model_kwargs,
+               actor_opt_conf,
+               critic_opt_conf,
+               action_noise,
+               memory_size=int(1e6),
+               obs_hist_len=1,
               ):
     """
     Args:
@@ -32,7 +32,6 @@ class AgentDDPG(OffPolicyAgent):
       obs_hist_len: int. How many environment observations comprise a single state.
     """
   
-
     super().__init__(**agent_config)
 
     assert type(self.env.observation_space) == gym.spaces.Box
@@ -64,17 +63,13 @@ class AgentDDPG(OffPolicyAgent):
     model_kwargs["act_max"]         = self.act_max
     model_kwargs["actor_opt_conf"]  = actor_opt_conf
     model_kwargs["critic_opt_conf"] = critic_opt_conf
-    # model_kwargs["tau"]             = tau
-    # model_kwargs["gamma"]           = gamma
-    # model_kwargs["huber_loss"]      = huber_loss
-
+ 
     # model_kwargs = dict(obs_shape=obs_shape,
     #                     n_actions=n_actions,
     #                     act_min=self.act_min,
     #                     act_max=self.act_max,
     #                     actor_opt_conf=actor_opt_conf,
     #                     critic_opt_conf=critic_opt_conf,
-    #                     img_obs=img_obs,
     #                     tau=tau,
     #                     gamma=gamma,
     #                     huber_loss=huber_loss
@@ -82,10 +77,6 @@ class AgentDDPG(OffPolicyAgent):
 
     self.model      = model_type(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_hist_len)
-
-    # self.model      = model_type(obs_shape, n_actions, self.act_min, self.act_max, 
-    #                              actor_opt_conf, critic_opt_conf, tau, img_obs, **model_kwargs)
-    # self.replay_buf = buf_type(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_hist_len)
     
     # Configure what information to log
     self._build_log_list()
@@ -109,23 +100,10 @@ class AgentDDPG(OffPolicyAgent):
 
 
   def _build_log_list(self):
-    # log_info.append(("actor learn rate",  "%f", lambda t: self.actor_lr.value(t)))
-    # log_info.append(("critic learn rate", "%f", lambda t: self.critic_lr.value(t)))
-    # log_info = []
-    # log_info.append(("actor learn rate",  "%f", lambda t: self.actor_opt_conf.lr_value(t)))
-    # log_info.append(("critic learn rate", "%f", lambda t: self.critic_opt_conf.lr_value(t)))
-    self.noise = 0
-    def print_noise():
-      ret = self.noise / float(self.log_freq)
-      self.noise = 0
-      return ret
-
     log_info = [
       ( "actor learn rate",  "%f", lambda t: self.actor_opt_conf.lr_value(t)  ),
       ( "critic learn rate", "%f", lambda t: self.critic_opt_conf.lr_value(t) ),
-      ( "average noise",     "%f", lambda t: print_noise() ),
     ]    
-
     super()._build_log_list(log_info)
 
 
@@ -181,9 +159,7 @@ class AgentDDPG(OffPolicyAgent):
       # obs = next_obs
 
       self._log_progress(t)
-      # if t == self.start_train:
-      #   import pdb
-      #   pdb.set_trace()
+
 
   def _train_model(self):
 
@@ -203,8 +179,6 @@ class AgentDDPG(OffPolicyAgent):
           self.model.rew_t_ph:       batch["rew"],
           self.model.obs_tp1_ph:     batch["obs_tp1"],
           self.model.done_ph:        batch["done"],
-          # self.actor_learn_rate_ph:  self.actor_lr.value(t),
-          # self.critic_learn_rate_ph: self.critic_lr.value(t),
           self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
           self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
           self.mean_ep_rew_ph:       self.mean_ep_rew,
