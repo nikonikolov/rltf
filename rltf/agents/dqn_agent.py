@@ -16,7 +16,7 @@ class AgentDQN(OffPolicyAgent):
                update_target_freq=10000,
                memory_size=int(1e6),
                obs_hist_len=4,
-               **agent_kwargs,
+               **agent_kwargs
               ):
     """
     Args:

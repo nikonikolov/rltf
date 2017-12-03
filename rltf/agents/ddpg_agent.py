@@ -17,7 +17,7 @@ class AgentDDPG(OffPolicyAgent):
                update_target_freq=1,
                memory_size=int(1e6),
                obs_hist_len=1,
-               **agent_kwargs,
+               **agent_kwargs
               ):
     """
     Args:
