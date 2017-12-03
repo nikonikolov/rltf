@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import tensorflow as tf
+import time
 import threading
 import sys
 
@@ -19,7 +20,7 @@ class Agent:
                model_dir,
                log_freq=10000,
                save=False,
-               save_freq=1e5,
+               save_freq=int(1e5),
               ):
     """
     Args:
@@ -58,13 +59,96 @@ class Agent:
 
     self.summary      = None
 
+    self.episodes         = 0
     self.mean_ep_rew      = -float('nan')
     self.best_ep_rew      = -float('inf')
     self.best_mean_ep_rew = -float('inf')
 
 
   def build(self):
-    raise NotImplementedError()
+    """Build the graph. If there is already a checkpoint in `self.model_dir`,
+    then it will be restored instead. Calls either `self._build()` and
+    `self.model.build()` or `self._restore()` and `self.model.restore()`.
+    """
+
+    # Check for checkpoint
+    ckpt    = tf.train.get_checkpoint_state(self.model_dir)
+    restore = ckpt and ckpt.model_checkpoint_path
+
+    # ------------------ BUILD THE MODEL ----------------
+    if not restore:
+      print("Building model")
+      # logger.info("Building model")
+      tf.reset_default_graph()
+
+      # Call the subclass _build function
+      self._build()
+
+      # Build the model
+      self.model.build()
+
+      # Create timestep variable and logs placeholders
+      with tf.device('/cpu:0'):
+        self.mean_ep_rew_ph      = tf.placeholder(tf.float32, shape=(), name="mean_ep_rew_ph")
+        self.best_mean_ep_rew_ph = tf.placeholder(tf.float32, shape=(), name="best_mean_ep_rew_ph")
+
+        self.t_tf                = tf.Variable(1, dtype=tf.int32, trainable=False, name="t_tf")
+        self.t_tf_inc            = tf.assign(self.t_tf, self.t_tf + 1, name="t_inc_op")
+
+        tf.summary.scalar("mean_ep_rew",      self.mean_ep_rew_ph)
+        tf.summary.scalar("best_mean_ep_rew", self.best_mean_ep_rew_ph)
+
+        # Create an Op for all summaries
+        self.summary_op = tf.summary.merge_all()
+
+      # Set control variables
+      self.start_step     = 1
+      self.learn_started  = False
+
+      # Create a session and initialize the model
+      self.sess = tf.Session()
+      self.sess.run(tf.global_variables_initializer())
+      self.sess.run(tf.local_variables_initializer())
+
+      # Initialize the model
+      self.model.initialize(self.sess)
+
+    # ------------------ RESTORE THE MODEL ----------------
+    else:
+      print("Restoring model")
+      # logger.info("Restoring model")
+
+      # Restore the graph
+      ckpt_path = ckpt.model_checkpoint_path + '.meta'
+      saver = tf.train.import_meta_graph(ckpt_path)
+      graph = tf.get_default_graph()
+
+      # Get the general variables and placeholders
+      self.t_tf                 = graph.get_tensor_by_name("t_tf:0")
+      self.t_tf_inc             = graph.get_operation_by_name("t_tf_inc")
+      self.mean_ep_rew_ph       = graph.get_tensor_by_name("mean_ep_rew_ph:0")
+      self.best_mean_ep_rew_ph  = graph.get_tensor_by_name("best_mean_ep_rew_ph:0")
+
+      # Restore the model variables
+      self.model.restore(graph)
+
+      # Restore the agent subclass variables
+      self._restore(graph)
+
+      # Restore the session
+      self.sess = tf.Session()
+      saver.restore(self.sess, ckpt.model_checkpoint_path)
+
+      # Get the summary Op
+      self.summary_op = graph.get_tensor_by_name("Merge/MergeSummary:0")
+
+      # Set control variables
+      self.start_step     = self.sess.run(self.t_tf)
+      self.learn_started  = True
+
+    # Create the Saver object: NOTE that you must do it after building the whole graph
+    self.saver     = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
+    self.tb_writer = tf.summary.FileWriter(self.model_dir + "tb/", self.sess.graph)
 
 
   def train(self):
@@ -81,84 +165,26 @@ class Agent:
 
 
   def _build(self):
-    """Build general logging placeholders and timestep variable (needed by any 
-    agent). Before calling this, self.model.build() must have been called and
-    all summary operators must have been added.
+    """Used by the subclass to build class specific TF objects. Must not call
+    `self.model.build()`
     """
-
-    # Build the model network
-    self.model.build()
-
-    # Create timestep variable and logs placeholders
-    with tf.device('/cpu:0'):
-      self.mean_ep_rew_ph      = tf.placeholder(tf.float32, shape=(), name="mean_ep_rew_ph")
-      self.best_mean_ep_rew_ph = tf.placeholder(tf.float32, shape=(), name="best_mean_ep_rew_ph")
-
-      self.t_tf                = tf.Variable(1, dtype=tf.int32, trainable=False, name="t_tf")
-      self.t_tf_inc            = tf.assign(self.t_tf, self.t_tf + 1, name="t_inc_op")
-
-      tf.summary.scalar("mean_ep_rew",      self.mean_ep_rew_ph)
-      tf.summary.scalar("best_mean_ep_rew", self.best_mean_ep_rew_ph)
-
-      # Create an Op for all summaries
-      self.summary_op = tf.summary.merge_all()
-
-    # Set control variables
-    self.start_step     = 1
-    self.learn_started  = False
-
-    # Create a session and initialize the model
-    self.sess = tf.Session()
-    self.sess.run(tf.global_variables_initializer())
-    self.sess.run(tf.local_variables_initializer())
-
-    # Create the Saver object: NOTE that you must do it after building the whole graph
-    self.saver     = tf.train.Saver()
-    self.tb_writer = tf.summary.FileWriter(self.model_dir + "tb/", self.sess.graph)
-
-    # Initialize the model
-    self.model.initialize(self.sess)
-
-
-  def _restore(self, ckpt):
     raise NotImplementedError()
 
-    # print("Restoring model")
-    # # Restore the graph
-    # self._restore(ckpt)
-    
-    # ckpt_path = ckpt.model_checkpoint_path
-    # g_saver   = self.model.restore_graph(ckpt_path)
 
-    # # Restore the session
-    # self.sess = tf.Session()
-    # g_saver.restore(self.sess, ckpt.model_checkpoint_path)
-    # # Make sure no variables are not initialized
-    # # assert not tf.report_uninitialized_variables()
+  def _restore(self, graph):
+    """Restore the Variables, placeholders and Ops needed by the class so that
+    it can operate in exactly the same way as if `self._build()` was called
 
-    # # Get variables and placeholders
-    # self.t_tf                 = tf.get_default_graph().get_tensor_by_name("t_tf:0")
-    # self.t_tf_inc             = tf.get_default_graph().get_operation_by_name("t_tf_inc")
-    # self.mean_ep_rew_ph       = tf.get_default_graph().get_tensor_by_name("mean_ep_rew_ph:0")
-    # self.best_mean_ep_rew_ph  = tf.get_default_graph().get_tensor_by_name("best_mean_ep_rew_ph:0")
-
-    # # Get the summary op
-    # self.summary_op           = tf.get_default_graph().get_tensor_by_name("Merge/MergeSummary:0")
-
-    # # Set control variables
-    # self.start_step     = self.sess.run(self.t_var)
-    # self.learn_started  = True
+    Args:
+      graph: tf.Graph. Graph, restored from a checkpoint
+    """
+    raise NotImplementedError()
 
 
-
-    # # Restore the buffer
-    # self.replay_buf        = self.replay_buf.restore(self.model_dir)
-
-
-  def _build_log_list(self, log_info):
+  def _build_log_info(self):
 
     def mean_step_time():
-      if hasattr(self, "last_log_time"):
+      if not hasattr(self, "last_log_time"):
         self.last_log_time = time.time()
         return float("nan")
       time_now  = time.time()
@@ -175,13 +201,26 @@ class Agent:
       ("mean step time",        "%f", lambda t: mean_step_time()),
     ]
 
-    log_info = default_info + log_info
+    custom_log_info = self._custom_log_info()
+    log_info = default_info + custom_log_info
 
     str_sizes = [len(s) for s, _, _ in log_info]
     pad = max(str_sizes) + 2
 
-    self.log_list  = [(s.ljust(pad) + ptype, v) for s, ptype, v in log_info]
-    self.log_list  = [("=" * pad, "%s", lambda t: "")] + self.log_list
+    self.log_info  = [(s.ljust(pad) + ptype, v) for s, ptype, v in log_info]
+    self.log_info  = [("=" * pad + "%s", lambda t: "")] + self.log_info
+
+
+  def _custom_log_info(self):
+    """
+    Returns:
+      List of tuples `(name, format, lambda)` with information of custom subclass
+      parameters to log during training. `name`: `str`, the name of the reported
+      value. `modifier`: `str`, the type modifier for printing the value.
+      `lambda`: A function that takes the current timestep as argument and
+      returns the value to be printed.
+    """
+    raise NotImplementedError()
 
 
   def _log_progress(self, t):
@@ -192,17 +231,21 @@ class Agent:
       t: int. Current timestep
     """
 
-    episode_rewards = self.env_monitor.get_episode_rewards()
-    if len(episode_rewards) > 0:
-      self.mean_ep_rew      = np.mean(episode_rewards[-100:])
-      self.best_ep_rew      = episode_rewards.max()
-      self.best_mean_ep_rew = max(self.best_mean_ep_rew, self.mean_ep_rew)
-    self.episodes = len(episode_rewards)
+    # Run the update only 2 step before the actual logging happens in order to
+    # make sure that the most recent possible values will be stored in
+    # self.summary. This is a hacky workaround in order to support OffPolicyAgent
+    # which runs 2 threads without coordination
+    if (t+2) % self.log_freq == 0 and self.learn_started:
+      episode_rewards = self.env_monitor.get_episode_rewards()
+      if len(episode_rewards) > 0:
+        self.mean_ep_rew      = np.mean(episode_rewards[-100:])
+        self.best_ep_rew      = max(episode_rewards)
+        self.best_mean_ep_rew = max(self.best_mean_ep_rew, self.mean_ep_rew)
+      self.episodes = len(episode_rewards)
 
     if t % self.log_freq == 0 and self.learn_started:
-      for s, lambda_v in self.log_list:
+      for s, lambda_v in self.log_info:
         print(s % lambda_v(t))
-      print("\n")
       sys.stdout.flush()
 
       if self.summary:

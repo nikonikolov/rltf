@@ -6,19 +6,47 @@ class Model:
   TensorFlow. All networks descend from this class
   """
 
-  def build(self, optimizer):
+  def build(self):
     raise NotImplementedError()
 
-  def restore(self, ckpt_path):
-    """Restore the TF graph (without the session) saved on disk in model_dir.
-    The object resulting state must be equivalent to a call to self.build_graph()
-    
+
+  def _build(self):
+    self._obs_t_ph    = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_t_ph")
+    self._act_t_ph    = tf.placeholder(self.act_dtype,  [None] + self.act_shape, name="act_t_ph")
+    self._rew_t_ph    = tf.placeholder(tf.float32,      [None],                  name="rew_t_ph")
+    self._obs_tp1_ph  = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_tp1_ph")
+    self._done_ph     = tf.placeholder(tf.bool,         [None],                  name="done_ph")
+
+
+  def restore(self, graph):
+    """Restore the Variables, placeholders and Ops needed by the class so that
+    it can operate in exactly the same way as if `self.build()` was called
     Args:
-      ckpt_path: str. Path for the checkpoint
-    Returns:
-      tf.Saver that is used to restore the session
+      graph: tf.Graph. Graph, restored from a checkpoint
     """
-    raise NotImplementedError()
+
+    # Get Ops
+    try: self._train_op       = graph.get_operation_by_name("train_op")
+    except KeyError: pass
+    try: self._update_target  = graph.get_operation_by_name("update_target")
+    except KeyError: pass
+
+    # Get Placeholders
+    try: self._obs_t_ph   = graph.get_tensor_by_name("obs_t_ph:0")
+    except KeyError: pass
+    try: self._act_t_ph   = graph.get_tensor_by_name("act_t_ph:0")
+    except KeyError: pass
+    try: self._rew_t_ph   = graph.get_tensor_by_name("rew_t_ph:0")
+    except KeyError: pass
+    try: self._obs_tp1_ph = graph.get_tensor_by_name("obs_tp1_ph:0")
+    except KeyError: pass
+    try: self._done_ph    = graph.get_tensor_by_name("done_ph:0")
+    except KeyError: pass
+    try: self._action     = graph.get_tensor_by_name("action:0")
+    except KeyError: pass
+
+    self._restore(graph)
+
 
   def initialize(self, sess):
     """Run additional initialization for the model when it was created via
@@ -26,6 +54,7 @@ class Model:
     tf.local_variables_initializer() have already been run
     """
     raise NotImplementedError()
+
 
   def control_action(self, sess, state):
     """Compute control action for the model. NOTE that this should NOT include
@@ -39,6 +68,11 @@ class Model:
       The calculated action. Type and shape varies based on the specific model
     """
     raise NotImplementedError()
+
+
+  def _restore(self, graph):
+    raise NotImplementedError()
+
 
   @property
   def name(self):
@@ -113,68 +147,6 @@ class Model:
     if hasattr(self, "_done_ph"): return self._done_ph
     else: raise NotImplementedError()
 
-  # QUESTION: Should this be a variable or a placeholder? Maybe a variable???
-  @property
-  def training_ph(self):
-    return self._training_ph
-
-  def _restore(self, ckpt_path):
-    saver = tf.train.import_meta_graph(ckpt_path + '.meta')
-    graph = tf.get_default_graph()
-    
-    # Get Ops
-    try: self._train_op       = graph.get_operation_by_name("train_op")
-    except KeyError: pass
-    try: self._update_target  = graph.get_operation_by_name("update_target")
-    except KeyError: pass
-    
-    # Get Placeholders
-    try: self._obs_t_ph     = graph.get_tensor_by_name("obs_t_ph:0")
-    except KeyError: pass
-    try: self._act_t_ph     = graph.get_tensor_by_name("act_t_ph:0")
-    except KeyError: pass
-    try: self._rew_t_ph     = graph.get_tensor_by_name("rew_t_ph:0")
-    except KeyError: pass
-    try: self._obs_tp1_ph   = graph.get_tensor_by_name("obs_tp1_ph:0")
-    except KeyError: pass
-    try: self._done_mask_ph = graph.get_tensor_by_name("done_ph:0")
-    except KeyError: pass
-    try: self._action       = graph.get_tensor_by_name("action:0")
-    except KeyError: pass
-
-    return graph, saver
-
-
   # @property
-  # def agent_vars(self):
-  #   """
-  #   Returns:
-  #   `list` of the variables used for estimator network
-  #   """
-  #   if hasattr(self, "_agent_vars"):
-  #     return self._agent_vars
-  #   else:
-  #     raise NotImplementedError()
-
-  # @property
-  # def _target_vars(self):
-  #   """
-  #   Returns:
-  #   `list` of the variables used for the target network (if such exists)
-  #   """
-  #   if hasattr(self, "_target_vars"):
-  #     return self._target_vars
-  #   else:
-  #     raise NotImplementedError()
-
-  # @property
-  # def vars(self):
-  #   raise NotImplementedError()
-
-  # @property
-  # def trainable_vars(self):
-  #   raise NotImplementedError()
-
-  # @property
-  # def perturbable_vars(self):
-  #   raise NotImplementedError()
+  # def training_ph(self):
+  #   return self._training_ph

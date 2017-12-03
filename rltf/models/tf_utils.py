@@ -2,7 +2,7 @@ import numpy      as np
 import tensorflow as tf
 
 
-def assign_values(source_vars, dest_vars, weight=1.0, name=None):
+def assign_values(dest_vars, source_vars, weight=1.0, name=None):
   """Create a `tf.Op` that assigns the values of source_vars to dest_vars.
   `source_vars` and `dest_vars` must have variables with matching names,
   but do not need to be sorted.
@@ -12,8 +12,8 @@ def assign_values(source_vars, dest_vars, weight=1.0, name=None):
   ```
 
   Args:
-    source_vars: list of tf.Variables. Holds the source values
     dest_vars: list of tf.Variables. Holds the variables that will be updated
+    source_vars: list of tf.Variables. Holds the source values
     weight: int. Weight to use in the above expression
     name: string. Optional name for the returned operation
   Returns:

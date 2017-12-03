@@ -6,99 +6,80 @@ from rltf.agents.agent  import OffPolicyAgent
 from rltf.memory        import ReplayBuffer
 
 
-class AgentDDPG(OffPolicyAgent):
+class AgentDQN(OffPolicyAgent):
 
   def __init__(self,
                model_type,
                model_kwargs,
-               actor_opt_conf,
-               critic_opt_conf,
-               action_noise,
-               update_target_freq=1,
+               opt_conf,
+               exploration,
+               update_target_freq=10000,
                memory_size=int(1e6),
-               obs_hist_len=1,
+               obs_hist_len=4,
                **agent_kwargs,
               ):
     """
     Args:
-      agent_config: dict. Dictionary with parameters for the Agent class. Must
-        contain all parameters that do not have default values
       model_type: rltf.models.Model. TF implementation of a model network
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
-      actor_opt_conf: rltf.optimizers.OptimizerConf. Config for the actor network optimizer
-      critic_opt_conf: rltf.optimizers.OptimizerConf. Config for the critic network optimizer
-      action_noise: rltf.exploration.ExplorationNoise. Action exploration noise
-        to add to the selected action
+      opt_conf: rltf.optimizers.OptimizerConf. Config for the network optimizer
+      exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
+      update_target_freq: Period in number of steps at which to update the target net
       memory_size: int. Size of the replay buffer
       obs_hist_len: int. How many environment observations comprise a single state.
+      agent_kwargs: Keyword arguments that will be passed to the Agent base class
     """
-  
+
     super().__init__(**agent_kwargs)
 
     assert type(self.env.observation_space) == gym.spaces.Box
-    assert type(self.env.action_space)      == gym.spaces.Box
+    assert type(self.env.action_space)      == gym.spaces.Discrete
 
-    self.act_min   = self.env.action_space.low
-    self.act_max   = self.env.action_space.high
-    self.action_noise = action_noise
-
-    self.actor_opt_conf   = actor_opt_conf
-    self.critic_opt_conf  = critic_opt_conf
+    self.opt_conf = opt_conf
+    self.exploration = exploration
     self.update_target_freq = update_target_freq
 
     # Get environment specs
-    act_shape = list(self.env.action_space.shape)
-    obs_shape = list(self.env.observation_space.shape)
-    
-    # Image observation
-    if len(obs_shape) == 3:
-      obs_dtype = np.uint8
-      obs_shape[-1] *= obs_hist_len
-    else:
-      obs_dtype = np.float32
+    img_h, img_w, img_c = self.env.observation_space.shape
+    obs_shape = [img_h, img_w, obs_hist_len * img_c]
+    buf_obs_shape = [img_h, img_w, img_c]
+    n_actions = self.env.action_space.n
 
-    model_kwargs["obs_shape"]       = obs_shape
-    model_kwargs["act_min"]         = self.act_min
-    model_kwargs["act_max"]         = self.act_max
-    model_kwargs["actor_opt_conf"]  = actor_opt_conf
-    model_kwargs["critic_opt_conf"] = critic_opt_conf
- 
+    model_kwargs["obs_shape"] = obs_shape
+    model_kwargs["n_actions"] = n_actions
+    model_kwargs["opt_conf"]  = opt_conf
+
     self.model      = model_type(**model_kwargs)
-    self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_hist_len)
-    
+    self.replay_buf = ReplayBuffer(memory_size, buf_obs_shape, np.uint8, [], np.uint8, obs_hist_len)
+
     # Configure what information to log
     super()._build_log_info()
 
 
   def _build(self):
     # Create Learning rate placeholders
-    self.actor_learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="actor_learn_rate_ph")
-    self.critic_learn_rate_ph = tf.placeholder(tf.float32, shape=(), name="critic_learn_rate_ph")
+    self.learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="learn_rate_ph")
+    self.epsilon_ph     = tf.placeholder(tf.float32, shape=(), name="epsilon_ph")
 
     # Set the learn rate placeholders for the model
-    self.actor_opt_conf.lr_ph  = self.actor_learn_rate_ph
-    self.critic_opt_conf.lr_ph = self.critic_learn_rate_ph
+    self.opt_conf.lr_ph = self.learn_rate_ph
 
-    # Create learn rate summaries
-    tf.summary.scalar("actor_learn_rate",  self.actor_learn_rate_ph)
-    tf.summary.scalar("critic_learn_rate", self.critic_learn_rate_ph)
+    # Add summaries
+    tf.summary.scalar("learn_rate", self.learn_rate_ph)
+    tf.summary.scalar("epsilon",    self.epsilon_ph)
 
 
-  def _restore(self):
-    self.actor_learn_rate_ph  = graph.get_tensor_by_name("actor_learn_rate_ph:0")
-    self.critic_learn_rate_ph = graph.get_tensor_by_name("critic_learn_rate_ph:0")
+  def _restore(self, graph):
+    self.learn_rate_ph  = graph.get_tensor_by_name("learn_rate_ph:0")
+    self.epsilon_ph     = graph.get_tensor_by_name("epsilon_ph:0")
 
 
   def _custom_log_info(self):
     log_info = [
       ( "actor learn rate",  "%f", lambda t: self.actor_opt_conf.lr_value(t)  ),
       ( "critic learn rate", "%f", lambda t: self.critic_opt_conf.lr_value(t) ),
-    ]    
+    ]
     return log_info
-
-
-  def reset(self):
-    self.action_noise.reset()
 
 
   def _run_env(self):
@@ -116,10 +97,14 @@ class AgentDDPG(OffPolicyAgent):
 
       # Get an action to run
       if self.learn_started:
-        noise   = self.action_noise.sample()
-        state   = self.replay_buf.encode_recent_obs()
-        action  = self.model.control_action(self.sess, state)
-        action  = action + noise
+        # Run epsilon greedy policy
+        epsilon = self.exploration.value(t)
+        if np.random.uniform(0,1) < epsilon:
+          action = self.env.action_space.sample()
+        else:
+          # Run the network to select an action
+          state   = self.replay_buf.encode_recent_obs()
+          action  = self.model.control_action(self.sess, state)
 
       else:
         # Choose random action when model not initialized
@@ -127,9 +112,6 @@ class AgentDDPG(OffPolicyAgent):
 
       # Signal to net_thread that action is chosen
       self._signal_act_chosen()
-
-      # Increement the TF timestep variable
-      self.sess.run(self.t_tf_inc)
 
       # Run action
       # next_obs, reward, done, info = self.env.step(action)
@@ -142,9 +124,8 @@ class AgentDDPG(OffPolicyAgent):
       # Reset the environment if end of episode
       # if done: next_obs = self.env.reset()
       # obs = next_obs
-      if done: 
-        last_obs = self.env.reset()
-        self.reset()
+      
+      if done: last_obs = self.env.reset()
 
       self._log_progress(t)
 
@@ -167,8 +148,8 @@ class AgentDDPG(OffPolicyAgent):
           self.model.rew_t_ph:       batch["rew"],
           self.model.obs_tp1_ph:     batch["obs_tp1"],
           self.model.done_ph:        batch["done"],
-          self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
-          self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
+          self.learn_rate_ph:        self.opt_conf.lr_value(t),
+          self.epsilon_ph:           self.exploration.value(t),
           self.mean_ep_rew_ph:       self.mean_ep_rew,
           self.best_mean_ep_rew_ph:  self.best_mean_ep_rew,
         }
@@ -179,7 +160,8 @@ class AgentDDPG(OffPolicyAgent):
         self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
 
         # Update target network
-        self.sess.run(self.model.update_target)
+        if t % self.update_target_freq == 0:
+          self.sess.run(self.model.update_target)
 
       else:
         self._wait_act_chosen()

@@ -14,7 +14,7 @@ def set_global_seeds(i):
   random.seed(i)
 
 
-def make_env(env_id, seed, model_dir, no_video, video_freq=None):
+def make_env(env_id, seed, model_dir, save_video, video_freq=None):
   """Create an instance of a gym environment, wrap it in a Monitor class and
   set seeds for the environment and for other modules (tf, np, random)
 
@@ -22,7 +22,7 @@ def make_env(env_id, seed, model_dir, no_video, video_freq=None):
     env_id: str. Full name of the gym environment
     seed: int. Seed for the environment and the modules
     model_dir: std. Path where videos from the Monitor class will be saved
-    no_video: bool. If True, no videos will be recorded
+    save_video: bool. If False, no videos will be recorded
     video_freq: int. Every `video_freq` episode will be recorded. If `None`,
       then every perfect cube episode number 1, 8, 27 ... 1000 will be recorded.
       After that, every 1000-th episode will be recorded
@@ -38,13 +38,13 @@ def make_env(env_id, seed, model_dir, no_video, video_freq=None):
     return pickle_restore(env_file)
 
   gym_dir = model_dir + "gym_video"
-  if no_video:
-    video_callable = lambda e_id: False
-  else:
+  if save_video:
     if video_freq is None:
       video_callable = None
     else:
       video_callable = lambda e_id: e_id % video_freq == 0
+  else:
+    video_callable = lambda e_id: False
 
   env = gym.make(env_id)
   env.seed(seed)

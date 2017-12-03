@@ -18,15 +18,18 @@ class DDPG(Model):
       obs_shape: list. Shape of a single state input
       act_min: np.array. Minimum possible action values. Must have size n_actions
       act_max: np.array. Maximum possible action values. Must have size n_actions
+      actor_opt_conf: rltf.optimizers.OptimizerConf. Configuration for the actor optimizer
+      critic_opt_conf: rltf.optimizers.OptimizerConf. Configuration for the critic optimizer
+      critic_reg: float. Regularization parameter for the weights of the critic
       tau: float. Rate of update for the target network
+      gamma: float. Discount factor
       huber_loss: bool. Whether to use Huber loss or not
     """
-
     assert act_max.shape      == act_min.shape
     assert len(act_max.shape) == 1
 
-    self.n_actions    = act_max.size
-    self.obs_shape    = obs_shape
+    super().__init__()
+
     self.tau          = tau
     self.huber_loss   = huber_loss
     self.gamma        = gamma
@@ -34,6 +37,12 @@ class DDPG(Model):
     
     self.actor_opt_conf   = actor_opt_conf
     self.critic_opt_conf  = critic_opt_conf
+
+    self.obs_shape = obs_shape
+    self.obs_dtype = tf.uint8 if len(obs_shape) == 3 else tf.float32
+    self.n_actions = act_max.size
+    self.act_shape = [self.n_actions]
+    self.act_dtype = tf.float32
 
     # Compute parameters to normalize and denormalize actions
     self._action_stats(act_min, act_max)
@@ -48,23 +57,18 @@ class DDPG(Model):
 
   def build(self):
     
+    super()._build()
+
     # Placehodler for the running mode - training or inference
     self._training      = tf.placeholder_with_default(True, (), name="training") 
     # self._training      = tf.Variable(True, trainable=False) 
     # self._set_train     = tf.assign(self._training, True,   name="set_train")
     # self._set_eval      = tf.assign(self._training, False,  name="set_eval")
 
-    self._act_t_ph      = tf.placeholder(tf.float32, [None, self.n_actions],  name="act_t_ph") 
-    self._rew_t_ph      = tf.placeholder(tf.float32, [None],                  name="rew_t_ph")
-    self._done_ph       = tf.placeholder(tf.bool,    [None],                  name="done_ph")
-
     act_t_norm          = (self._act_t_ph - self.act_mean) / self.act_std
 
     # Conv net
-    if len(self.obs_shape) == 3:
-      self._obs_t_ph    = tf.placeholder(tf.uint8, [None] + self.obs_shape, name="obs_t_ph")
-      self._obs_tp1_ph  = tf.placeholder(tf.uint8, [None] + self.obs_shape, name="obs_tp1_ph")
-
+    if self.obs_dtype == tf.uint8:
       obs_t_float   = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
       obs_tp1_float = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
 
@@ -73,9 +77,6 @@ class DDPG(Model):
 
     # Low-dimensionsal net
     else:
-      self._obs_t_ph    = tf.placeholder(tf.float32, [None] + self.obs_shape, name="obs_t_ph")
-      self._obs_tp1_ph  = tf.placeholder(tf.float32, [None] + self.obs_shape, name="obs_tp1_ph")
-
       obs_t_float       = tf.layers.flatten(self._obs_t_ph)
       obs_tp1_float     = tf.layers.flatten(self._obs_tp1_ph)
 
@@ -83,13 +84,12 @@ class DDPG(Model):
                                                         training=self._training, trainable=False)
       obs_tp1_float     = tf.layers.batch_normalization(obs_tp1_float, axis=-1,
                                                         training=self._training, trainable=False)
-
       actor   = self._actor_net
       critic  = self._critic_net
 
-    action          = actor(obs_t_float,               scope="agent_net/actor")
-    actor_critic_q  = critic(obs_t_float, action,      scope="agent_net/critic")
-    act_samples_q   = critic(obs_t_float, act_t_norm,  scope="agent_net/critic")
+    action          = actor(obs_t_float,                scope="agent_net/actor")
+    actor_critic_q  = critic(obs_t_float, action,       scope="agent_net/critic")
+    act_samples_q   = critic(obs_t_float, act_t_norm,   scope="agent_net/critic")
 
     target_act      = actor(obs_tp1_float,              scope="target_net/actor")
     target_q        = critic(obs_tp1_float, target_act, scope="target_net/critic")
@@ -132,44 +132,38 @@ class DDPG(Model):
     self._train_op  = tf.group(train_actor, train_critic, name="train_op")
     
     # Create the Op that updates the target
-    self._update_target = tf_utils.assign_values(agent_vars, target_vars, self.tau, "update_target")
+    self._update_target = tf_utils.assign_values(target_vars, agent_vars, self.tau, "update_target")
 
     # Remember the action tensor. name is needed when restoring the graph
-    # self._action    = tf.identity(action, name="action")
-    self._action    = tf.add(action * self.act_std, self.act_mean, name="action")
+    self._action    = tf.identity(action, name="action")
+    # self._action    = tf.add(action * self.act_std, self.act_mean, name="action")
 
     # Initialization Op
-    self.init_op    = tf_utils.assign_values(agent_vars, target_vars, name="init_op")
+    self._init_op   = tf_utils.assign_values(target_vars, agent_vars, name="init_op")
 
     # Summaries
     tf.summary.scalar("actor_loss",   actor_loss)
     tf.summary.scalar("critic_loss",  critic_loss)
 
 
-  def restore(self, ckpt_path):
-    graph, saver    = super()._restore(ckpt_path)
+  def _restore(self, graph):
     # Retrieve the Ops for changing between train and eval modes
     # self._set_train = graph.get_operation_by_name("set_train")
     # self._set_eval  = graph.get_operation_by_name("set_eval")
     self._training  = graph.get_tensor_by_name("training:0")
-    self.init_op    = graph.get_operation_by_name("init_op")
-
-    return saver
+    self._init_op   = graph.get_operation_by_name("init_op")
 
 
   def initialize(self, sess):
-    """Initialize the model. See Model.initialize()
-    """
-    sess.run(self.init_op)
+    """Initialize the model. See Model.initialize()"""
+    sess.run(self._init_op)
 
 
   def control_action(self, sess, state):
     feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
-    return sess.run(self._action, feed_dict=feed_dict)[0]
-
-    # norm_action = sess.run(self.action, feed_dict={self._obs_t_ph: state[None,:]})
-    # action      = (norm_action + self.act_mean) * self.act_std
-    # return action
+    norm_act  = sess.run(self._action, feed_dict=feed_dict)[0]
+    return norm_act * self.act_std + self.act_mean
+    # return sess.run(self._action, feed_dict=feed_dict)[0]
 
 
   def _actor_net(self, state, scope):
