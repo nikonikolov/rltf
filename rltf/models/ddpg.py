@@ -185,8 +185,8 @@ class DDPG(Model):
       x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=init_uniform(), name="dense2")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
 
-      x = tf.layers.dense(x, n_actions, kernel_initializer=tf.random_uniform_initializer(-3e-3, 3e-3),
-                          name="dense3")
+      x = tf.layers.dense(x, n_actions, tf.nn.tanh, name="dense3",
+                          kernel_initializer=tf.random_uniform_initializer(-3e-3, 3e-3))
       
       return x
 
@@ -277,8 +277,8 @@ class DDPG(Model):
       x = tf.layers.dense(x, 200, tf.nn.relu, kernel_initializer=init_uniform(), name="dense2")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm5")
 
-      x = tf.layers.dense(x, n_actions, kernel_initializer=tf.random_uniform_initializer(-3e-4, 3e-4),
-                          name="dense3")
+      x = tf.layers.dense(x, n_actions, tf.nn.tanh, name="dense3",
+                          kernel_initializer=tf.random_uniform_initializer(-3e-4, 3e-4))
 
       return x
 
