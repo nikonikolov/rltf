@@ -190,29 +190,6 @@ class DDPG(Model):
       
       return x
 
-  # def _critic_net(self, state, action, scope):
-  #   """Build critic network
-
-  #   Args:
-  #     state: tf.Tensor. Input tensor for the state. Batch must be the 0 dimension
-  #     action: tf.Tensor. Input tensor for the action. Batch must be the 0 dimension
-  #     scope: string. Parent scope for the network variables. Must end in "/"
-  #   Returns:
-  #     `tf.Tensor` that holds the value of the Q-function estimate
-  #   """
-
-  #   x = state
-  #   with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-  #     x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=init_uniform(), name="dense1")
-  #     x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
-
-  #     x = tf.concat([x, action], axis=-1)
-
-  #     # No batch norm after action input, as in the original paper
-  #     x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=init_uniform(), name="dense2")
-
-  #     x = tf.layers.dense(x, 1, kernel_initializer=tf.random_uniform_initializer(-3e-3,3e-3), name="dense3")
-  #     return x
 
   def _critic_net(self, state, action, scope):
     """Build critic network

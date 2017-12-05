@@ -8,6 +8,16 @@ import tensorflow as tf
 
 from rltf import config
 
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def set_global_seeds(i):
   tf.set_random_seed(i) 
   np.random.seed(i)

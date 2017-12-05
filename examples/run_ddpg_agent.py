@@ -7,6 +7,7 @@ from rltf.exploration   import OrnsteinUhlenbeckNoise
 from rltf.models        import DDPG
 from rltf.optimizers    import OptimizerConf
 from rltf.optimizers    import AdamGradClipOptimizer
+from rltf.run_utils     import str2bool
 from rltf.schedules     import ConstSchedule
 
 from rltf import run_utils as rltfru
@@ -22,18 +23,18 @@ def parse_args():
   parser.add_argument('--tau',          default=0.001,  type=float, help='target soft update weight')
   parser.add_argument('--sigma',        default=0.2,    type=float, help='ornsein uhlenbeck sigma')
   parser.add_argument('--theta',        default=0.15,   type=float, help='ornsein uhlenbeck theta')
-  parser.add_argument('--critic_reg',   default=0.02,   type=float, help='network weight regularization')
+  parser.add_argument('--critic-reg',   default=0.02,   type=float, help='network weight regularization')
   parser.add_argument('--batch-size',   default=None,   type=float, help='batch size')
   parser.add_argument('--adam-epsilon', default=None,   type=float, help='expsilon for Adam optimizer')
   
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')
-  parser.add_argument('--huber-loss',   default=False,  type=bool,  help='use huber loss')
+  parser.add_argument('--huber-loss',   default=False,  type=str2bool,  help='use huber loss')
   parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
-  parser.add_argument('--save',         default=False,  type=bool,  help='save model')
-  parser.add_argument('--save-video',   default=True,   type=bool,  help='save gym videos')
+  parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
+  parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
   parser.add_argument('--video-freq',   default=500,    type=int,
                       help='period in number of episodes at which to record videos')
   

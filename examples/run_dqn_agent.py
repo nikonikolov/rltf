@@ -9,6 +9,7 @@ from rltf.models        import DQN
 # from rltf.models        import QRDQN
 from rltf.optimizers    import OptimizerConf
 from rltf.optimizers    import AdamGradClipOptimizer
+from rltf.run_utils     import str2bool
 from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
 
@@ -25,12 +26,12 @@ def parse_args():
   
   parser.add_argument('--train-freq',   default=4,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')
-  parser.add_argument('--huber-loss',   default=True,   type=bool,  help='use huber loss')
+  parser.add_argument('--huber-loss',   default=True,   type=str2bool,  help='use huber loss')
   parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
-  parser.add_argument('--save',         default=False,  type=bool,  help='save model')
-  parser.add_argument('--save-video',   default=True,   type=bool,  help='save gym videos')
+  parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
+  parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
   parser.add_argument('--video-freq',   default=1000,   type=int,
                       help='period in number of episodes at which to record videos')
   
