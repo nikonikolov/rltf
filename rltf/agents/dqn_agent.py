@@ -34,6 +34,7 @@ class AgentDQN(OffPolicyAgent):
 
     assert isinstance(self.env.observation_space, gym.spaces.Box)
     assert isinstance(self.env.action_space,      gym.spaces.Discrete)
+    assert update_target_freq % self.train_freq == 0
 
     self.opt_conf = opt_conf
     self.exploration = exploration

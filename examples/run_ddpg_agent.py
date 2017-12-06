@@ -26,7 +26,9 @@ def parse_args():
   parser.add_argument('--critic-reg',   default=0.02,   type=float, help='network weight regularization')
   parser.add_argument('--batch-size',   default=None,   type=float, help='batch size')
   parser.add_argument('--adam-epsilon', default=None,   type=float, help='expsilon for Adam optimizer')
+  parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
   
+  parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')
   parser.add_argument('--huber-loss',   default=False,  type=str2bool,  help='use huber loss')
@@ -69,7 +71,7 @@ def main():
 
   # Create the environment
   env = rltfru.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
-  env = wrap_deepmind_ddpg(env)
+  env = wrap_deepmind_ddpg(env, args.reward_scale)
 
   # Set additional arguments
   if args.batch_size is None:
@@ -110,7 +112,7 @@ def main():
     actor_opt_conf=actor_opt_conf,
     critic_opt_conf=critic_opt_conf,
     action_noise=action_noise,
-    update_target_freq=1,
+    update_target_freq=args.update_freq,
     memory_size=int(1e6),
     obs_hist_len=1,
   )

@@ -37,6 +37,7 @@ class AgentDDPG(OffPolicyAgent):
 
     assert isinstance(self.env.observation_space, gym.spaces.Box)
     assert isinstance(self.env.action_space,      gym.spaces.Box)
+    assert update_target_freq % self.train_freq == 0
 
     self.act_min   = self.env.action_space.low
     self.act_max   = self.env.action_space.high
@@ -183,7 +184,8 @@ class AgentDDPG(OffPolicyAgent):
         self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
 
         # Update target network
-        self.sess.run(self.model.update_target)
+        if t % self.update_target_freq == 0:
+          self.sess.run(self.model.update_target)
 
       else:
         self._wait_act_chosen()

@@ -57,7 +57,7 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=None):
     else:
       video_callable = lambda e_id: e_id % video_freq == 0
   else:
-    video_callable = lambda e_id: False
+    video_callable = False
 
   env = gym.make(env_id)
   env.seed(seed)
