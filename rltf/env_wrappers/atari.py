@@ -12,9 +12,9 @@ class NoopResetEnv(gym.Wrapper):
     self.noop_max = noop_max
     assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
 
-  def _reset(self):
+  def _reset(self, **kwargs):
     """ Do no-op action for a number of steps in [1, noop_max]."""
-    self.env.reset()
+    self.env.reset(**kwargs)
     noops = np.random.randint(1, self.noop_max + 1)
     for _ in range(noops):
       obs, _, done, _ = self.env.step(0)
@@ -112,12 +112,12 @@ class WarpFrame(gym.ObservationWrapper):
     self.height = 84
     self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self.height, self.width, 1))
 
-  def _observation(self, frame):
+  def _observation(self, observation):
     # COLOR_RGB2GRAY is eqivalent to Y channel
     # See CV docs at https://docs.opencv.org/3.1.0/de/d25/imgproc_color_conversions.html
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-    frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
-    return frame[:, :, None]
+    observation = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
+    observation = cv2.resize(observation, (self.width, self.height), interpolation=cv2.INTER_AREA)
+    return observation[:, :, None]
 
 
 class ClippedRewardsWrapper(gym.Wrapper):

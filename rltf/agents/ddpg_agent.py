@@ -69,6 +69,10 @@ class AgentDDPG(OffPolicyAgent):
     # Configure what information to log
     super()._build_log_info()
 
+    # Custom TF Tensors and Ops
+    self.actor_learn_rate_ph  = None
+    self.critic_learn_rate_ph = None
+
 
   def _build(self):
     # Create Learning rate placeholders

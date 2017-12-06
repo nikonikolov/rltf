@@ -55,6 +55,10 @@ class AgentDQN(OffPolicyAgent):
     # Configure what information to log
     super()._build_log_info()
 
+    # Custom TF Tensors and Ops
+    self.learn_rate_ph  = None
+    self.epsilon_ph     = None
+
 
   def _build(self):
     # Create Learning rate placeholders

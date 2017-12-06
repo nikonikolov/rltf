@@ -47,6 +47,11 @@ class DDPG(Model):
     # Compute parameters to normalize and denormalize actions
     self._action_stats(act_min, act_max)
 
+    # Custom TF Tensors and Ops
+    self._init_op   = None
+    self._training  = None
+
+
   def _action_stats(self, act_min, act_max):
     self.act_mean     = np.asarray((act_min + act_max) / 2.0, dtype=np.float32)
     act_std           = act_max - self.act_mean

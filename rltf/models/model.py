@@ -6,6 +6,25 @@ class Model:
   TensorFlow. All networks descend from this class
   """
 
+  def __init__(self):
+    # Input TF placeholders that must be set
+    self._obs_t_ph      = None
+    self._act_t_ph      = None
+    self._rew_t_ph      = None
+    self._obs_tp1_ph    = None
+    self._done_ph       = None
+
+    # TF Ops that should be set
+    self._train_op      = None
+    self._update_target = None  # Optional
+    self._action        = None  # Optional
+
+    self.obs_dtype      = None
+    self.obs_shape      = None
+    self.act_dtype      = None
+    self.act_shape      = None
+
+
   def build(self):
     raise NotImplementedError()
 
@@ -111,7 +130,7 @@ class Model:
       `self.act_t_ph`, `self.obs_tp1_ph`, `self.done_ph` placeholders
       are set via feed_dict. Might require other placeholders as well.
     """
-    if hasattr(self, "_train_op"):
+    if self._train_op is not None:
       return self._train_op
     else:
       raise NotImplementedError()
@@ -122,7 +141,7 @@ class Model:
     Returns:
       `tf.Op` that updates the target network (if one is used).
     """
-    if hasattr(self, "_update_target"):
+    if self._update_target is not None:
       return self._update_target
     else:
       raise NotImplementedError()
@@ -133,7 +152,7 @@ class Model:
     Returns:
       `tf.placeholder` for observations at time t from the training batch
     """
-    if hasattr(self, "_obs_t_ph"):
+    if self._obs_t_ph is not None:
       return self._obs_t_ph
     else:
       raise NotImplementedError()
@@ -144,7 +163,7 @@ class Model:
     Returns:
       `tf.placeholder` for actions at time t from the training batch
     """
-    if hasattr(self, "_act_t_ph"):
+    if self._act_t_ph is not None:
       return self._act_t_ph
     else:
       raise NotImplementedError()
@@ -155,7 +174,7 @@ class Model:
     Returns:
       `tf.placeholder` for actions at time t from the training batch
     """
-    if hasattr(self, "_rew_t_ph"):
+    if self._rew_t_ph is not None:
       return self._rew_t_ph
     else:
       raise NotImplementedError()
@@ -166,7 +185,7 @@ class Model:
     Returns:
       `tf.placeholder` for observations at time t+1 from the training batch
     """
-    if hasattr(self, "_obs_tp1_ph"):
+    if self._obs_tp1_ph is not None:
       return self._obs_tp1_ph
     else:
       raise NotImplementedError()
@@ -177,7 +196,7 @@ class Model:
     Returns:
     `tf.placeholder` to indicate end of episode for examples in the training batch
     """
-    if hasattr(self, "_done_ph"):
+    if self._done_ph is not None:
       return self._done_ph
     else:
       raise NotImplementedError()

@@ -65,7 +65,23 @@ class Agent:
     self.best_ep_rew      = -float('inf')
     self.best_mean_ep_rew = -float('inf')
 
+    # Attributes that are set during build
+    self.model            = None
+    self.start_step       = None
     self.learn_started    = None
+    self.log_info         = None
+    self.last_log_time    = None
+
+    self.t_tf             = None
+    self.t_tf_inc         = None
+    self.summary_op       = None
+    self.mean_ep_rew_ph   = None
+    self.best_mean_ep_rew_ph = None
+
+    self.sess             = None
+    self.saver            = None
+    self.tb_writer        = None
+
 
   def build(self):
     """Build the graph. If there is already a checkpoint in `self.model_dir`,
@@ -186,7 +202,7 @@ class Agent:
   def _build_log_info(self):
 
     def mean_step_time():
-      if not hasattr(self, "last_log_time"):
+      if self.last_log_time is None:
         self.last_log_time = time.time()
         return float("nan")
       time_now  = time.time()
@@ -239,10 +255,12 @@ class Agent:
     # which runs 2 threads without coordination
     if (t+2) % self.log_freq == 0 and self.learn_started:
       episode_rewards = self.env_monitor.get_episode_rewards()
-      if len(episode_rewards) > 0:
+      try:
         self.mean_ep_rew      = np.mean(episode_rewards[-100:])
         self.best_ep_rew      = max(episode_rewards)
         self.best_mean_ep_rew = max(self.best_mean_ep_rew, self.mean_ep_rew)
+      except IndexError:
+        pass
       self.episodes = len(episode_rewards)
 
     if t % self.log_freq == 0 and self.learn_started:
@@ -302,7 +320,7 @@ class OffPolicyAgent(Agent):
     # self.sess.close()
 
 
-  def _run_env():
+  def _run_env(self):
     """Thread for running the environment. Must call `self._wait_train_done()`
     before selcting an action (by running the model). This ensures that the
     `self._train_model()` thread has finished the training step. After action
@@ -312,7 +330,7 @@ class OffPolicyAgent(Agent):
     raise NotImplementedError()
 
 
-  def _train_model():
+  def _train_model(self):
     """Thread for trianing the model. Must call `self._wait_act_chosen()`
     before trying to run a training step on the model. This ensures that the
     `self._run_env()` thread has finished selcting an action (by running the model).

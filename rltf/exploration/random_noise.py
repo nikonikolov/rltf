@@ -30,8 +30,8 @@ class GaussianNoise(ExplorationNoise):
     """
     super().__init__()
 
-    self.mu = mu
-    self.sigma = sigma
+    self.mu     = mu
+    self.sigma  = sigma
 
   def sample(self):
     return np.random.normal(self.mu, self.sigma)
@@ -80,7 +80,8 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     self.reset()
 
   def sample(self):
-    # self.x += self.theta * (self.mu - self.x) * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.shape)
+    # self.x += self.theta * (self.mu - self.x) * self.dt +
+    # self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.shape)
     mean  = self.theta * (self.mu - self.x) * self.dt
     std   = self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.shape)
     self.x += mean + std
@@ -90,5 +91,5 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     self.x = np.zeros_like(self.mu, dtype=np.float32)
 
   def __repr__(self):
-    return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={}, theta={})'.format(
+    return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={}, theta={}, dt={})'.format(
       self.mu, self.sigma, self.theta, self.dt)

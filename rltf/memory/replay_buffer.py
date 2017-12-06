@@ -233,5 +233,3 @@ class ReplayBuffer(BaseBuffer):
 
   #   self.next_idx = (self.next_idx + 1) % self.max_size
   #   self.size_now     = min(self.max_size, self.size_now + 1)
-
-

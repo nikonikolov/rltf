@@ -56,6 +56,10 @@ class DQN(Model):
     self.act_shape  = []
     self.act_dtype  = tf.uint8
 
+    # Custom TF Tensors and Ops
+    self._q         = None
+
+
   def build(self):
 
     super()._build()
@@ -120,4 +124,3 @@ class DQN(Model):
     q_vals  = sess.run(self._q, feed_dict={self.obs_t_ph: state[None,:]})
     action  = np.argmax(q_vals)
     return action
-
