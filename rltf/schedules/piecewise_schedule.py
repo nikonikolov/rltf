@@ -8,13 +8,13 @@ class PiecewiseSchedule(Schedule):
 
     Args:
       endpoints: list of pairs [(int, int)]. Every pair `(time, value)` means
-       that schedule should output `value` when `t==time`. All time values 
-       must be sorted in an increasing order. For times in between endpoints, 
+       that schedule should output `value` when `t==time`. All time values
+       must be sorted in an increasing order. For times in between endpoints,
        interpolation is used to return a value
       interpolation: lambda float, float, float: float
         a function that takes value to the left and to the right of t according
-        to the `endpoints`. The last argument alpha is the fraction of distance 
-        from left endpoint to right endpoint that t has covered. 
+        to the `endpoints`. The last argument alpha is the fraction of distance
+        from left endpoint to right endpoint that t has covered.
         See linear_interpolation for example.
       outside_value: float
         if the value is requested outside of all the intervals sepecified in

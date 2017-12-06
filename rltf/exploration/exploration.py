@@ -4,7 +4,7 @@
 #   pass
 
 class ExplorationNoise:
-  
+
   def sample(self):
     raise NotImplementedError()
 

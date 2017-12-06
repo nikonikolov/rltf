@@ -6,7 +6,7 @@ from rltf.exploration.exploration import ExplorationNoise
 class NoNoise(ExplorationNoise):
   """Returns 0 as noise"""
 
-  def __init__(self, mu):
+  def __init__(self):
     super().__init__()
 
   def sample(self):
@@ -29,7 +29,7 @@ class GaussianNoise(ExplorationNoise):
       sigma: float or np.array. Standard deviation of the Gaussian
     """
     super().__init__()
-    
+
     self.mu = mu
     self.sigma = sigma
 
@@ -45,20 +45,20 @@ class GaussianNoise(ExplorationNoise):
 
 class OrnsteinUhlenbeckNoise(ExplorationNoise):
   """Simulates Ornstein-Uhlenbeck Random Process
-  
+
   Sources:
     - https://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
     - https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
     - https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py
   """
-  
+
   def __init__(self, mu, sigma, theta=0.15, dt=1e-2):
     """
     Args:
       mu: np.array or scalar. Noise mean
       sigma: np.array or scalar. Wiener noise scale constant. Should have the same shape as mu
       theta: float. Mean attraction constant
-      dt: float. Time constant. Can be interpreted as the time difference 
+      dt: float. Time constant. Can be interpreted as the time difference
         between two environent actions
     """
     super().__init__()

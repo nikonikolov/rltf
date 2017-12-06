@@ -1,9 +1,10 @@
-import numpy as np
 import os
-import tensorflow as tf
 import time
 import threading
 import sys
+
+import numpy      as np
+import tensorflow as tf
 
 import rltf.env_wrappers.utils as env_utils
 
@@ -32,9 +33,9 @@ class Agent:
       batch_size: int. Batch size for training the model
       log_freq: int. Add TensorBoard summary and print progress every log_freq
         number of environment steps
-      save: bool. If true, save the model every 
+      save: bool. If true, save the model every
       save_freq: int. Save the model every `save_freq` training steps
-      
+
 
       exploration: rltf.schedules.Schedule. Exploration schedule for the model
     """
@@ -42,7 +43,7 @@ class Agent:
     # Store parameters
     self.env          = env
     self.env_monitor  = env_utils.get_monitor_wrapper(env)
-     
+
     self.train_freq   = train_freq
     self.start_train  = start_train
     self.max_steps    = max_steps
@@ -64,6 +65,7 @@ class Agent:
     self.best_ep_rew      = -float('inf')
     self.best_mean_ep_rew = -float('inf')
 
+    self.learn_started    = None
 
   def build(self):
     """Build the graph. If there is already a checkpoint in `self.model_dir`,
@@ -226,7 +228,7 @@ class Agent:
   def _log_progress(self, t):
     """Log the training progress and append the TensorBoard summary.
     Note that the TensorBoard summary might be 1 step older.
-    
+
     Args:
       t: int. Current timestep
     """
@@ -267,9 +269,9 @@ class Agent:
 
 class OffPolicyAgent(Agent):
   """The base class for Off-policy agents
-  
+
   Allows to run env actions and train the model in separate threads, while
-  providing an easy way to synchronize between the threads. Can speed up 
+  providing an easy way to synchronize between the threads. Can speed up
   training by 20-50%
   """
 
@@ -288,7 +290,7 @@ class OffPolicyAgent(Agent):
 
     env_thread  = threading.Thread(name='environment_thread', target=self._run_env)
     nn_thread   = threading.Thread(name='network_thread',     target=self._train_model)
-    
+
     nn_thread.start()
     env_thread.start()
 
@@ -304,7 +306,7 @@ class OffPolicyAgent(Agent):
     """Thread for running the environment. Must call `self._wait_train_done()`
     before selcting an action (by running the model). This ensures that the
     `self._train_model()` thread has finished the training step. After action
-    is selected, it must call `self._signal_act_chosen()` to allow 
+    is selected, it must call `self._signal_act_chosen()` to allow
     `self._train_model()` thread to start a new training step
     """
     raise NotImplementedError()
@@ -314,7 +316,7 @@ class OffPolicyAgent(Agent):
     """Thread for trianing the model. Must call `self._wait_act_chosen()`
     before trying to run a training step on the model. This ensures that the
     `self._run_env()` thread has finished selcting an action (by running the model).
-    After training step is done, it must call `self._signal_train_done()` to allow 
+    After training step is done, it must call `self._signal_train_done()` to allow
     `self._run_env()` thread to select a new action
     """
     raise NotImplementedError()

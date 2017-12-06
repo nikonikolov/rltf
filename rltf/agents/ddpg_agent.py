@@ -32,11 +32,11 @@ class AgentDDPG(OffPolicyAgent):
       memory_size: int. Size of the replay buffer
       obs_hist_len: int. How many environment observations comprise a single state.
     """
-  
+
     super().__init__(**agent_kwargs)
 
-    assert type(self.env.observation_space) == gym.spaces.Box
-    assert type(self.env.action_space)      == gym.spaces.Box
+    assert isinstance(self.env.observation_space, gym.spaces.Box)
+    assert isinstance(self.env.action_space,      gym.spaces.Box)
 
     self.act_min   = self.env.action_space.low
     self.act_max   = self.env.action_space.high
@@ -49,7 +49,7 @@ class AgentDDPG(OffPolicyAgent):
     # Get environment specs
     act_shape = list(self.env.action_space.shape)
     obs_shape = list(self.env.observation_space.shape)
-    
+
     # Image observation
     if len(obs_shape) == 3:
       obs_dtype = np.uint8
@@ -62,10 +62,10 @@ class AgentDDPG(OffPolicyAgent):
     model_kwargs["act_max"]         = self.act_max
     model_kwargs["actor_opt_conf"]  = actor_opt_conf
     model_kwargs["critic_opt_conf"] = critic_opt_conf
- 
+
     self.model      = model_type(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_hist_len)
-    
+
     # Configure what information to log
     super()._build_log_info()
 
@@ -84,7 +84,7 @@ class AgentDDPG(OffPolicyAgent):
     tf.summary.scalar("critic_learn_rate", self.critic_learn_rate_ph)
 
 
-  def _restore(self):
+  def _restore(self, graph):
     self.actor_learn_rate_ph  = graph.get_tensor_by_name("actor_learn_rate_ph:0")
     self.critic_learn_rate_ph = graph.get_tensor_by_name("critic_learn_rate_ph:0")
 
@@ -93,7 +93,7 @@ class AgentDDPG(OffPolicyAgent):
     log_info = [
       ( "actor learn rate",  "%f", lambda t: self.actor_opt_conf.lr_value(t)  ),
       ( "critic learn rate", "%f", lambda t: self.critic_opt_conf.lr_value(t) ),
-    ]    
+    ]
     return log_info
 
 
@@ -142,7 +142,7 @@ class AgentDDPG(OffPolicyAgent):
       # Reset the environment if end of episode
       # if done: next_obs = self.env.reset()
       # obs = next_obs
-      if done: 
+      if done:
         last_obs = self.env.reset()
         self.reset()
 
@@ -183,7 +183,7 @@ class AgentDDPG(OffPolicyAgent):
 
       else:
         self._wait_act_chosen()
-  
+
       if t % self.save_freq == 0: self._save()
 
       self._signal_train_done()

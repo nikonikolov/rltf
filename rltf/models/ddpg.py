@@ -34,7 +34,7 @@ class DDPG(Model):
     self.huber_loss   = huber_loss
     self.gamma        = gamma
     self.critic_reg   = critic_reg
-    
+
     self.actor_opt_conf   = actor_opt_conf
     self.critic_opt_conf  = critic_opt_conf
 
@@ -56,12 +56,12 @@ class DDPG(Model):
 
 
   def build(self):
-    
+
     super()._build()
 
     # Placehodler for the running mode - training or inference
-    self._training      = tf.placeholder_with_default(True, (), name="training") 
-    # self._training      = tf.Variable(True, trainable=False) 
+    self._training      = tf.placeholder_with_default(True, (), name="training")
+    # self._training      = tf.Variable(True, trainable=False)
     # self._set_train     = tf.assign(self._training, True,   name="set_train")
     # self._set_eval      = tf.assign(self._training, False,  name="set_eval")
 
@@ -119,7 +119,7 @@ class DDPG(Model):
 
     a_grad_tensors  = [grad for grad, var in actor_grads]
     c_grad_tensors  = [grad for grad, var in critic_grads]
-    
+
     # Get the ops for updating the running mean and variance in batch norm layers
     batch_norm_ops  = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     control_deps    = a_grad_tensors + c_grad_tensors + batch_norm_ops
@@ -130,7 +130,7 @@ class DDPG(Model):
 
     # Create train Op
     self._train_op  = tf.group(train_actor, train_critic, name="train_op")
-    
+
     # Create the Op that updates the target
     self._update_target = tf_utils.assign_values(target_vars, agent_vars, self.tau, "update_target")
 
@@ -187,7 +187,7 @@ class DDPG(Model):
 
       x = tf.layers.dense(x, n_actions, tf.nn.tanh, name="dense3",
                           kernel_initializer=tf.random_uniform_initializer(-3e-3, 3e-3))
-      
+
       return x
 
 
@@ -205,14 +205,14 @@ class DDPG(Model):
     regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg)
     x = state
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-      x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=init_uniform(), 
+      x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=init_uniform(),
                           kernel_regularizer=regularizer, name="dense1")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
 
       x = tf.concat([x, action], axis=-1)
 
       # No batch norm after action input, as in the original paper
-      x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=init_uniform(), 
+      x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=init_uniform(),
                           kernel_regularizer=regularizer, name="dense2")
 
       x = tf.layers.dense(x, 1, kernel_initializer=tf.random_uniform_initializer(-3e-3,3e-3),
@@ -297,6 +297,3 @@ class DDPG(Model):
       x = tf.layers.dense(x, 1, kernel_initializer=tf.random_uniform_initializer(-3e-4, 3e-4))
 
       return x
-
-
-

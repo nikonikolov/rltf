@@ -5,7 +5,7 @@ class AdamGradClipOptimizer(tf.train.AdamOptimizer):
 
   def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-08,
                use_locking=False, clip_val=None, name='AdamGradClipOptimizer'):
-    
+
     super().__init__(learning_rate=learning_rate,
                      beta1=beta1,
                      beta2=beta2,

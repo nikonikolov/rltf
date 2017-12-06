@@ -1,25 +1,28 @@
+import argparse
 import datetime
 import glob
-import gym
-import numpy as np
 import os
 import random
+
+import gym
+import numpy      as np
 import tensorflow as tf
 
 from rltf import config
 
 
 def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+  """Parse command line bool argument"""
+  if v.lower() in ('yes', 'true', 't', 'y', '1'):
+    return True
+  elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+    return False
+  else:
+    raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def set_global_seeds(i):
-  tf.set_random_seed(i) 
+  tf.set_random_seed(i)
   np.random.seed(i)
   random.seed(i)
 
@@ -79,14 +82,14 @@ def make_model_dir(model_type, env_id):
   # Get the number of existing models
   pattern     = model_dir + "_m*/"
   models      = glob.glob(pattern)
-  
+
   # Get the number of the new model dir
   model_dir  += "_m" + str(len(models)+1)
   model_dir   = os.path.join(model_dir, "")
 
   # Create the directory for the model
   os.makedirs(model_dir)
-  
+
   return model_dir
 
 

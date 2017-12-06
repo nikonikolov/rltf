@@ -42,7 +42,7 @@ class DQN(Model):
       gamma: float. Discount factor
       huber_loss: bool. Whether to use huber loss or not
     """
-    
+
     super().__init__()
 
     self.gamma      = gamma
@@ -71,14 +71,14 @@ class DQN(Model):
     obs_tp1_float = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
     act_t         = tf.cast(self._act_t_ph,   tf.int32)
 
-    # Construct the Q-network and the target network 
+    # Construct the Q-network and the target network
     q           = self.nn_model(obs_t_float,   self.n_actions, scope="agent_net")
     target_q    = self.nn_model(obs_tp1_float, self.n_actions, scope="target_net")
-      
+
     # Get the Q value for the played action
     act_mask    = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
     sample_q    = tf.boolean_mask(q, act_mask)
-    
+
     # Get the target Q value
     done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     target_q    = tf.reduce_max(target_q, axis=-1)

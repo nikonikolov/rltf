@@ -16,12 +16,12 @@ class OptimizerConf:
     self.kwargs       = kwargs
     self.lr_ph        = None
 
-  
+
   def build(self):
     """Construct the optimizer with all the specs and return it"""
     return self.opt_type(self.lr_ph, **self.kwargs)
 
-  
+
   def lr_value(self, t):
     """
     Args:

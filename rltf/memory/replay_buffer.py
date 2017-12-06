@@ -17,7 +17,7 @@ class ReplayBuffer(BaseBuffer):
     assert state_len > 0
     assert isinstance(state_len, int)
     # Only image observations support stacking observations
-    if state_len > 1: 
+    if state_len > 1:
       assert len(obs_shape) == 3
     # Make sure that the type of the observation is np.uint8 for images
     if len(obs_shape) == 3:
@@ -75,44 +75,44 @@ class ReplayBuffer(BaseBuffer):
 
   def encode_recent_obs(self):
     assert self.size_now > self.state_len
-    idx = (self.next_idx - 1) % self.max_size 
-    
+    idx = (self.next_idx - 1) % self.max_size
+
     if self.state_len == 1:   return self.obs[idx]
     else:                     return self._encode_observation(idx)
 
 
   def sample(self, batch_size):
     """
-    Sample uniformyl `batch_size` different transitions. Note that the 
+    Sample uniformyl `batch_size` different transitions. Note that the
     implementation is thread-safe and allows for another thread to be currently
     adding a new transition to the buffer.
 
-    i-th sample transition is as follows: when state `obs[i]`, action 
+    i-th sample transition is as follows: when state `obs[i]`, action
     `act[i]` was taken. After that reward `rew[i]` was received and subsequent
     state `obs_tp1[i]` was observed. If `done[i]` is True, then the episode was
     finished after taking `act[i]`
-    
+
     Arg:
       batch_size: int. Size of the batch to sample
     Returns:
-      Python dictionary with keys 
+      Python dictionary with keys
       "obs": np.array, shape=[batch_size, obs_shape], dtype=obs_dtype, Batch state
         FIX obs_shape - must be times state_len
 
       "act": np.array, shape=[batch_size, act_shape], dtype=act_dtype. Batch actions
       "rew": np.array, shape=[batch_size, 1], dtype=np.float32. Batch rewards
       "obs_tp1": np.array, shape=[batch_size, obs_shape], dtype=obs_dtype. Batch next state
-      "done": np.array, shape=[batch_size, 1], dtype=np.bool. Batch done mask. 
+      "done": np.array, shape=[batch_size, 1], dtype=np.bool. Batch done mask.
         True if episode has ended, False otherwise
     """
-        
+
     exclude = self._exclude_indices()
-    
+
     assert batch_size < self.size_now - len(exclude) - 1
-    
+
     idxes   = self._sample_n_unique(batch_size, 0, self.size_now-2, exclude)
     samples = self._batch_samples(idxes)
-    
+
     return samples
 
 
@@ -129,7 +129,7 @@ class ReplayBuffer(BaseBuffer):
     else:
       obs_batch     = np.concatenate([self._encode_observation(idx)[None] for idx in idxes], 0)
       obs_tp1_batch = np.concatenate([self._encode_observation(idx)[None] for idx in idxes+1], 0)
-      
+
     act_batch     = self.action[idxes]
     rew_batch     = self.reward[idxes]
     done_mask     = self.done[idxes]
@@ -138,7 +138,7 @@ class ReplayBuffer(BaseBuffer):
 
 
   def _exclude_indices(self):
-    """Compute indices that must be excluded because the information there 
+    """Compute indices that must be excluded because the information there
     might be incosistent or being currently modified.
     Returns:
       list or np.array of indices to exclude
@@ -148,13 +148,13 @@ class ReplayBuffer(BaseBuffer):
     # to the sample that will be overwritten next time. Then:
     # - the idx-1 sample is invalid because the next obs is not the true one
     # - the [idx : idx+state_len-1) samples are have inconsistent history
-    # If another thread can be currently incrementing the original value of 
-    # self.next_idx, then the actual values that idx can have at this 
+    # If another thread can be currently incrementing the original value of
+    # self.next_idx, then the actual values that idx can have at this
     # point are self.next_idx or self.next_idx+1. Then we need to widen the
     # exlude range by 1 at each end. However, the previous sample is no longer
-    # guaranteed to be correctly written, so we need to widen the min exclude 
+    # guaranteed to be correctly written, so we need to widen the min exclude
     # range by 1 more
-    
+
     idx     = self.next_idx
     exclude = np.arange(idx-3, idx+self.state_len) % self.max_size
     return exclude

@@ -32,8 +32,8 @@ class AgentDQN(OffPolicyAgent):
 
     super().__init__(**agent_kwargs)
 
-    assert type(self.env.observation_space) == gym.spaces.Box
-    assert type(self.env.action_space)      == gym.spaces.Discrete
+    assert isinstance(self.env.observation_space, gym.spaces.Box)
+    assert isinstance(self.env.action_space,      gym.spaces.Discrete)
 
     self.opt_conf = opt_conf
     self.exploration = exploration
@@ -124,7 +124,7 @@ class AgentDQN(OffPolicyAgent):
       # Reset the environment if end of episode
       # if done: next_obs = self.env.reset()
       # obs = next_obs
-      
+
       if done: last_obs = self.env.reset()
 
       self._log_progress(t)
@@ -165,7 +165,10 @@ class AgentDQN(OffPolicyAgent):
 
       else:
         self._wait_act_chosen()
-  
+
       if t % self.save_freq == 0: self._save()
 
       self._signal_train_done()
+
+  def reset(self):
+    pass

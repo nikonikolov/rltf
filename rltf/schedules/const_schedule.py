@@ -1,7 +1,7 @@
 from rltf.schedules.schedule import Schedule
 
 class ConstSchedule(Schedule):
-  
+
   def __init__(self, value):
     """Value remains constant over time.
     Args:
@@ -13,7 +13,7 @@ class ConstSchedule(Schedule):
     """See Schedule.value"""
     return self._v
 
-  def __str__(self):
+  def __repr__(self):
     """See Schedule.__str__"""
     string = self.__class__.__name__ + "({})".format(self._v)
     return string

@@ -8,4 +8,3 @@ class Schedule:
   def __repr__(self):
     """Representation of the schedule for logging purposes"""
     raise NotImplementedError()
-

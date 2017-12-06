@@ -2,7 +2,7 @@ import tensorflow as tf
 
 
 class Model:
-  """The base class for operating a Reinforcement Learning deep net in 
+  """The base class for operating a Reinforcement Learning deep net in
   TensorFlow. All networks descend from this class
   """
 
@@ -26,24 +26,45 @@ class Model:
     """
 
     # Get Ops
-    try: self._train_op       = graph.get_operation_by_name("train_op")
-    except KeyError: pass
-    try: self._update_target  = graph.get_operation_by_name("update_target")
-    except KeyError: pass
+    try:
+      self._train_op       = graph.get_operation_by_name("train_op")
+    except KeyError:
+      pass
+    try:
+      self._update_target  = graph.get_operation_by_name("update_target")
+    except KeyError:
+      pass
 
     # Get Placeholders
-    try: self._obs_t_ph   = graph.get_tensor_by_name("obs_t_ph:0")
-    except KeyError: pass
-    try: self._act_t_ph   = graph.get_tensor_by_name("act_t_ph:0")
-    except KeyError: pass
-    try: self._rew_t_ph   = graph.get_tensor_by_name("rew_t_ph:0")
-    except KeyError: pass
-    try: self._obs_tp1_ph = graph.get_tensor_by_name("obs_tp1_ph:0")
-    except KeyError: pass
-    try: self._done_ph    = graph.get_tensor_by_name("done_ph:0")
-    except KeyError: pass
-    try: self._action     = graph.get_tensor_by_name("action:0")
-    except KeyError: pass
+    try:
+      self._obs_t_ph   = graph.get_tensor_by_name("obs_t_ph:0")
+    except KeyError:
+      pass
+
+    try:
+      self._act_t_ph   = graph.get_tensor_by_name("act_t_ph:0")
+    except KeyError:
+      pass
+
+    try:
+      self._rew_t_ph   = graph.get_tensor_by_name("rew_t_ph:0")
+    except KeyError:
+      pass
+
+    try:
+      self._obs_tp1_ph = graph.get_tensor_by_name("obs_tp1_ph:0")
+    except KeyError:
+      pass
+
+    try:
+      self._done_ph    = graph.get_tensor_by_name("done_ph:0")
+    except KeyError:
+      pass
+
+    try:
+      self._action     = graph.get_tensor_by_name("action:0")
+    except KeyError:
+      pass
 
     self._restore(graph)
 
@@ -86,12 +107,14 @@ class Model:
   def train_op(self):
     """
     Returns:
-      `tf.Op` that trains the network. Requires that `self.obs_t_ph`, 
+      `tf.Op` that trains the network. Requires that `self.obs_t_ph`,
       `self.act_t_ph`, `self.obs_tp1_ph`, `self.done_ph` placeholders
       are set via feed_dict. Might require other placeholders as well.
     """
-    if hasattr(self, "_train_op"): return self._train_op
-    else: raise NotImplementedError()
+    if hasattr(self, "_train_op"):
+      return self._train_op
+    else:
+      raise NotImplementedError()
 
   @property
   def update_target(self):
@@ -99,8 +122,10 @@ class Model:
     Returns:
       `tf.Op` that updates the target network (if one is used).
     """
-    if hasattr(self, "_update_target"): return self._update_target
-    else: raise NotImplementedError()
+    if hasattr(self, "_update_target"):
+      return self._update_target
+    else:
+      raise NotImplementedError()
 
   @property
   def obs_t_ph(self):
@@ -108,8 +133,10 @@ class Model:
     Returns:
       `tf.placeholder` for observations at time t from the training batch
     """
-    if hasattr(self, "_obs_t_ph"): return self._obs_t_ph
-    else: raise NotImplementedError()
+    if hasattr(self, "_obs_t_ph"):
+      return self._obs_t_ph
+    else:
+      raise NotImplementedError()
 
   @property
   def act_t_ph(self):
@@ -117,8 +144,10 @@ class Model:
     Returns:
       `tf.placeholder` for actions at time t from the training batch
     """
-    if hasattr(self, "_act_t_ph"): return self._act_t_ph
-    else: raise NotImplementedError()
+    if hasattr(self, "_act_t_ph"):
+      return self._act_t_ph
+    else:
+      raise NotImplementedError()
 
   @property
   def rew_t_ph(self):
@@ -126,8 +155,10 @@ class Model:
     Returns:
       `tf.placeholder` for actions at time t from the training batch
     """
-    if hasattr(self, "_rew_t_ph"): return self._rew_t_ph
-    else: raise NotImplementedError()
+    if hasattr(self, "_rew_t_ph"):
+      return self._rew_t_ph
+    else:
+      raise NotImplementedError()
 
   @property
   def obs_tp1_ph(self):
@@ -135,8 +166,10 @@ class Model:
     Returns:
       `tf.placeholder` for observations at time t+1 from the training batch
     """
-    if hasattr(self, "_obs_tp1_ph"): return self._obs_tp1_ph
-    else: raise NotImplementedError()
+    if hasattr(self, "_obs_tp1_ph"):
+      return self._obs_tp1_ph
+    else:
+      raise NotImplementedError()
 
   @property
   def done_ph(self):
@@ -144,8 +177,10 @@ class Model:
     Returns:
     `tf.placeholder` to indicate end of episode for examples in the training batch
     """
-    if hasattr(self, "_done_ph"): return self._done_ph
-    else: raise NotImplementedError()
+    if hasattr(self, "_done_ph"):
+      return self._done_ph
+    else:
+      raise NotImplementedError()
 
   # @property
   # def training_ph(self):

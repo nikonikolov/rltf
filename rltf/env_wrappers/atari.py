@@ -135,9 +135,9 @@ class ClippedRewardsWrapper(gym.Wrapper):
 #   return env
 
 def wrap_deepmind_atari(env):
-  """Wraps an Atari environment to have the same settings as in the original 
+  """Wraps an Atari environment to have the same settings as in the original
   DQN Nature paper by Deepmind.
-  
+
   Args:
     env: gym.Env
   Returns:

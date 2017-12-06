@@ -6,7 +6,7 @@ def get_monitor_wrapper(env):
     env: gym.Env. The wrapped environment.
   Returns:
     the `gym.wrappers.Monitor` around env
-  
+
   Raises:
     `ValueError` if env is not wrapper by Monitor
   """
@@ -18,4 +18,4 @@ def get_monitor_wrapper(env):
     elif isinstance(env, gym.Wrapper):
       currentenv = currentenv.env
     else:
-      raise ValueError("Couldn't find wrapper named %s" % classname)
+      raise ValueError("Couldn't find wrapper named Monitor")

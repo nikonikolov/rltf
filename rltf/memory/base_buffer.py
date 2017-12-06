@@ -1,6 +1,8 @@
-import numpy as np
 import os
 import pickle
+
+import numpy as np
+
 
 class BaseBuffer():
 
@@ -13,8 +15,8 @@ class BaseBuffer():
       act_dtype: np.dtype. Type of the action data
     """
 
-    obs_shape   = list(obs_shape) 
-    act_shape   = list(act_shape) 
+    obs_shape   = list(obs_shape)
+    act_shape   = list(act_shape)
 
     self.max_size  = int(size)
     self.size_now  = 0
@@ -47,7 +49,7 @@ class BaseBuffer():
     """Store the data to disk
 
     NOTE: Undefined behavior if another thread accesses the object
-    
+
     Args:
       model_dir: Full path of the directory to save the buffer
       obj_name: Name of the object - used to uniquely identify the created files
@@ -55,7 +57,7 @@ class BaseBuffer():
 
     if obj_name is None:
       obj_name = self.__class__.__name__
-    
+
     np.save(os.path.join(model_dir, obj_name + "_obs.npy"),   self.obs)
     np.save(os.path.join(model_dir, obj_name + "_act.npy"),   self.action)
     np.save(os.path.join(model_dir, obj_name + "_done.npy"),  self.done)
@@ -71,7 +73,7 @@ class BaseBuffer():
     self.done   = None
 
     pickle_save(os.path.join(model_dir, obj_name + ".pkl"), self)
-    
+
     self.obs    = obs
     self.action = action
     self.reward = reward
@@ -98,7 +100,7 @@ class BaseBuffer():
       high: int. Upper boundary of the sample range
       exclude: list or np.array. Contains values that samples must not take
     """
-    
+
     batch = np.empty(n, dtype=np.uint32)
     if exclude is not None:
       exclude = np.asarray(exclude)
