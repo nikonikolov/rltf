@@ -30,6 +30,7 @@ def parse_args():
   parser.add_argument('--adam-epsilon', default=None,   type=float, help='expsilon for Adam optimizer')
   parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
   
+  parser.add_argument('--start-train',  default=50000,  type=int,   help='step at which to start training')
   parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')
@@ -103,7 +104,7 @@ def main():
   agent_kwargs = dict(
     env=env,
     train_freq=args.train_freq,
-    start_train=1000,
+    start_train=args.start_train,
     max_steps=int(2.5e6),
     batch_size=args.batch_size,
     model_dir=model_dir,
