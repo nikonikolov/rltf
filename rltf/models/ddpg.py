@@ -104,16 +104,11 @@ class DDPG(Model):
     actor_vars      = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net/actor")
     critic_vars     = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net/critic")
 
-    done_mask       = tf.cast(tf.logical_not(self._done_ph), tf.float32)
-    target_q        = self._rew_t_ph + done_mask * self.gamma * target_q
-
-    # Get Huber or L2 loss
-    critic_tf_loss  = tf.losses.huber_loss if self.huber_loss else tf.losses.mean_squared_error
+    target_q        = self._compute_target(target_q)
 
     # Set the pseudo loss for the policy. Take the negative of the loss for Gradient Ascent
-    actor_loss      = -tf.reduce_mean(actor_critic_q)
-    critic_loss     = critic_tf_loss(target_q, act_samples_q)
-    critic_loss    += tf.losses.get_regularization_loss(scope="agent_net/critic")
+    actor_loss      = self._get_actor_loss(actor_critic_q)
+    critic_loss     = self._get_critic_loss(target_q, act_samples_q)
 
     # Build the optimizers
     actor_opt       = self.actor_opt_conf.build()
@@ -149,6 +144,23 @@ class DDPG(Model):
     # Summaries
     tf.summary.scalar("actor_loss",   actor_loss)
     tf.summary.scalar("critic_loss",  critic_loss)
+
+
+  def _compute_target(self, target_q):
+    done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+    return self._rew_t_ph + done_mask * self.gamma * target_q
+
+  def _get_actor_loss(self, actor_critic_q):
+    return -tf.reduce_mean(actor_critic_q)
+
+  def _get_critic_loss(self, target_q, agent_q):
+    if self.huber_loss:
+      critic_loss = tf.losses.huber_loss(target_q, agent_q)
+    else:
+      critic_loss = tf.losses.mean_squared_error(target_q, agent_q)
+    critic_loss    += tf.losses.get_regularization_loss(scope="agent_net/critic")
+
+    return critic_loss
 
 
   def _restore(self, graph):

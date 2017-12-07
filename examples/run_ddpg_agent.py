@@ -5,6 +5,7 @@ from rltf.agents        import AgentDDPG
 from rltf.env_wrappers  import wrap_deepmind_ddpg
 from rltf.exploration   import OrnsteinUhlenbeckNoise
 from rltf.models        import DDPG
+from rltf.models        import QRDDPG
 from rltf.optimizers    import OptimizerConf
 from rltf.optimizers    import AdamGradClipOptimizer
 from rltf.run_utils     import str2bool
@@ -16,15 +17,16 @@ from rltf import run_utils as rltfru
 def parse_args():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--env-id',       required=True,  type=str,   help='full environment name')
-  # parser.add_argument('--model',        required=True,  type=str,   choices=["DDPG", "QRDDPG"])
+  parser.add_argument('--model',        required=True,  type=str,   choices=["DDPG", "QRDDPG"])
 
-  parser.add_argument('--actor-lr',     default=1e-4,   type=float, help='actor learn rate',)
+  parser.add_argument('--N',            default=100,    type=int,   help='number of quantiles')
+  parser.add_argument('--actor-lr',     default=1e-4,   type=float, help='actor learn rate')
   parser.add_argument('--critic-lr',    default=1e-3,   type=float, help='critic learn rate')
   parser.add_argument('--tau',          default=0.001,  type=float, help='target soft update weight')
   parser.add_argument('--sigma',        default=0.2,    type=float, help='ornsein uhlenbeck sigma')
   parser.add_argument('--theta',        default=0.15,   type=float, help='ornsein uhlenbeck theta')
   parser.add_argument('--critic-reg',   default=0.02,   type=float, help='network weight regularization')
-  parser.add_argument('--batch-size',   default=None,   type=float, help='batch size')
+  parser.add_argument('--batch-size',   default=None,   type=int,   help='batch size')
   parser.add_argument('--adam-epsilon', default=None,   type=float, help='expsilon for Adam optimizer')
   parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
   
@@ -42,8 +44,6 @@ def parse_args():
   
   args = parser.parse_args()
   
-  args.model = DDPG
-
   if args.grad_clip is not None:
     assert args.grad_clip > 0
     assert not args.huber_loss
@@ -55,9 +55,6 @@ def main():
 
   args = parse_args()
 
-  # Get the model-specific settings
-  model_type = args.model
-
   # Set the model-specific keyword arguments
   model_kwargs = dict(
     critic_reg=args.critic_reg,
@@ -65,6 +62,13 @@ def main():
     gamma=0.99,
     huber_loss=args.huber_loss,
   )
+
+  # Get the model-specific settings
+  if    args.model == "DDPG":
+    model_type = DDPG
+  elif  args.model == "QRDDPG":
+    model_type = QRDDPG
+    model_kwargs["N"] = args.N
 
   # Get the model directory path
   model_dir = rltfru.make_model_dir(model_type, args.env_id)
