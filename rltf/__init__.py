@@ -1,5 +1,5 @@
 from rltf import agents
-from rltf import env_wrappers
+from rltf import env_wrap
 from rltf import exploration
 from rltf import memory
 from rltf import models

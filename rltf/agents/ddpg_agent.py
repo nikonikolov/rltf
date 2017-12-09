@@ -96,8 +96,8 @@ class AgentDDPG(OffPolicyAgent):
 
   def _custom_log_info(self):
     log_info = [
-      ( "actor learn rate",  "%f", lambda t: self.actor_opt_conf.lr_value(t)  ),
-      ( "critic learn rate", "%f", lambda t: self.critic_opt_conf.lr_value(t) ),
+      ( "train/actor_learn_rate",  "f", self.actor_opt_conf.lr_value  ),
+      ( "train/critic_learn_rate", "f", self.critic_opt_conf.lr_value ),
     ]
     return log_info
 

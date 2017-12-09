@@ -1,5 +1,4 @@
 import argparse
-import datetime
 import glob
 import os
 import random
@@ -8,7 +7,7 @@ import gym
 import numpy      as np
 import tensorflow as tf
 
-from rltf import config
+import rltf.conf
 
 
 def str2bool(v):
@@ -25,6 +24,7 @@ def set_global_seeds(i):
   tf.set_random_seed(i)
   np.random.seed(i)
   random.seed(i)
+  rltf.conf.SEED = i
 
 
 def make_env(env_id, seed, model_dir, save_video, video_freq=None):
@@ -69,14 +69,18 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=None):
 def make_model_dir(model_type, env_id):
   """
   Args:
-    model_type: python class. The class of the model
+    model_type: python class or str. The class of the model
     env_id: str. The environment name
   Returns:
     The absolute path for the model directory
   """
 
-  model_name  = model_type.__name__.lower()
-  model_dir   = os.path.join(config.MODELS_DIR,   model_name)
+  if isinstance(model_type, str):
+    model_name  = model_type.lower()
+  else:
+    model_name  = model_type.__name__.lower()
+
+  model_dir   = os.path.join(rltf.conf.MODELS_DIR,   model_name)
   model_dir   = os.path.join(model_dir,   env_id)
 
   # Get the number of existing models
@@ -91,23 +95,3 @@ def make_model_dir(model_type, env_id):
   os.makedirs(model_dir)
 
   return model_dir
-
-
-def log_params(model_dir, params):
-  """Log the runtime parameters for the model to a file on disk
-  Args:
-    model_dir: str. The path where to save the log file
-    params: list. Each entry must be a tuple of (name, value). Value can also
-      be any time of object, but it should have an implementation of __str__
-  """
-  params = sorted(params, key=lambda tup: tup[0])
-
-  str_sizes = [len(s) for s, _ in params]
-  pad       = max(str_sizes) + 2
-  params    = [(s.ljust(pad), v) for s, v in params]
-
-  with open(os.path.join(model_dir, "params.txt"), 'w') as f:
-    date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    f.write(date + "\n\n")
-    for k, v in params:
-      f.write(k + ": " + str(v) + "\n")

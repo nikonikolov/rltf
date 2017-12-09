@@ -2,7 +2,7 @@ import argparse
 import tensorflow as tf
 
 from rltf.agents        import AgentDQN
-from rltf.env_wrappers  import wrap_deepmind_atari
+from rltf.env_wrap      import wrap_deepmind_atari
 # from rltf.exploration   import EGreedy
 from rltf.models        import DQN
 # from rltf.models        import C51
@@ -13,6 +13,7 @@ from rltf.run_utils     import str2bool
 from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
 
+import rltf.log
 from rltf import run_utils as rltfru
 
 
@@ -48,6 +49,12 @@ def main():
 
   args = parse_args()
 
+  # Get the model directory path
+  model_dir = rltfru.make_model_dir(args.model, args.env_id)
+
+  # Configure loggers
+  rltf.log.conf_logs(model_dir)
+
   # Get the model-specific settings
   if   args.model == "DQN":
     model_type    = DQN
@@ -61,8 +68,6 @@ def main():
 
   model_kwargs["gamma"] = 0.99
 
-  # Get the model directory path
-  model_dir = rltfru.make_model_dir(model_type, args.env_id)
 
   # Create the environment
   env = rltfru.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
@@ -110,7 +115,7 @@ def main():
   # Log the parameters for model
   log_info = [("seed", args.seed), ("extra_info", args.extra_info)]
   log_info += kwargs.items()
-  rltfru.log_params(model_dir, log_info)
+  rltf.log.log_params(log_info, args)
 
   # Create the agent
   dqn_agent = AgentDQN(**kwargs)

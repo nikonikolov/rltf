@@ -1,12 +1,17 @@
+import logging
 import os
 import time
 import threading
-import sys
 
 import numpy      as np
 import tensorflow as tf
 
-import rltf.env_wrappers.utils as env_utils
+import rltf.conf
+import rltf.log
+from rltf.env_wrap.utils import get_monitor_wrapper
+
+stats_logger  = logging.getLogger(rltf.conf.STATS_LOGGER_NAME)
+logger        = logging.getLogger(__name__)
 
 
 class Agent:
@@ -42,7 +47,7 @@ class Agent:
 
     # Store parameters
     self.env          = env
-    self.env_monitor  = env_utils.get_monitor_wrapper(env)
+    self.env_monitor  = get_monitor_wrapper(env)
 
     self.train_freq   = train_freq
     self.start_train  = start_train
@@ -58,12 +63,12 @@ class Agent:
 
     self.env_file     = os.path.join(self.model_dir, "Env.pkl")
 
-    self.summary      = None
-
-    self.episodes         = 0
+    # Stats
+    self.episode_rewards  = np.asarray([])
     self.mean_ep_rew      = -float('nan')
-    self.best_ep_rew      = -float('inf')
     self.best_mean_ep_rew = -float('inf')
+    self.stats_n          = 100   # Number of episodes over which to take stats
+    self.summary          = None
 
     # Attributes that are set during build
     self.model            = None
@@ -95,8 +100,7 @@ class Agent:
 
     # ------------------ BUILD THE MODEL ----------------
     if not restore:
-      print("Building model")
-      # logger.info("Building model")
+      logger.info("Building model")
       tf.reset_default_graph()
 
       # Call the subclass _build function
@@ -133,8 +137,7 @@ class Agent:
 
     # ------------------ RESTORE THE MODEL ----------------
     else:
-      print("Restoring model")
-      # logger.info("Restoring model")
+      logger.info("Restoring model")
 
       # Restore the graph
       ckpt_path = ckpt.model_checkpoint_path + '.meta'
@@ -200,33 +203,64 @@ class Agent:
 
 
   def _build_log_info(self):
-
-    def mean_step_time():
-      if self.last_log_time is None:
-        self.last_log_time = time.time()
-        return float("nan")
-      time_now  = time.time()
-      mean_time = (time_now - self.last_log_time) / self.log_freq
-      self.last_log_time  = time_now
-      return mean_time
+    n = self.stats_n
 
     default_info = [
-      ("timestep",              "%d", lambda t: t),
-      ("episodes",              "%d", lambda t: self.episodes),
-      ("mean reward (100 eps)", "%f", lambda t: self.mean_ep_rew),
-      ("best mean reward",      "%f", lambda t: self.best_mean_ep_rew),
-      ("best episode reward",   "%f", lambda t: self.best_ep_rew),
-      ("mean step time",        "%f", lambda t: mean_step_time()),
+      ("total/agent_steps",                     "d",    lambda t: t),
+      ("total/env_steps",                       "d",    lambda t: self.env_monitor.get_total_steps()),
+      ("total/episodes",                        "d",    self._stats_episodes),
+
+      ("mean/n_eps > 0.8*best_rew (%d eps)"%n,  ".3f",  self._stats_frac_good_episodes),
+      ("mean/ep_length",                        ".3f",  self._stats_ep_length),
+      ("mean/steps_per_sec",                    ".3f",  self._stats_steps_per_sec),
+      ("mean/reward (%d eps)"%n,                ".3f",  lambda t: self.mean_ep_rew),
+
+      ("best/episode_reward",                   ".3f",  self._stats_best_reward),
+      ("best/mean_reward (%d eps)"%n,           ".3f",  lambda t: self.best_mean_ep_rew),
     ]
 
     custom_log_info = self._custom_log_info()
     log_info = default_info + custom_log_info
 
-    str_sizes = [len(s) for s, _, _ in log_info]
-    pad = max(str_sizes) + 2
+    self.log_info = rltf.log.format_tabular(log_info)
 
-    self.log_info  = [(s.ljust(pad) + ptype, v) for s, ptype, v in log_info]
-    self.log_info  = [("=" * pad + "%s", lambda t: "")] + self.log_info
+
+  def _stats_ep_length(self, *args):
+    ep_lengths = self.env_monitor.get_episode_lengths()
+    if len(ep_lengths) > 0:
+      return np.mean(ep_lengths)
+    return float("nan")
+
+  def _stats_episodes(self, *args):
+    if self.episode_rewards.size == 0:
+      return float("nan")
+    return self.episode_rewards.size
+
+  def _stats_frac_good_episodes(self, *args):
+    if self.episode_rewards.size == 0:
+      return float("nan")
+    ep_rews   = self.episode_rewards[-self.stats_n:]
+    best_rew  = ep_rews.max()
+    if best_rew >= 0:
+      thresh  = 0.8 * best_rew
+    else:
+      thresh  = 1.2 * best_rew
+    good_eps  = ep_rews >= thresh
+    return np.sum(good_eps) / float(self.stats_n)
+
+  def _stats_best_reward(self, *args):
+    if self.episode_rewards.size == 0:
+      return float("nan")
+    return self.episode_rewards.max()
+
+  def _stats_steps_per_sec(self, *args):
+    now  = time.time()
+    if self.last_log_time is None:
+      t_per_s = float("nan")
+    else:
+      t_per_s = self.log_freq / (now - self.last_log_time)
+    self.last_log_time  = now
+    return t_per_s
 
 
   def _custom_log_info(self):
@@ -255,18 +289,16 @@ class Agent:
     # which runs 2 threads without coordination
     if (t+2) % self.log_freq == 0 and self.learn_started:
       episode_rewards = self.env_monitor.get_episode_rewards()
-      try:
-        self.mean_ep_rew      = np.mean(episode_rewards[-100:])
-        self.best_ep_rew      = max(episode_rewards)
+      self.episode_rewards = np.asarray(episode_rewards)
+      if self.episode_rewards.size > 0:
+        self.mean_ep_rew      = np.mean(episode_rewards[-self.stats_n:])
         self.best_mean_ep_rew = max(self.best_mean_ep_rew, self.mean_ep_rew)
-      except IndexError:
-        pass
-      self.episodes = len(episode_rewards)
 
     if t % self.log_freq == 0 and self.learn_started:
+      stats_logger.info("")
       for s, lambda_v in self.log_info:
-        print(s % lambda_v(t))
-      sys.stdout.flush()
+        stats_logger.info(s.format(lambda_v(t)))
+      stats_logger.info("")
 
       if self.summary:
         # Log with TensorBoard
@@ -276,9 +308,9 @@ class Agent:
   def _save(self):
     # Save model
     if self.learn_started and self.save:
-      print("Saving model")
+      logger.info("Saving model")
       self.saver.save(self.sess, self.model_dir, global_step=self.t_tf)
-      # print("Saving memory")
+      # logger.info("Saving memory")
       # self.replay_buf.save(self.model_dir)
       # pickle_save(self.env_file, self.env)
 

@@ -150,8 +150,10 @@ class DDPG(Model):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     return self._rew_t_ph + done_mask * self.gamma * target_q
 
+
   def _get_actor_loss(self, actor_critic_q):
     return -tf.reduce_mean(actor_critic_q)
+
 
   def _get_critic_loss(self, target_q, agent_q):
     if self.huber_loss:

@@ -2,7 +2,7 @@ import argparse
 import tensorflow as tf
 
 from rltf.agents        import AgentDDPG
-from rltf.env_wrappers  import wrap_deepmind_ddpg
+from rltf.env_wrap      import wrap_deepmind_ddpg
 from rltf.exploration   import OrnsteinUhlenbeckNoise
 from rltf.models        import DDPG
 from rltf.models        import QRDDPG
@@ -11,6 +11,7 @@ from rltf.optimizers    import AdamGradClipOptimizer
 from rltf.run_utils     import str2bool
 from rltf.schedules     import ConstSchedule
 
+import rltf.log
 from rltf import run_utils as rltfru
 
 
@@ -56,6 +57,12 @@ def main():
 
   args = parse_args()
 
+  # Get the model directory path
+  model_dir = rltfru.make_model_dir(args.model, args.env_id)
+
+  # Configure loggers
+  rltf.log.conf_logs(model_dir)
+
   # Set the model-specific keyword arguments
   model_kwargs = dict(
     critic_reg=args.critic_reg,
@@ -71,8 +78,6 @@ def main():
     model_type = QRDDPG
     model_kwargs["N"] = args.N
 
-  # Get the model directory path
-  model_dir = rltfru.make_model_dir(model_type, args.env_id)
 
   # Create the environment
   env = rltfru.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
@@ -127,7 +132,7 @@ def main():
   # Log the parameters for model
   log_info = [("seed", args.seed), ("extra_info", args.extra_info)]
   log_info += kwargs.items()
-  rltfru.log_params(model_dir, log_info)
+  rltf.log.log_params(log_info, args)
 
   # Create the agent
   ddpg_agent = AgentDDPG(**kwargs)

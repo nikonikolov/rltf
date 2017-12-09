@@ -1,6 +1,6 @@
-# from rltf.env_wrappers.wrappers import ResizeFrame
-# from rltf.env_wrappers.wrappers import RepeatAndStackImage
-from rltf.env_wrappers.wrappers import ScaleReward
+# from rltf.env_wrap.wrappers import ResizeFrame
+# from rltf.env_wrap.wrappers import RepeatAndStackImage
+from rltf.env_wrap.wrappers import ScaleReward
 
 def wrap_deepmind_ddpg(env, rew_scale=1.0):
   if rew_scale != 1.0:

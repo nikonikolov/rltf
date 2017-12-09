@@ -81,8 +81,8 @@ class AgentDQN(OffPolicyAgent):
 
   def _custom_log_info(self):
     log_info = [
-      ( "learn rate",  "%f", lambda t: self.opt_conf.lr_value(t)  ),
-      ( "exploration", "%f", lambda t: self.exploration.value(t) ),
+      ( "train/learn_rate",  "f", self.opt_conf.lr_value ),
+      ( "train/exploration", "f", self.exploration.value ),
     ]
     return log_info
 
