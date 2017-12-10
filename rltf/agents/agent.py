@@ -208,7 +208,7 @@ class Agent:
     default_info = [
       ("total/agent_steps",                     "d",    lambda t: t),
       ("total/env_steps",                       "d",    lambda t: self.env_monitor.get_total_steps()),
-      ("total/episodes",                        "d",    self._stats_episodes),
+      ("total/episodes",                        "d",    lambda t: self.episode_rewards.size),
 
       ("mean/n_eps > 0.8*best_rew (%d eps)"%n,  ".3f",  self._stats_frac_good_episodes),
       ("mean/ep_length",                        ".3f",  self._stats_ep_length),
@@ -230,11 +230,6 @@ class Agent:
     if len(ep_lengths) > 0:
       return np.mean(ep_lengths)
     return float("nan")
-
-  def _stats_episodes(self, *args):
-    if self.episode_rewards.size == 0:
-      return float("nan")
-    return self.episode_rewards.size
 
   def _stats_frac_good_episodes(self, *args):
     if self.episode_rewards.size == 0:
