@@ -50,6 +50,7 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     - https://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
     - https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
     - https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py
+    - https://github.com/rll/rllab/blob/master/rllab/exploration_strategies/ou_strategy.py
   """
 
   def __init__(self, mu, sigma, theta=0.15, dt=1e-2):
@@ -63,15 +64,9 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     """
     super().__init__()
 
-    try:
-      self.shape = mu.shape
-    except AttributeError:
-      mu = np.float32(mu)
-      try:
-        self.shape = sigma.shape
-      except AttributeError:
-        sigma = np.float32(sigma)
-        self.shape = None
+    assert isinstance(sigma, np.ndarray)
+    assert isinstance(mu,    np.ndarray)
+    assert mu.shape == sigma.shape
 
     self.mu     = mu
     self.sigma  = sigma
@@ -80,15 +75,14 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     self.reset()
 
   def sample(self):
-    # self.x += self.theta * (self.mu - self.x) * self.dt +
-    # self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.shape)
-    mean  = self.theta * (self.mu - self.x) * self.dt
-    std   = self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.shape)
-    self.x += mean + std
-    return self.x
+    x = self.x + self.theta * (self.mu - self.x) * self.dt + \
+        self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.sigma.shape)
+    self.x = x
+    return x
 
   def reset(self):
-    self.x = np.zeros_like(self.mu, dtype=np.float32)
+    self.x = self.mu
+    # self.x = np.zeros_like(self.mu, dtype=np.float32)
 
   def __repr__(self):
     return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={}, theta={}, dt={})'.format(

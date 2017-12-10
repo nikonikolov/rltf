@@ -2,6 +2,7 @@ import cv2
 import gym
 import numpy as np
 
+
 class ScaleReward(gym.RewardWrapper):
   """Scale rewards"""
 
@@ -11,6 +12,40 @@ class ScaleReward(gym.RewardWrapper):
 
   def _reward(self, reward):
     return self.scale * reward
+
+
+class NormalizeAction(gym.ActionWrapper):
+  """Receive actions in the range [-1, 1]"""
+
+  def __init__(self, env):
+    assert isinstance(env.action_space, gym.spaces.Box)
+    super().__init__(env)
+    self.act_mean = (self.action_space.high + self.action_space.low) / 2.0
+    self.act_std  = (self.action_space.high - self.action_space.low) / 2.0
+    self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=self.action_space.shape)
+
+  def _action(self, action):
+    return self.act_std * action + self.act_mean
+
+  def _reverse_action(self, action):
+    return (action - self.act_mean) / self.act_std
+
+
+class ClipAction(gym.ActionWrapper):
+  """Clip actions before playing them"""
+
+  def __init__(self, env, low=-1.0, high=1.0):
+    assert isinstance(env.action_space, gym.spaces.Box)
+    super().__init__(env)
+    self.high = high
+    self.low  = low
+
+  def _action(self, action):
+    return np.clip(action, self.low, self.high)
+
+  def _reverse_action(self, action):
+    return action
+
 
 
 # class RepeatAndStackLowDim(gym.Wrapper):
@@ -46,7 +81,9 @@ class ScaleReward(gym.RewardWrapper):
 #         obs, reward, done, info = self.env.step(action)
 #         total_reward += reward
 #       self._obs_buf[i, :] = obs
-
+#     # NOTE: DO NOTE RETURN self._obs_buf !!! This breaks encapsulation
+#     # and will cause the object to later change the replay buffer unintentionally.
+#     # Return a copy of self._obs_buf
 #     return self._obs_buf, total_reward, done, info
 
 

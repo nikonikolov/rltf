@@ -1,4 +1,7 @@
+import logging
 import tensorflow as tf
+
+logger = logging.getLogger(__name__)
 
 
 def assign_values(dest_vars, source_vars, weight=1.0, name=None):
@@ -23,13 +26,18 @@ def assign_values(dest_vars, source_vars, weight=1.0, name=None):
   assert len(source_vars) == len(dest_vars)
 
   # Create op that updates the target Q network with the current Q network
-  networks_vars = zip(sorted(source_vars, key=lambda v: v.name),
-                      sorted(dest_vars,   key=lambda v: v.name))
+  zip_vars = zip(sorted(source_vars, key=lambda v: v.name),
+                 sorted(dest_vars,   key=lambda v: v.name))
+
+  logger.debug("Assigning tf values as:")
+  for s_var, d_var in zip_vars:
+    logger.debug(d_var.name + " := " + s_var.name)
+  logger.debug("")
 
   if weight == 1.0:
-    update_ops    = [d_var.assign(s_var) for s_var, d_var in networks_vars]
+    update_ops    = [d_var.assign(s_var) for s_var, d_var in zip_vars]
   else:
-    update_ops    = [d_var.assign(weight*s_var + (1.-weight)*d_var) for s_var, d_var in networks_vars]
+    update_ops    = [d_var.assign(weight*s_var + (1.-weight)*d_var) for s_var, d_var in zip_vars]
 
   return tf.group(*update_ops, name=name)
 
@@ -46,3 +54,17 @@ def huber_loss(x, delta=1.0):
     tf.square(x) * 0.5,
     delta * (abs_x - 0.5 * delta)
   )
+
+
+def init_he_relu():
+  """
+  Returns:
+    A normal distribution initializer with std = sqrt(2.0 / fan_in), where fan_in
+    is the size of the variable
+  """
+  # variance_scaling_initializer: https://www.tensorflow.org/api_docs/python/tf/variance_scaling_initializer
+  return tf.variance_scaling_initializer(scale=2.0, mode="fan_in", distribution="normal")
+
+
+def init_default():
+  return None

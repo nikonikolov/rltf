@@ -1,9 +1,11 @@
 import argparse
+import numpy      as np
 import tensorflow as tf
 
 from rltf.agents        import AgentDDPG
 from rltf.env_wrap      import wrap_deepmind_ddpg
 from rltf.exploration   import OrnsteinUhlenbeckNoise
+from rltf.exploration   import GaussianNoise
 from rltf.models        import DDPG
 from rltf.models        import QRDDPG
 from rltf.optimizers    import OptimizerConf
@@ -24,13 +26,16 @@ def parse_args():
   parser.add_argument('--actor-lr',     default=1e-4,   type=float, help='actor learn rate')
   parser.add_argument('--critic-lr',    default=1e-3,   type=float, help='critic learn rate')
   parser.add_argument('--tau',          default=0.001,  type=float, help='target soft update weight')
-  parser.add_argument('--sigma',        default=0.2,    type=float, help='ornsein uhlenbeck sigma')
-  parser.add_argument('--theta',        default=0.15,   type=float, help='ornsein uhlenbeck theta')
   parser.add_argument('--critic-reg',   default=0.02,   type=float, help='network weight regularization')
   parser.add_argument('--batch-size',   default=None,   type=int,   help='batch size')
   parser.add_argument('--adam-epsilon', default=None,   type=float, help='expsilon for Adam optimizer')
   parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
-  
+  parser.add_argument('--sigma',        default=0.2,    type=float, help='action noise sigma')
+  parser.add_argument('--theta',        default=0.15,   type=float, help='action noise theta')
+  parser.add_argument('--dt',           default=1e-2,   type=float, help='action noise dt')
+  parser.add_argument('--noise-type',   default="OU",   type=str,   help='action noise type',
+                      choices=["OU", "Gaussian"])
+
   parser.add_argument('--start-train',  default=50000,  type=int,   help='step at which to start training')
   parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
@@ -102,7 +107,13 @@ def main():
     critic_opt_conf = OptimizerConf(AdamGradClipOptimizer, critic_lr, **opt_args)
 
   # Create the exploration noise
-  action_noise = OrnsteinUhlenbeckNoise(mu=0, sigma=args.sigma, theta=args.theta)
+  act_shape     = env.action_space.shape
+  mu            = np.zeros(act_shape, dtype=np.float32)
+  sigma         = np.ones(act_shape,  dtype=np.float32) * args.sigma
+  if args.noise_type == "OU":
+    action_noise  = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
+  elif args.noise_type == "Gaussian":
+    action_noise  = GaussianNoise(mu, sigma)
 
 
   # Set the Agent class keyword arguments

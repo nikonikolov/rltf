@@ -101,7 +101,7 @@ class Agent:
     # ------------------ BUILD THE MODEL ----------------
     if not restore:
       logger.info("Building model")
-      tf.reset_default_graph()
+      # tf.reset_default_graph()
 
       # Call the subclass _build function
       self._build()

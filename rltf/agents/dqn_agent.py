@@ -120,7 +120,7 @@ class AgentDQN(OffPolicyAgent):
 
       # Run action
       # next_obs, reward, done, info = self.env.step(action)
-      last_obs, reward, done, info = self.env.step(action)
+      last_obs, reward, done, _ = self.env.step(action)
 
       # Store the effect of the action taken upon last_obs
       # self.replay_buf.store(obs, action, reward, done)

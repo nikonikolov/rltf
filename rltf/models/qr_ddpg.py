@@ -4,15 +4,15 @@ import tensorflow as tf
 from rltf.models  import DDPG
 from rltf.models  import tf_utils
 
-from rltf.models.ddpg import init_uniform
+from rltf.models.ddpg import init_hidden_uniform
 
 
 class QRDDPG(DDPG):
 
-  def __init__(self, obs_shape, act_min, act_max, actor_opt_conf, critic_opt_conf,
+  def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf,
                critic_reg, tau, gamma, N, huber_loss):
 
-    super().__init__(obs_shape, act_min, act_max, actor_opt_conf, critic_opt_conf,
+    super().__init__(obs_shape, n_actions, actor_opt_conf, critic_opt_conf,
                      critic_reg, tau, gamma, huber_loss)
     self.N = N
 
@@ -85,16 +85,16 @@ class QRDDPG(DDPG):
     regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg)
     x = state
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-      x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=init_uniform(),
+      x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense1")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
 
       x = tf.concat([x, action], axis=-1)
 
       # No batch norm after action input, as in the original paper
-      x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=init_uniform(),
+      x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense2")
 
-      x = tf.layers.dense(x, self.N, kernel_initializer=tf.random_uniform_initializer(-3e-3,3e-3),
+      x = tf.layers.dense(x, self.N, kernel_initializer=self.output_init(),
                           kernel_regularizer=regularizer, name="dense3")
       return x

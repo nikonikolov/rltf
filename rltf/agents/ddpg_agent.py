@@ -1,3 +1,5 @@
+import collections
+
 import gym
 import numpy as np
 import tensorflow as tf
@@ -39,8 +41,6 @@ class AgentDDPG(OffPolicyAgent):
     assert isinstance(self.env.action_space,      gym.spaces.Box)
     assert update_target_freq % self.train_freq == 0
 
-    self.act_min   = self.env.action_space.low
-    self.act_max   = self.env.action_space.high
     self.action_noise = action_noise
 
     self.actor_opt_conf   = actor_opt_conf
@@ -59,8 +59,7 @@ class AgentDDPG(OffPolicyAgent):
       obs_dtype = np.float32
 
     model_kwargs["obs_shape"]       = obs_shape
-    model_kwargs["act_min"]         = self.act_min
-    model_kwargs["act_max"]         = self.act_max
+    model_kwargs["n_actions"]       = act_shape[0]
     model_kwargs["actor_opt_conf"]  = actor_opt_conf
     model_kwargs["critic_opt_conf"] = critic_opt_conf
 
@@ -73,6 +72,9 @@ class AgentDDPG(OffPolicyAgent):
     # Custom TF Tensors and Ops
     self.actor_learn_rate_ph  = None
     self.critic_learn_rate_ph = None
+
+    # Custom stats
+    self.act_noise_stats = collections.deque([], maxlen=self.log_freq)
 
 
   def _build(self):
@@ -95,15 +97,29 @@ class AgentDDPG(OffPolicyAgent):
 
 
   def _custom_log_info(self):
+    t = self.log_freq
     log_info = [
-      ( "train/actor_learn_rate",  "f", self.actor_opt_conf.lr_value  ),
-      ( "train/critic_learn_rate", "f", self.critic_opt_conf.lr_value ),
+      ( "train/actor_learn_rate",           "f", self.actor_opt_conf.lr_value   ),
+      ( "train/critic_learn_rate",          "f", self.critic_opt_conf.lr_value  ),
+      ( "mean/act_noise_mean (%d steps)"%t, "f", self._stats_act_noise_mean     ),
+      ( "mean/act_noise_std  (%d steps)"%t, "f", self._stats_act_noise_std      ),
     ]
     return log_info
 
 
   def reset(self):
     self.action_noise.reset()
+
+
+  def _stats_act_noise_mean(self, *args):
+    if self.act_noise_stats.count() == 0:
+      return float("nan")
+    return np.mean(self.act_noise_stats)
+
+  def _stats_act_noise_std(self, *args):
+    if self.act_noise_stats.count() == 0:
+      return float("nan")
+    return np.std(self.act_noise_stats)
 
 
   def _run_env(self):
@@ -125,6 +141,9 @@ class AgentDDPG(OffPolicyAgent):
         state   = self.replay_buf.encode_recent_obs()
         action  = self.model.control_action(self.sess, state)
         action  = action + noise
+  
+        # Add action noise to stats
+        self.act_noise_stats.append(noise)
 
       else:
         # Choose random action when model not initialized
@@ -138,7 +157,7 @@ class AgentDDPG(OffPolicyAgent):
 
       # Run action
       # next_obs, reward, done, info = self.env.step(action)
-      last_obs, reward, done, info = self.env.step(action)
+      last_obs, reward, done, _ = self.env.step(action)
 
       # Store the effect of the action taken upon last_obs
       # self.replay_buf.store(obs, action, reward, done)
