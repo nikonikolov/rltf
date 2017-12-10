@@ -112,12 +112,12 @@ class AgentDDPG(OffPolicyAgent):
 
 
   def _stats_act_noise_mean(self, *args):
-    if self.act_noise_stats.count() == 0:
+    if len(self.act_noise_stats) == 0:
       return float("nan")
     return np.mean(self.act_noise_stats)
 
   def _stats_act_noise_std(self, *args):
-    if self.act_noise_stats.count() == 0:
+    if len(self.act_noise_stats) == 0:
       return float("nan")
     return np.std(self.act_noise_stats)
 
