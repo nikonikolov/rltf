@@ -130,7 +130,8 @@ class AgentDQN(OffPolicyAgent):
       # if done: next_obs = self.env.reset()
       # obs = next_obs
 
-      if done: last_obs = self.env.reset()
+      if done:
+        last_obs = self.env.reset()
 
       self._log_progress(t)
 
@@ -171,7 +172,8 @@ class AgentDQN(OffPolicyAgent):
       else:
         self._wait_act_chosen()
 
-      if t % self.save_freq == 0: self._save()
+      if t % self.save_freq == 0:
+        self._save()
 
       self._signal_train_done()
 

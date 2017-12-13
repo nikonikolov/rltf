@@ -141,7 +141,7 @@ class AgentDDPG(OffPolicyAgent):
         state   = self.replay_buf.encode_recent_obs()
         action  = self.model.control_action(self.sess, state)
         action  = action + noise
-  
+
         # Add action noise to stats
         self.act_noise_stats.append(noise)
 
@@ -209,6 +209,7 @@ class AgentDDPG(OffPolicyAgent):
       else:
         self._wait_act_chosen()
 
-      if t % self.save_freq == 0: self._save()
+      if t % self.save_freq == 0:
+        self._save()
 
       self._signal_train_done()

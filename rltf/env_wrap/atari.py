@@ -92,8 +92,10 @@ class MaxAndSkipEnv(gym.Wrapper):
     done = None
     for i in range(self._skip):
       obs, reward, done, info = self.env.step(action)
-      if i == self._skip - 2: self._obs_buffer[0] = obs
-      if i == self._skip - 1: self._obs_buffer[1] = obs
+      if i == self._skip - 2:
+        self._obs_buffer[0] = obs
+      if i == self._skip - 1:
+        self._obs_buffer[1] = obs
       total_reward += reward
       if done:
         break

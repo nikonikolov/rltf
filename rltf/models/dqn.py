@@ -101,7 +101,7 @@ class DQN(Model):
     self._train_op = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
 
     # Create the Op to update the target
-    self._update_target = tf_utils.assign_values(target_vars, agent_vars, name="update_target")
+    self._update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
     # Save the Q-function estimate tensor
     self._q   = tf.identity(q, name="q_fn")
