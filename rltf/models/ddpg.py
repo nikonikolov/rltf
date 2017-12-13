@@ -112,12 +112,7 @@ class DDPG(Model):
     actor_grads     = actor_opt.compute_gradients(actor_loss,   var_list=actor_vars)
     critic_grads    = critic_opt.compute_gradients(critic_loss, var_list=critic_vars)
 
-    a_grad_tensors  = [grad for grad, var in actor_grads]
-    c_grad_tensors  = [grad for grad, var in critic_grads]
-
-    # Get the ops for updating the running mean and variance in batch norm layers
-    batch_norm_ops  = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    control_deps    = a_grad_tensors + c_grad_tensors + batch_norm_ops
+    control_deps    = self._group_control_deps(actor_grads, critic_grads)
 
     # Apply gradients only after both actor and critic have been differentiated
     with tf.control_dependencies(control_deps):
@@ -129,14 +124,14 @@ class DDPG(Model):
 
     # Create the Op that updates the target
     logger.debug("Creating target net update Op")
-    self._update_target = tf_utils.assign_values(target_vars, agent_vars, self.tau, "update_target")
+    self._update_target = tf_utils.assign_vars(target_vars, agent_vars, self.tau, "update_target")
 
     # Remember the action tensor. name is needed when restoring the graph
     self._action    = tf.identity(action, name="action")
 
     # Initialization Op
     logger.debug("Creating initialization Op")
-    self._init_op   = tf_utils.assign_values(target_vars, agent_vars, name="init_op")
+    self._init_op   = tf_utils.assign_vars(target_vars, agent_vars, name="init_op")
 
     # Summaries
     tf.summary.scalar("actor_loss",   actor_loss)
@@ -149,7 +144,9 @@ class DDPG(Model):
 
   def _compute_target(self, target_q):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
-    return self._rew_t_ph + done_mask * self.gamma * target_q
+    done_mask = tf.expand_dims(done_mask, axis=-1)
+    reward    = tf.expand_dims(self._rew_t_ph, axis=-1)
+    return reward + done_mask * self.gamma * target_q
 
 
   def _get_actor_loss(self, actor_critic_q):
@@ -164,6 +161,19 @@ class DDPG(Model):
     critic_loss    += tf.losses.get_regularization_loss(scope="agent_net/critic")
 
     return critic_loss
+
+
+  def _group_control_deps(self, actor_grads, critic_grads):
+    a_grad_tensors  = [grad for grad, var in actor_grads]
+    c_grad_tensors  = [grad for grad, var in critic_grads]
+
+    # Get the ops for updating the running mean and variance in batch norm layers
+    batch_norm_ops  = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    control_deps    = a_grad_tensors + c_grad_tensors + batch_norm_ops
+    logger.info("Control dependencies for apply_gradients():")
+    for t in control_deps:
+      logger.info(t.name)
+    return control_deps
 
 
   def _restore(self, graph):
@@ -195,11 +205,13 @@ class DDPG(Model):
 
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
 
-      x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=self.hidden_init(), name="dense1")
+      x = tf.layers.dense(x, 400, kernel_initializer=self.hidden_init(), name="dense1")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
+      x = tf.nn.relu(x)
 
-      x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=self.hidden_init(), name="dense2")
+      x = tf.layers.dense(x, 300, kernel_initializer=self.hidden_init(), name="dense2")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
+      x = tf.nn.relu(x)
 
       x = tf.layers.dense(x, n_actions, tf.nn.tanh, kernel_initializer=self.output_init(), name="dense3")
 
@@ -221,15 +233,18 @@ class DDPG(Model):
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
       regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg)
 
-      x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=self.hidden_init(),
+      x = tf.layers.dense(x, 400, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense1")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
+      x = tf.nn.relu(x)
 
       x = tf.concat([x, action], axis=-1)
 
       # No batch norm after action input, as in the original paper
-      x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=self.hidden_init(),
+      x = tf.layers.dense(x, 300, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense2")
+      x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
+      x = tf.nn.relu(x)
 
       x = tf.layers.dense(x, 1, kernel_initializer=self.output_init(),
                           kernel_regularizer=regularizer, name="dense3")

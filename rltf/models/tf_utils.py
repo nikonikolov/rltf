@@ -4,7 +4,7 @@ import tensorflow as tf
 logger = logging.getLogger(__name__)
 
 
-def assign_values(dest_vars, source_vars, weight=1.0, name=None):
+def assign_vars(dest_vars, source_vars, weight=1.0, name=None):
   """Create a `tf.Op` that assigns the values of source_vars to dest_vars.
   `source_vars` and `dest_vars` must have variables with matching names,
   but do not need to be sorted.
@@ -25,21 +25,20 @@ def assign_values(dest_vars, source_vars, weight=1.0, name=None):
   assert weight >  0.0
   assert len(source_vars) == len(dest_vars)
 
-  # Create op that updates the target Q network with the current Q network
-  zip_vars = zip(sorted(source_vars, key=lambda v: v.name),
-                 sorted(dest_vars,   key=lambda v: v.name))
+  update_ops = []
 
   logger.debug("Assigning tf values as:")
-  for s_var, d_var in zip_vars:
+  for s_var, d_var in zip(source_vars, dest_vars):
     logger.debug(d_var.name + " := " + s_var.name)
-  logger.debug("")
+    if weight == 1.0:
+      update_ops.append(tf.assign(d_var, s_var))
+    else:
+      update_ops.append(tf.assign(d_var, (1.-weight)*d_var + weight*s_var))
 
-  if weight == 1.0:
-    update_ops    = [d_var.assign(s_var) for s_var, d_var in zip_vars]
-  else:
-    update_ops    = [d_var.assign(weight*s_var + (1.-weight)*d_var) for s_var, d_var in zip_vars]
+  assert len(update_ops) > 0
 
   return tf.group(*update_ops, name=name)
+
 
 
 def huber_loss(x, delta=1.0):
