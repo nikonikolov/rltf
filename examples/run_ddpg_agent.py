@@ -28,7 +28,7 @@ def parse_args():
   parser.add_argument('--tau',          default=0.001,  type=float, help='target soft update weight')
   parser.add_argument('--critic-reg',   default=0.02,   type=float, help='network weight regularization')
   parser.add_argument('--batch-size',   default=None,   type=int,   help='batch size')
-  parser.add_argument('--adam-epsilon', default=None,   type=float, help='expsilon for Adam optimizer')
+  parser.add_argument('--adam-epsilon', default=1e-08,  type=float, help='expsilon for Adam optimizer')
   parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
   parser.add_argument('--sigma',        default=0.2,    type=float, help='action noise sigma')
   parser.add_argument('--theta',        default=0.15,   type=float, help='action noise theta')
@@ -36,7 +36,7 @@ def parse_args():
   parser.add_argument('--noise-type',   default="OU",   type=str,   help='action noise type',
                       choices=["OU", "Gaussian"])
 
-  parser.add_argument('--start-train',  default=50000,  type=int,   help='step at which to start training')
+  parser.add_argument('--start-train',  default=1000,   type=int,   help='step at which to start training')
   parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')

@@ -1,3 +1,4 @@
+import logging
 import numpy      as np
 import tensorflow as tf
 
@@ -5,6 +6,8 @@ from rltf.models  import DDPG
 from rltf.models  import tf_utils
 
 from rltf.models.ddpg import init_hidden_uniform
+
+logger = logging.getLogger(__name__)
 
 
 class QRDDPG(DDPG):
@@ -29,7 +32,8 @@ class QRDDPG(DDPG):
 
 
   def _compute_target(self, target_q):
-    done_mask = tf.expand_dims(tf.cast(tf.logical_not(self._done_ph), tf.float32), axis=-1)
+    done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+    done_mask = tf.expand_dims(done_mask, axis=-1)
     rew_t_ph  = tf.expand_dims(self.rew_t_ph, axis=-1)
     return rew_t_ph + done_mask * self.gamma * target_q
 
