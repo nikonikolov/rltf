@@ -120,9 +120,10 @@ class QRDDPG(DDPG):
     regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg)
     x = state
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-      x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=self.hidden_init(),
+      x = tf.layers.dense(x, 400, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense1")
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
+      x = tf.nn.relu(x)
 
       x = tf.concat([x, action], axis=-1)
 
