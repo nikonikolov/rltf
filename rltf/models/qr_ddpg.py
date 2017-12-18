@@ -18,6 +18,8 @@ class QRDDPG(DDPG):
     super().__init__(obs_shape, n_actions, actor_opt_conf, critic_opt_conf,
                      critic_reg, tau, gamma, huber_loss)
     self.N = N
+    # self.hidden_init = tf_utils.init_default
+    # self.output_init = tf_utils.init_default
 
     # Custom TF Tensors and Ops
     self.quantile_mids = None
@@ -127,7 +129,7 @@ class QRDDPG(DDPG):
       # No batch norm after action input, as in the original paper
       x = tf.layers.dense(x, 300, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense2")
-      
+
       x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
       x = tf.nn.relu(x)
 
