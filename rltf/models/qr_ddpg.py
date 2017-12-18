@@ -75,6 +75,35 @@ class QRDDPG(DDPG):
     return critic_loss
 
 
+  # def _critic_net(self, state, action, scope):
+  #   """Build critic network
+
+  #   Args:
+  #     state: tf.Tensor. Input tensor for the state. Batch must be the 0 dimension
+  #     action: tf.Tensor. Input tensor for the action. Batch must be the 0 dimension
+  #     scope: string. Parent scope for the network variables. Must end in "/"
+  #   Returns:
+  #     `tf.Tensor` that holds the value of the Q-function estimate
+  #   """
+
+  #   regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg)
+  #   x = state
+  #   with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
+  #     x = tf.layers.dense(x, 400, tf.nn.relu, kernel_initializer=self.hidden_init(),
+  #                         kernel_regularizer=regularizer, name="dense1")
+  #     x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
+
+  #     x = tf.concat([x, action], axis=-1)
+
+  #     # No batch norm after action input, as in the original paper
+  #     x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=self.hidden_init(),
+  #                         kernel_regularizer=regularizer, name="dense2")
+
+  #     x = tf.layers.dense(x, self.N, kernel_initializer=self.output_init(),
+  #                         kernel_regularizer=regularizer, name="dense3")
+  #     return x
+
+
   def _critic_net(self, state, action, scope):
     """Build critic network
 
@@ -96,8 +125,11 @@ class QRDDPG(DDPG):
       x = tf.concat([x, action], axis=-1)
 
       # No batch norm after action input, as in the original paper
-      x = tf.layers.dense(x, 300, tf.nn.relu, kernel_initializer=self.hidden_init(),
+      x = tf.layers.dense(x, 300, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense2")
+      
+      x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
+      x = tf.nn.relu(x)
 
       x = tf.layers.dense(x, self.N, kernel_initializer=self.output_init(),
                           kernel_regularizer=regularizer, name="dense3")

@@ -7,7 +7,7 @@ import rltf.conf
 param_logger = logging.getLogger(rltf.conf.PARAM_LOGGER_NAME)
 
 
-def conf_logs(model_dir, file_lvl="DEBUG", stdout_lvl="DEBUG"):
+def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
 
   run_file    = os.path.join(model_dir, "run.log")
   param_file  = os.path.join(model_dir, "params.txt")

@@ -44,6 +44,7 @@ def parse_args():
   parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
+  parser.add_argument('--log_level',    default="INFO", type=str,       help='logger lvl')
   parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
   parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
   parser.add_argument('--video-freq',   default=500,    type=int,
@@ -66,7 +67,7 @@ def main():
   model_dir = rltfru.make_model_dir(args.model, args.env_id)
 
   # Configure loggers
-  rltf.log.conf_logs(model_dir)
+  rltf.log.conf_logs(model_dir, args.log_level)
 
   # Set the model-specific keyword arguments
   model_kwargs = dict(
