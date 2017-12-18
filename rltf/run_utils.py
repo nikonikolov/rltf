@@ -4,6 +4,10 @@ import os
 import random
 
 import gym
+try:
+  import roboschool
+except ModuleNotFoundError:
+  pass
 import numpy      as np
 import tensorflow as tf
 
