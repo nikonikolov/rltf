@@ -76,7 +76,7 @@ def conf_logs(model_dir, file_lvl="DEBUG", stdout_lvl="DEBUG"):
       # Trianing stat reports logger
       rltf.conf.STATS_LOGGER_NAME:
         {
-          'handlers': ['std_info', 'run_file', 'param_file'],
+          'handlers': ['std_info', 'run_file'],
           'level': 'INFO',
           'propagate': False
         },
