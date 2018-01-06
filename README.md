@@ -31,15 +31,16 @@ git clone https://github.com/nikonikolov/rltf.git
 
 ## Implemented Algorithms
 
-| Algorithm     | Model                     | Agent                           | Orignal Paper |
-| ---           | ---                       | ---                             | ---           |  
-| DQN           | [](rltf/models/dqn.py)    | [](rltf/agents/dqn_agent.py)    | [DQN](https://www.nature.com/articles/nature14236) |
-| Double DQN    | next                      | next                            | [Double DQN](https://arxiv.org/abs/1509.06461) |
-| Dueling DQN   | next                      | next                            | [Dueling DQN](https://arxiv.org/abs/1511.06581) |
-| C51           | [](rltf/models/c51.py)    | [](rltf/agents/dqn_agent.py)    | [C51](https://arxiv.org/abs/1707.06887) |
-| QR-DQN        | [](rltf/models/qrdqn.py)  | [](rltf/agents/dqn_agent.py)    | [QR-DQN](https://arxiv.org/abs/1710.10044) |
-| DDPG          | [](rltf/models/ddpg.py)   | [](rltf/agents/ddpg_agent.py)   | [DDPG](https://arxiv.org/abs/1509.02971) |
-| NAF           | next                      | next                            | [NAF](https://arxiv.org/abs/1603.00748) |
+| Algorithm | Model | Agent | Orignal Paper |
+| --- | --- | --- | --- |  
+| DQN | [dqn.py](blob/master/rltf/models/dqn.py) | [dqn_agent.py](blob/master/rltf/agents/dqn_agent.py) | [Human-level control through deep reinforcement learning](https://www.nature.com/articles/nature14236) |
+| Double DQN | next | next | [Deep Reinforcement Learning with Double Q-learning](https://arxiv.org/abs/1509.06461) |
+| Dueling DQN | next | next | [Dueling Network Architectures for Deep Reinforcement Learning
+](https://arxiv.org/abs/1511.06581) |
+| C51 | [c51.py](blob/master/rltf/models/c51.py) | [dqn_agent.py](blob/master/rltf/agents/dqn_agent.py) | [A Distributional Perspective on Reinforcement Learning](https://arxiv.org/abs/1707.06887) |
+| QR-DQN | [qrdqn.py](blob/master/rltf/models/qrdqn.py) | [dqn_agent.py](blob/master/rltf/agents/dqn_agent.py) | [Distributional Reinforcement Learning with Quantile Regression](https://arxiv.org/abs/1710.10044) |
+| DDPG | [ddpg.py](blob/master/rltf/models/ddpg.py) | [ddpg_agent.py](blob/master/rltf/agents/ddpg_agent.py) | [Continuous control with deep reinforcement learning](https://arxiv.org/abs/1509.02971) |
+| NAF | next | next | [Continuous Deep Q-Learning with Model-based Acceleration](https://arxiv.org/abs/1603.00748) |
 
 Other algorithms are also coming in the near future:
 - [Soft Q-learning](https://arxiv.org/abs/1702.08165)
