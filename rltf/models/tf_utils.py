@@ -1,6 +1,8 @@
 import logging
 import tensorflow as tf
 
+import rltf.conf
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,6 +65,10 @@ def init_he_relu():
   """
   # variance_scaling_initializer: https://www.tensorflow.org/api_docs/python/tf/variance_scaling_initializer
   return tf.variance_scaling_initializer(scale=2.0, mode="fan_in", distribution="normal")
+
+
+def init_glorot_normal():
+  return tf.glorot_normal_initializer(seed=rltf.conf.SEED)
 
 
 def init_default():

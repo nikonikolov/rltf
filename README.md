@@ -41,12 +41,10 @@ git clone https://github.com/nikonikolov/rltf.git
 | DDPG          | [ddpg.py](rltf/models/ddpg.py)    | [ddpg_agent.py](rltf/agents/ddpg_agent.py)  | [DDPG](https://arxiv.org/abs/1509.02971) |
 | NAF           | next                              | next                                        | [NAF](https://arxiv.org/abs/1603.00748) |
 
-Other algorithms are also coming in the near future:
-- [Soft Q-learning](https://arxiv.org/abs/1702.08165)
-- [A3C](https://arxiv.org/pdf/1602.01783.pdf)
+Other algorithms are also coming soon:
 - [TRPO](https://arxiv.org/abs/1502.05477)
-- [PPO](https://arxiv.org/abs/1707.06347)
 - [REINFORCE]()
+- ...
 
 ## Structure
 

@@ -9,13 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def init_hidden_uniform():
-  return tf.variance_scaling_initializer(scale=1.0/3.0, mode="fan_in", distribution="uniform")
+  return tf.variance_scaling_initializer(scale=1.0/3.0, mode="fan_in", distribution="uniform",
+                                         seed=rltf.conf.SEED)
 
 def init_output_uniform():
-  return tf.random_uniform_initializer(-3e-3, 3e-3)
+  return tf.random_uniform_initializer(-3e-3, 3e-3, seed=rltf.conf.SEED)
 
 def init_output_uniform_conv():
-  return tf.random_uniform_initializer(-3e-4, 3e-4)
+  return tf.random_uniform_initializer(-3e-4, 3e-4, seed=rltf.conf.SEED)
 
 
 class DDPG(Model):

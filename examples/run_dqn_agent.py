@@ -5,8 +5,8 @@ from rltf.agents        import AgentDQN
 from rltf.env_wrap      import wrap_deepmind_atari
 # from rltf.exploration   import EGreedy
 from rltf.models        import DQN
-# from rltf.models        import C51
-# from rltf.models        import QRDQN
+from rltf.models        import C51
+from rltf.models        import QRDQN
 from rltf.optimizers    import OptimizerConf
 from rltf.optimizers    import AdamGradClipOptimizer
 from rltf.run_utils     import str2bool

@@ -5,11 +5,11 @@ from rltf.models.model  import Model
 from rltf.models        import tf_utils
 
 
-def dqn_nn(img_in, n_actions, scope):
+def dqn_nn(x, n_actions, scope):
   """ Build the DQN architecture - as described in the original paper
 
   Args:
-    img_in: tf.Tensor. Tensor for the input image
+    x: tf.Tensor. Tensor for the input
     n_actions: int. Number of possible output actions
     scope: str. Scope in which all the model related variables should be created
 
@@ -17,7 +17,6 @@ def dqn_nn(img_in, n_actions, scope):
     `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
   """
   with tf.variable_scope(scope, reuse=False):
-    x = img_in
     with tf.variable_scope("convnet"):
       # original architecture
       x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
@@ -31,7 +30,6 @@ def dqn_nn(img_in, n_actions, scope):
 
 
 class DQN(Model):
-  """ Class for the DQN model """
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss=True):
     """
