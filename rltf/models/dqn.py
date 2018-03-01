@@ -71,24 +71,21 @@ class DQN(Model):
     # In this case, casting on GPU ensures lower data transfer times
     obs_t_float   = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
     obs_tp1_float = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
-    act_t         = tf.cast(self._act_t_ph,   tf.int32)
 
     # Construct the Q-network and the target network
     q           = self.nn_model(obs_t_float,   self.n_actions, scope="agent_net")
     target_q    = self.nn_model(obs_tp1_float, self.n_actions, scope="target_net")
 
-    # Get the Q value for the played action
-    act_mask    = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    sample_q    = tf.boolean_mask(q, act_mask)
+    # Save the Q-function estimate tensor
+    self._q     = tf.identity(q, name="q_fn")
 
-    # Get the target Q value
-    done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)
-    target_q    = tf.reduce_max(target_q, axis=-1)
-    target_q    = self.rew_t_ph + self.gamma * done_mask * target_q
+    # Compute the estimated Q-function and its backup value
+    q           = self._compute_q(q)
+    target_q    = self._compute_target(target_q)
 
     # Compute the loss
     loss_fn     = tf.losses.huber_loss if self.huber_loss else tf.losses.mean_squared_error
-    loss        = loss_fn(target_q, sample_q)
+    loss        = loss_fn(target_q, q)
 
     agent_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net')
     target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
@@ -101,11 +98,23 @@ class DQN(Model):
     # Create the Op to update the target
     self._update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
-    # Save the Q-function estimate tensor
-    self._q   = tf.identity(q, name="q_fn")
-
     # Add summaries
     tf.summary.scalar("loss", loss)
+
+
+  def _compute_q(self, q):
+    # Get the Q value for the played action
+    act_t     = tf.cast(self._act_t_ph,   tf.int32)
+    act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
+    q         = tf.boolean_mask(q, act_mask)
+    return q
+
+
+  def _compute_target(self, target_q):
+    done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+    target_q  = tf.reduce_max(target_q, axis=-1)
+    target_q  = self.rew_t_ph + self.gamma * done_mask * target_q
+    return target_q
 
 
   def _restore(self, graph):

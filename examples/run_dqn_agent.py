@@ -4,6 +4,7 @@ import tensorflow as tf
 from rltf.agents        import AgentDQN
 from rltf.env_wrap      import wrap_deepmind_atari
 # from rltf.exploration   import EGreedy
+from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
 from rltf.models        import QRDQN
@@ -20,7 +21,7 @@ from rltf import run_utils as rltfru
 def parse_args():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--env-id',       required=True,  type=str,   help='full environment name')
-  parser.add_argument('--model',        required=True,  type=str,   choices=["DQN", "C51", "QRDQN"])
+  parser.add_argument('--model',        required=True,  type=str,   choices=["DQN", "DDQN", "C51", "QRDQN"])
 
   parser.add_argument('--learn-rate',   default=None,   type=float, help='learn rate',)
   parser.add_argument('--adam-epsilon', default=.01/32, type=float, help='epsilon for Adam optimizer')
@@ -58,6 +59,9 @@ def main():
   # Get the model-specific settings
   if   args.model == "DQN":
     model_type    = DQN
+    model_kwargs  = dict(huber_loss=True if args.huber_loss else False)
+  elif args.model == "DDQN":
+    model_type    = DDQN
     model_kwargs  = dict(huber_loss=True if args.huber_loss else False)
   elif args.model == "C51":
     model_type    = C51

@@ -119,7 +119,6 @@ class C51(DQN):
     bin_inds_hi   = tf.concat([row_inds, tf.expand_dims(tf.to_int32(bin_inds_hi), axis=-1)], axis=-1)
 
     with tf.control_dependencies([target_z]):
-    # with tf.control_dependencies([target_z, assert_softmax]):
       target_z    = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
       target_z    = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
 
@@ -130,7 +129,7 @@ class C51(DQN):
     target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
 
     # Build the optimizer
-    optimizer   = self.opt_conf.build()
+    optimizer     = self.opt_conf.build()
     # Create the training Op
     self._train_op = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
 

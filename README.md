@@ -34,12 +34,13 @@ git clone https://github.com/nikonikolov/rltf.git
 | Algorithm     | Model                             | Agent                                       | Orignal Paper |
 | ---           | ---                               | ---                                         | --- |  
 | DQN           | [dqn.py](rltf/models/dqn.py)      | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [DQN](https://www.nature.com/articles/nature14236) |
-| Double DQN    | next                              | next                                        | [Double DQN](https://arxiv.org/abs/1509.06461) |
+| Double DQN    | [ddqn.py](rltf/models/ddqn.py)    | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [Double DQN](https://arxiv.org/abs/1509.06461) |
 | Dueling DQN   | next                              | next                                        | [Dueling DQN](https://arxiv.org/abs/1511.06581) |
 | C51           | [c51.py](rltf/models/c51.py)      | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [C51](https://arxiv.org/abs/1707.06887) |
 | QR-DQN        | [qrdqn.py](rltf/models/qrdqn.py)  | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [QR-DQN](https://arxiv.org/abs/1710.10044) |
 | DDPG          | [ddpg.py](rltf/models/ddpg.py)    | [ddpg_agent.py](rltf/agents/ddpg_agent.py)  | [DDPG](https://arxiv.org/abs/1509.02971) |
 | NAF           | next                              | next                                        | [NAF](https://arxiv.org/abs/1603.00748) |
+| Bootstrapped DQN | next                           | next                                        | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf) |
 
 Other algorithms are also coming soon:
 - [TRPO](https://arxiv.org/abs/1502.05477)
@@ -75,7 +76,7 @@ folder will contain:
 
 To see the TensorBoard plots, run:
 ```
-tensorboard --logdir="<path/to/tb/dir"
+tensorboard --logdir="<path/to/tb/dir>"
 ```
 and then go to http://localhost:6006 in your browser
 

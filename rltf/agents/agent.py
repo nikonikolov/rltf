@@ -128,7 +128,7 @@ class Agent:
       self.learn_started  = False
 
       # Create a session and initialize the model
-      self.sess = tf.Session()
+      self.sess = self._get_sess()
       self.sess.run(tf.global_variables_initializer())
       self.sess.run(tf.local_variables_initializer())
 
@@ -157,7 +157,7 @@ class Agent:
       self._restore(graph)
 
       # Restore the session
-      self.sess = tf.Session()
+      self.sess = self._get_sess()
       saver.restore(self.sess, ckpt.model_checkpoint_path)
 
       # Get the summary Op
@@ -309,6 +309,11 @@ class Agent:
       # self.replay_buf.save(self.model_dir)
       # pickle_save(self.env_file, self.env)
 
+
+  def _get_sess(self):
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    return tf.Session(config=config)
 
 
 
