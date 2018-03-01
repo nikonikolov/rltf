@@ -1,7 +1,7 @@
 # rltf
 Reinforcement Learning Library in TensorFlow and OpenAI gym
 
-**NOTE: This is work in progress and the core structure of some parts of the library is likely to change**
+**NOTE: This is work in progress and structure of some parts of the library is likely to change. More functionality and documentation are coming soon.**
 
 ## About
 

@@ -2,6 +2,8 @@ import logging
 
 import tensorflow as tf
 
+import rltf.conf
+
 from rltf.models.model  import Model
 from rltf.models        import tf_utils
 

@@ -36,7 +36,7 @@ def parse_args():
   parser.add_argument('--noise-type',   default="OU",   type=str,   help='action noise type',
                       choices=["OU", "Gaussian"])
 
-  parser.add_argument('--start-train',  default=1000,   type=int,   help='step at which to start training')
+  parser.add_argument('--start-train',  default=10000,  type=int,   help='step at which to start training')
   parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')
