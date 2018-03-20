@@ -122,94 +122,38 @@ class AgentDDPG(OffPolicyAgent):
     return np.std(self.act_noise_stats)
 
 
-  def _run_env(self):
+  def _get_feed_dict(self):
+    # Sample the Replay Buffer
+    batch = self.replay_buf.sample(self.batch_size)
 
-    last_obs  = self.env.reset()
-
-    for t in range (self.start_step, self.max_steps+1):
-      # sess.run(t_inc_op)
-
-      # Wait until net_thread is done
-      self._wait_train_done()
-
-      # Store the latest obesrvation in the buffer
-      idx = self.replay_buf.store_frame(last_obs)
-
-      # Get an action to run
-      if self.learn_started:
-        noise   = self.action_noise.sample()
-        state   = self.replay_buf.encode_recent_obs()
-        action  = self.model.control_action(self.sess, state)
-        action  = action + noise
-
-        # Add action noise to stats
-        self.act_noise_stats.append(noise)
-
-      else:
-        # Choose random action when model not initialized
-        action = self.env.action_space.sample()
-
-      # Signal to net_thread that action is chosen
-      self._signal_act_chosen()
-
-      # Increement the TF timestep variable
-      self.sess.run(self.t_tf_inc)
-
-      # Run action
-      # next_obs, reward, done, info = self.env.step(action)
-      last_obs, reward, done, _ = self.env.step(action)
-
-      # Store the effect of the action taken upon last_obs
-      # self.replay_buf.store(obs, action, reward, done)
-      self.replay_buf.store_effect(idx, action, reward, done)
-
-      # Reset the environment if end of episode
-      # if done: next_obs = self.env.reset()
-      # obs = next_obs
-      if done:
-        last_obs = self.env.reset()
-        self.reset()
-
-      self._log_progress(t)
+    # Compose feed_dict
+    feed_dict = {
+      self.model.obs_t_ph:       batch["obs"],
+      self.model.act_t_ph:       batch["act"],
+      self.model.rew_t_ph:       batch["rew"],
+      self.model.obs_tp1_ph:     batch["obs_tp1"],
+      self.model.done_ph:        batch["done"],
+      self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
+      self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
+      self.mean_ep_rew_ph:       self.mean_ep_rew,
+      self.best_mean_ep_rew_ph:  self.best_mean_ep_rew,
+    }
+    return feed_dict
 
 
-  def _train_model(self):
+  def _action_train(self):
+    noise   = self.action_noise.sample()
+    state   = self.replay_buf.encode_recent_obs()
+    action  = self.model.control_action(self.sess, state)
+    action  = action + noise
 
-    for t in range (self.start_step, self.max_steps+1):
+    # Add action noise to stats
+    self.act_noise_stats.append(noise)
 
-      if (t >= self.start_train and t % self.train_freq == 0):
+    return action
 
-        self.learn_started = True
 
-        # Sample the Replay Buffer
-        batch = self.replay_buf.sample(self.batch_size)
-
-        # Compose feed_dict
-        feed_dict = {
-          self.model.obs_t_ph:       batch["obs"],
-          self.model.act_t_ph:       batch["act"],
-          self.model.rew_t_ph:       batch["rew"],
-          self.model.obs_tp1_ph:     batch["obs_tp1"],
-          self.model.done_ph:        batch["done"],
-          self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
-          self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
-          self.mean_ep_rew_ph:       self.mean_ep_rew,
-          self.best_mean_ep_rew_ph:  self.best_mean_ep_rew,
-        }
-
-        self._wait_act_chosen()
-
-        # Run a training step
-        self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
-
-        # Update target network
-        if t % self.update_target_freq == 0:
-          self.sess.run(self.model.update_target)
-
-      else:
-        self._wait_act_chosen()
-
-      if t % self.save_freq == 0:
-        self._save()
-
-      self._signal_train_done()
+  # def _action_eval(self):
+  #   state   = self.replay_buf.encode_recent_obs()
+  #   action  = self.model.control_action(self.sess, state)
+  #   return action

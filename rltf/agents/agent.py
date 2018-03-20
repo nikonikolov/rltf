@@ -191,6 +191,10 @@ class Agent:
     """
     raise NotImplementedError()
 
+  def _get_feed_dict(self):
+    """Get the placeholder parameters to feed to the model while training"""
+    raise NotImplementedError()
+
 
   def _restore(self, graph):
     """Restore the Variables, placeholders and Ops needed by the class so that
@@ -352,6 +356,16 @@ class OffPolicyAgent(Agent):
     # self.sess.close()
 
 
+  def _action_train(self):
+    """Return action selected by the agent for a training step"""
+    raise NotImplementedError()
+
+
+  def _action_eval(self):
+    """Return action selected by the agent for an evaluation step"""
+    raise NotImplementedError()
+
+
   def _run_env(self):
     """Thread for running the environment. Must call `self._wait_train_done()`
     before selcting an action (by running the model). This ensures that the
@@ -359,7 +373,48 @@ class OffPolicyAgent(Agent):
     is selected, it must call `self._signal_act_chosen()` to allow
     `self._train_model()` thread to start a new training step
     """
-    raise NotImplementedError()
+
+    last_obs  = self.env.reset()
+
+    for t in range (self.start_step, self.max_steps+1):
+      # sess.run(t_inc_op)
+
+      # Wait until net_thread is done
+      self._wait_train_done()
+
+      # Store the latest obesrvation in the buffer
+      idx = self.replay_buf.store_frame(last_obs)
+
+      # Get an action to run
+      if self.learn_started:
+        action = self._action_train()
+
+      # Choose random action if learning has not started
+      else:
+        action = self.env.action_space.sample()
+
+      # Signal to net_thread that action is chosen
+      self._signal_act_chosen()
+
+      # Increement the TF timestep variable
+      self.sess.run(self.t_tf_inc)
+
+      # Run action
+      # next_obs, reward, done, info = self.env.step(action)
+      last_obs, reward, done, _ = self.env.step(action)
+
+      # Store the effect of the action taken upon last_obs
+      # self.replay_buf.store(obs, action, reward, done)
+      self.replay_buf.store_effect(idx, action, reward, done)
+
+      # Reset the environment if end of episode
+      # if done: next_obs = self.env.reset()
+      # obs = next_obs
+      if done:
+        last_obs = self.env.reset()
+        self.reset()
+
+      self._log_progress(t)
 
 
   def _train_model(self):
@@ -369,7 +424,32 @@ class OffPolicyAgent(Agent):
     After training step is done, it must call `self._signal_train_done()` to allow
     `self._run_env()` thread to select a new action
     """
-    raise NotImplementedError()
+
+    for t in range (self.start_step, self.max_steps+1):
+
+      if (t >= self.start_train and t % self.train_freq == 0):
+
+        self.learn_started = True
+
+        # Compose feed_dict
+        feed_dict = self._get_feed_dict()
+
+        self._wait_act_chosen()
+
+        # Run a training step
+        self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
+
+        # Update target network
+        if t % self.update_target_freq == 0:
+          self.sess.run(self.model.update_target)
+
+      else:
+        self._wait_act_chosen()
+
+      if t % self.save_freq == 0:
+        self._save()
+
+      self._signal_train_done()
 
 
   def _wait_act_chosen(self):

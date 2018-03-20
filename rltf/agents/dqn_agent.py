@@ -87,95 +87,44 @@ class AgentDQN(OffPolicyAgent):
     return log_info
 
 
-  def _run_env(self):
-
-    last_obs  = self.env.reset()
-
-    for t in range (self.start_step, self.max_steps+1):
-      # sess.run(t_inc_op)
-
-      # Wait until net_thread is done
-      self._wait_train_done()
-
-      # Store the latest obesrvation in the buffer
-      idx = self.replay_buf.store_frame(last_obs)
-
-      # Get an action to run
-      if self.learn_started:
-        # Run epsilon greedy policy
-        epsilon = self.exploration.value(t)
-        if np.random.uniform(0,1) < epsilon:
-          action = self.env.action_space.sample()
-        else:
-          # Run the network to select an action
-          state   = self.replay_buf.encode_recent_obs()
-          action  = self.model.control_action(self.sess, state)
-
-      else:
-        # Choose random action when model not initialized
-        action = self.env.action_space.sample()
-
-      # Signal to net_thread that action is chosen
-      self._signal_act_chosen()
-
-      # Run action
-      # next_obs, reward, done, info = self.env.step(action)
-      last_obs, reward, done, _ = self.env.step(action)
-
-      # Store the effect of the action taken upon last_obs
-      # self.replay_buf.store(obs, action, reward, done)
-      self.replay_buf.store_effect(idx, action, reward, done)
-
-      # Reset the environment if end of episode
-      # if done: next_obs = self.env.reset()
-      # obs = next_obs
-
-      if done:
-        last_obs = self.env.reset()
-
-      self._log_progress(t)
-
-
-  def _train_model(self):
-
-    for t in range (self.start_step, self.max_steps+1):
-
-      if (t >= self.start_train and t % self.train_freq == 0):
-
-        self.learn_started = True
-
-        # Sample the Replay Buffer
-        batch = self.replay_buf.sample(self.batch_size)
-
-        # Compose feed_dict
-        feed_dict = {
-          self.model.obs_t_ph:       batch["obs"],
-          self.model.act_t_ph:       batch["act"],
-          self.model.rew_t_ph:       batch["rew"],
-          self.model.obs_tp1_ph:     batch["obs_tp1"],
-          self.model.done_ph:        batch["done"],
-          self.learn_rate_ph:        self.opt_conf.lr_value(t),
-          self.epsilon_ph:           self.exploration.value(t),
-          self.mean_ep_rew_ph:       self.mean_ep_rew,
-          self.best_mean_ep_rew_ph:  self.best_mean_ep_rew,
-        }
-
-        self._wait_act_chosen()
-
-        # Run a training step
-        self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
-
-        # Update target network
-        if t % self.update_target_freq == 0:
-          self.sess.run(self.model.update_target)
-
-      else:
-        self._wait_act_chosen()
-
-      if t % self.save_freq == 0:
-        self._save()
-
-      self._signal_train_done()
-
   def reset(self):
     pass
+
+
+  def _get_feed_dict(self):
+    # Sample the Replay Buffer
+    batch = self.replay_buf.sample(self.batch_size)
+
+    # Compose feed_dict
+    feed_dict = {
+      self.model.obs_t_ph:       batch["obs"],
+      self.model.act_t_ph:       batch["act"],
+      self.model.rew_t_ph:       batch["rew"],
+      self.model.obs_tp1_ph:     batch["obs_tp1"],
+      self.model.done_ph:        batch["done"],
+      self.learn_rate_ph:        self.opt_conf.lr_value(t),
+      self.epsilon_ph:           self.exploration.value(t),
+      self.mean_ep_rew_ph:       self.mean_ep_rew,
+      self.best_mean_ep_rew_ph:  self.best_mean_ep_rew,
+    }
+
+    return feed_dict
+
+
+  def _action_train(self):
+    # Run epsilon greedy policy
+    epsilon = self.exploration.value(t)
+    if np.random.uniform(0,1) < epsilon:
+      action = self.env.action_space.sample()
+    else:
+      # Run the network to select an action
+      state   = self.replay_buf.encode_recent_obs()
+      action  = self.model.control_action(self.sess, state)
+    return action
+
+
+  # def _action_eval(self):
+  #   state   = self.replay_buf.encode_recent_obs()
+  #   action  = self.model.control_action(self.sess, state)
+  #   return action
+

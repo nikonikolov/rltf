@@ -41,6 +41,7 @@ git clone https://github.com/nikonikolov/rltf.git
 | DDPG          | [ddpg.py](rltf/models/ddpg.py)    | [ddpg_agent.py](rltf/agents/ddpg_agent.py)  | [DDPG](https://arxiv.org/abs/1509.02971) |
 | NAF           | next                              | next                                        | [NAF](https://arxiv.org/abs/1603.00748) |
 | Bootstrapped DQN | next                           | next                                        | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf) |
+| PPO           | next                              | next                                        | [PPO](https://arxiv.org/abs/1707.06347) |
 
 Other algorithms are also coming soon:
 - [TRPO](https://arxiv.org/abs/1502.05477)
