@@ -122,7 +122,7 @@ class AgentDDPG(OffPolicyAgent):
     return np.std(self.act_noise_stats)
 
 
-  def _get_feed_dict(self):
+  def _get_feed_dict(self, t):
     # Sample the Replay Buffer
     batch = self.replay_buf.sample(self.batch_size)
 
@@ -141,7 +141,7 @@ class AgentDDPG(OffPolicyAgent):
     return feed_dict
 
 
-  def _action_train(self):
+  def _action_train(self, t):
     noise   = self.action_noise.sample()
     state   = self.replay_buf.encode_recent_obs()
     action  = self.model.control_action(self.sess, state)
@@ -153,7 +153,7 @@ class AgentDDPG(OffPolicyAgent):
     return action
 
 
-  # def _action_eval(self):
+  # def _action_eval(self, t):
   #   state   = self.replay_buf.encode_recent_obs()
   #   action  = self.model.control_action(self.sess, state)
   #   return action

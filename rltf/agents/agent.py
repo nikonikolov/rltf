@@ -191,8 +191,12 @@ class Agent:
     """
     raise NotImplementedError()
 
-  def _get_feed_dict(self):
-    """Get the placeholder parameters to feed to the model while training"""
+  def _get_feed_dict(self, t):
+    """Get the placeholder parameters to feed to the model while training
+    Args:
+      t: int. Current timestep
+    """
+
     raise NotImplementedError()
 
 
@@ -356,13 +360,19 @@ class OffPolicyAgent(Agent):
     # self.sess.close()
 
 
-  def _action_train(self):
-    """Return action selected by the agent for a training step"""
+  def _action_train(self, t):
+    """Return action selected by the agent for a training step
+    Args:
+      t: int. Current timestep
+    """
     raise NotImplementedError()
 
 
-  def _action_eval(self):
-    """Return action selected by the agent for an evaluation step"""
+  def _action_eval(self, t):
+    """Return action selected by the agent for an evaluation step
+    Args:
+      t: int. Current timestep
+    """
     raise NotImplementedError()
 
 
@@ -387,7 +397,7 @@ class OffPolicyAgent(Agent):
 
       # Get an action to run
       if self.learn_started:
-        action = self._action_train()
+        action = self._action_train(t)
 
       # Choose random action if learning has not started
       else:
@@ -432,7 +442,7 @@ class OffPolicyAgent(Agent):
         self.learn_started = True
 
         # Compose feed_dict
-        feed_dict = self._get_feed_dict()
+        feed_dict = self._get_feed_dict(t)
 
         self._wait_act_chosen()
 

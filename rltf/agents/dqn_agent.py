@@ -91,7 +91,7 @@ class AgentDQN(OffPolicyAgent):
     pass
 
 
-  def _get_feed_dict(self):
+  def _get_feed_dict(self, t):
     # Sample the Replay Buffer
     batch = self.replay_buf.sample(self.batch_size)
 
@@ -111,7 +111,7 @@ class AgentDQN(OffPolicyAgent):
     return feed_dict
 
 
-  def _action_train(self):
+  def _action_train(self, t):
     # Run epsilon greedy policy
     epsilon = self.exploration.value(t)
     if np.random.uniform(0,1) < epsilon:
@@ -123,8 +123,7 @@ class AgentDQN(OffPolicyAgent):
     return action
 
 
-  # def _action_eval(self):
+  # def _action_eval(self, t):
   #   state   = self.replay_buf.encode_recent_obs()
   #   action  = self.model.control_action(self.sess, state)
   #   return action
-
