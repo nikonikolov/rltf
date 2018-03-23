@@ -4,6 +4,7 @@ import tensorflow as tf
 from rltf.agents        import AgentDQN
 from rltf.env_wrap      import wrap_deepmind_atari
 # from rltf.exploration   import EGreedy
+from rltf.models        import BstrapDQN
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
@@ -19,18 +20,22 @@ from rltf import run_utils as rltfru
 
 
 def parse_args():
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('--env-id',       required=True,  type=str,   help='full environment name')
-  parser.add_argument('--model',        required=True,  type=str,   choices=["DQN", "DDQN", "C51", "QRDQN"])
+  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN"]
 
-  parser.add_argument('--learn-rate',   default=None,   type=float, help='learn rate',)
-  parser.add_argument('--adam-epsilon', default=.01/32, type=float, help='epsilon for Adam optimizer')
+  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument('--env-id',       required=True,  type=str,       help='full environment name')
+  parser.add_argument('--model',        required=True,  type=str,       choices=model_choices)
+
+  parser.add_argument('--learn-rate',   default=None,   type=float,     help='learn rate',)
+  parser.add_argument('--adam-epsilon', default=.01/32, type=float,     help='epsilon for Adam optimizer')
   
-  parser.add_argument('--train-freq',   default=4,      type=int,   help='learn frequency')
-  parser.add_argument('--seed',         default=0,      type=int,   help='seed')
+  parser.add_argument('--train-freq',   default=4,      type=int,       help='learn frequency')
+  parser.add_argument('--start-train',  default=50000,  type=int,       help='step to start training')
+  parser.add_argument('--n-heads',      default=10,     type=int,       help='number of BstrapDQN heads')
+  parser.add_argument('--seed',         default=0,      type=int,       help='seed')
   parser.add_argument('--huber-loss',   default=True,   type=str2bool,  help='use huber loss')
-  parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
-  parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
+  parser.add_argument('--grad-clip',    default=None,   type=float,     help='value to clip gradinets to')
+  parser.add_argument('--extra-info',   default="",     type=str,       help='extra info to log')
 
   parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
   parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
@@ -59,16 +64,19 @@ def main():
   # Get the model-specific settings
   if   args.model == "DQN":
     model_type    = DQN
-    model_kwargs  = dict(huber_loss=True if args.huber_loss else False)
+    model_kwargs  = dict(huber_loss=args.huber_loss)
   elif args.model == "DDQN":
     model_type    = DDQN
-    model_kwargs  = dict(huber_loss=True if args.huber_loss else False)
+    model_kwargs  = dict(huber_loss=args.huber_loss)
+  elif args.model == "BstrapDQN":
+    model_type    = BstrapDQN
+    model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
   elif args.model == "C51":
     model_type    = C51
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)
   elif args.model == "QRDQN":
     model_type    = QRDQN
-    model_kwargs  = dict(N=200, k=1 if args.huber_loss else 0)
+    model_kwargs  = dict(N=200, k=int(args.huber_loss))
 
   model_kwargs["gamma"] = 0.99
 
@@ -98,7 +106,7 @@ def main():
   agent_kwargs = dict(
     env=env,
     train_freq=args.train_freq,
-    start_train=50000,
+    start_train=args.start_train,
     max_steps=int(2e8),
     batch_size=32,
     model_dir=model_dir,

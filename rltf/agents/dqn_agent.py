@@ -87,10 +87,6 @@ class AgentDQN(OffPolicyAgent):
     return log_info
 
 
-  def reset(self):
-    pass
-
-
   def _get_feed_dict(self, t):
     # Sample the Replay Buffer
     batch = self.replay_buf.sample(self.batch_size)
@@ -127,3 +123,7 @@ class AgentDQN(OffPolicyAgent):
   #   state   = self.replay_buf.encode_recent_obs()
   #   action  = self.model.control_action(self.sess, state)
   #   return action
+
+
+  def _reset(self):
+    pass

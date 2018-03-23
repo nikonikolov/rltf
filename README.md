@@ -40,7 +40,7 @@ git clone https://github.com/nikonikolov/rltf.git
 | QR-DQN        | [qrdqn.py](rltf/models/qrdqn.py)  | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [QR-DQN](https://arxiv.org/abs/1710.10044) |
 | DDPG          | [ddpg.py](rltf/models/ddpg.py)    | [ddpg_agent.py](rltf/agents/ddpg_agent.py)  | [DDPG](https://arxiv.org/abs/1509.02971) |
 | NAF           | next                              | next                                        | [NAF](https://arxiv.org/abs/1603.00748) |
-| Bootstrapped DQN | next                           | next                                        | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf) |
+| Bootstrapped DQN | [bstrap_dqn.py](rltf/models/bstrap_dqn.py) | [dqn_agent.py](rltf/agents/dqn_agent.py) | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf) |
 | PPO           | next                              | next                                        | [PPO](https://arxiv.org/abs/1707.06347) |
 
 Other algorithms are also coming soon:

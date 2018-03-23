@@ -177,7 +177,17 @@ class Agent:
 
 
   def reset(self):
+    """This method must be called at the end of every episode. Allows for
+    executing changes that stay the same for the duration of the whole episode"""
+    if self.learn_started:
+      self.model.reset(self.sess)
+      self._reset()
+
+
+  def _reset(self):
+    """Reset method to be implemented by the inheriting class"""
     raise NotImplementedError()
+
 
   def close(self):
     # Close session on exit

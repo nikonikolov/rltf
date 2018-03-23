@@ -104,6 +104,10 @@ class BaseDQN(Model):
     sess.run(self._update_target)
 
 
+  def reset(self, sess):
+    pass
+
+
   def control_action(self, sess, state):
     q_vals  = sess.run(self._q, feed_dict={self.obs_t_ph: state[None,:]})
     action  = np.argmax(q_vals)

@@ -107,7 +107,7 @@ class AgentDDPG(OffPolicyAgent):
     return log_info
 
 
-  def reset(self):
+  def _reset(self):
     self.action_noise.reset()
 
 

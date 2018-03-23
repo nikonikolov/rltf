@@ -190,6 +190,10 @@ class DDPG(Model):
     sess.run(self._init_op)
 
 
+  def reset(self, sess):
+    pass
+
+
   def control_action(self, sess, state):
     feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
     return sess.run(self._action, feed_dict=feed_dict)[0]

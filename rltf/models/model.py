@@ -96,6 +96,13 @@ class Model:
     raise NotImplementedError()
 
 
+  def reset(self, sess):
+    """This method is called by the agent at the end of every episode. Allows for
+    internal changes in the model that stay the same for the duration of the whole episode
+    """
+    raise NotImplementedError()
+
+
   def control_action(self, sess, state):
     """Compute control action for the model. NOTE that this should NOT include
     any exploration policy, but should only return the action that would be
