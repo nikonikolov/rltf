@@ -67,7 +67,7 @@ class AgentDDPG(OffPolicyAgent):
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_hist_len)
 
     # Configure what information to log
-    super()._build_log_info()
+    self._define_log_info()
 
     # Custom TF Tensors and Ops
     self.actor_learn_rate_ph  = None
@@ -136,7 +136,6 @@ class AgentDDPG(OffPolicyAgent):
       self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
       self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
       self.mean_ep_rew_ph:       self.mean_ep_rew,
-      self.best_mean_ep_rew_ph:  self.best_mean_ep_rew,
     }
     return feed_dict
 

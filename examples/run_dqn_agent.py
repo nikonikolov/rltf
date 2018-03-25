@@ -11,12 +11,11 @@ from rltf.models        import C51
 from rltf.models        import QRDQN
 from rltf.optimizers    import OptimizerConf
 from rltf.optimizers    import AdamGradClipOptimizer
-from rltf.run_utils     import str2bool
 from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
-
-import rltf.log
-from rltf import run_utils as rltfru
+from rltf.utils         import rltf_log
+from rltf.utils         import maker
+from rltf.utils.cmdargs import str2bool
 
 
 def parse_args():
@@ -28,9 +27,10 @@ def parse_args():
 
   parser.add_argument('--learn-rate',   default=None,   type=float,     help='learn rate',)
   parser.add_argument('--adam-epsilon', default=.01/32, type=float,     help='epsilon for Adam optimizer')
-  
+
   parser.add_argument('--train-freq',   default=4,      type=int,       help='learn frequency')
   parser.add_argument('--start-train',  default=50000,  type=int,       help='step to start training')
+  parser.add_argument('--max-steps',    default=10**8,  type=int,       help='steps to run the agent for')
   parser.add_argument('--n-heads',      default=10,     type=int,       help='number of BstrapDQN heads')
   parser.add_argument('--seed',         default=0,      type=int,       help='seed')
   parser.add_argument('--huber-loss',   default=True,   type=str2bool,  help='use huber loss')
@@ -41,9 +41,9 @@ def parse_args():
   parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
   parser.add_argument('--video-freq',   default=1000,   type=int,
                       help='period in number of episodes at which to record videos')
-  
+
   args = parser.parse_args()
-  
+
   if args.grad_clip is not None:
     assert args.grad_clip > 0
     assert not args.huber_loss
@@ -56,10 +56,10 @@ def main():
   args = parse_args()
 
   # Get the model directory path
-  model_dir = rltfru.make_model_dir(args.model, args.env_id)
+  model_dir = maker.make_model_dir(args.model, args.env_id)
 
   # Configure loggers
-  rltf.log.conf_logs(model_dir)
+  rltf_log.conf_logs(model_dir)
 
   # Get the model-specific settings
   if   args.model == "DQN":
@@ -82,7 +82,7 @@ def main():
 
 
   # Create the environment
-  env = rltfru.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
+  env = maker.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
   env = wrap_deepmind_atari(env)
 
   # Set the learning rate schedule
@@ -107,14 +107,14 @@ def main():
     env=env,
     train_freq=args.train_freq,
     start_train=args.start_train,
-    max_steps=int(2e8),
+    max_steps=args.max_steps,
     batch_size=32,
     model_dir=model_dir,
     save=args.save,
   )
 
   dqn_agent_kwargs = dict(
-    model_type=model_type, 
+    model_type=model_type,
     model_kwargs=model_kwargs,
     opt_conf=opt_conf,
     exploration=exploration,
@@ -128,7 +128,7 @@ def main():
   # Log the parameters for model
   log_info = [("seed", args.seed), ("extra_info", args.extra_info)]
   log_info += kwargs.items()
-  rltf.log.log_params(log_info, args)
+  rltf_log.log_params(log_info, args)
 
   # Create the agent
   dqn_agent = AgentDQN(**kwargs)

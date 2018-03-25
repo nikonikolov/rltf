@@ -1,6 +1,6 @@
 import gym
 
-def get_monitor_wrapper(env):
+def get_env_monitor(env):
   """
   Args:
     env: gym.Env. The wrapped environment.

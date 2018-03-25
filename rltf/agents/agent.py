@@ -1,14 +1,11 @@
 import logging
 import os
-import time
 import threading
 
-import numpy      as np
 import tensorflow as tf
 
 import rltf.conf
-import rltf.log
-from rltf.env_wrap.utils import get_monitor_wrapper
+from rltf.env_wrap.utils import get_env_monitor
 
 stats_logger  = logging.getLogger(rltf.conf.STATS_LOGGER_NAME)
 logger        = logging.getLogger(__name__)
@@ -47,7 +44,7 @@ class Agent:
 
     # Store parameters
     self.env          = env
-    self.env_monitor  = get_monitor_wrapper(env)
+    self.env_monitor  = get_env_monitor(env)
 
     self.train_freq   = train_freq
     self.start_train  = start_train
@@ -64,28 +61,22 @@ class Agent:
     self.env_file     = os.path.join(self.model_dir, "Env.pkl")
 
     # Stats
-    self.episode_rewards  = np.asarray([])
-    self.mean_ep_rew      = -float('nan')
-    self.best_mean_ep_rew = -float('inf')
-    self.stats_n          = 100   # Number of episodes over which to take stats
-    self.summary          = None
+    self.mean_ep_rew  = -float('nan')
+    self.summary      = None
 
     # Attributes that are set during build
-    self.model            = None
-    self.start_step       = None
-    self.learn_started    = None
-    self.log_info         = None
-    self.last_log_time    = None
+    self.model          = None
+    self.start_step     = None
+    self.learn_started  = None
 
-    self.t_tf             = None
-    self.t_tf_inc         = None
-    self.summary_op       = None
-    self.mean_ep_rew_ph   = None
-    self.best_mean_ep_rew_ph = None
+    self.t_tf           = None
+    self.t_tf_inc       = None
+    self.summary_op     = None
+    self.mean_ep_rew_ph = None
 
-    self.sess             = None
-    self.saver            = None
-    self.tb_writer        = None
+    self.sess           = None
+    self.saver          = None
+    self.tb_writer      = None
 
 
   def build(self):
@@ -112,13 +103,11 @@ class Agent:
       # Create timestep variable and logs placeholders
       with tf.device('/cpu:0'):
         self.mean_ep_rew_ph      = tf.placeholder(tf.float32, shape=(), name="mean_ep_rew_ph")
-        self.best_mean_ep_rew_ph = tf.placeholder(tf.float32, shape=(), name="best_mean_ep_rew_ph")
 
         self.t_tf                = tf.Variable(1, dtype=tf.int32, trainable=False, name="t_tf")
         self.t_tf_inc            = tf.assign(self.t_tf, self.t_tf + 1, name="t_inc_op")
 
         tf.summary.scalar("mean_ep_rew",      self.mean_ep_rew_ph)
-        tf.summary.scalar("best_mean_ep_rew", self.best_mean_ep_rew_ph)
 
         # Create an Op for all summaries
         self.summary_op = tf.summary.merge_all()
@@ -148,7 +137,6 @@ class Agent:
       self.t_tf                 = graph.get_tensor_by_name("t_tf:0")
       self.t_tf_inc             = graph.get_operation_by_name("t_tf_inc")
       self.mean_ep_rew_ph       = graph.get_tensor_by_name("mean_ep_rew_ph:0")
-      self.best_mean_ep_rew_ph  = graph.get_tensor_by_name("best_mean_ep_rew_ph:0")
 
       # Restore the model variables
       self.model.restore(graph)
@@ -201,6 +189,7 @@ class Agent:
     """
     raise NotImplementedError()
 
+
   def _get_feed_dict(self, t):
     """Get the placeholder parameters to feed to the model while training
     Args:
@@ -220,60 +209,9 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _build_log_info(self):
-    n = self.stats_n
-
-    default_info = [
-      ("total/agent_steps",                     "d",    lambda t: t),
-      ("total/env_steps",                       "d",    lambda t: self.env_monitor.get_total_steps()),
-      ("total/episodes",                        "d",    lambda t: self.episode_rewards.size),
-
-      ("mean/n_eps > 0.8*best_rew (%d eps)"%n,  ".3f",  self._stats_frac_good_episodes),
-      ("mean/ep_length",                        ".3f",  self._stats_ep_length),
-      ("mean/steps_per_sec",                    ".3f",  self._stats_steps_per_sec),
-      ("mean/reward (%d eps)"%n,                ".3f",  lambda t: self.mean_ep_rew),
-
-      ("best/episode_reward",                   ".3f",  self._stats_best_reward),
-      ("best/mean_reward (%d eps)"%n,           ".3f",  lambda t: self.best_mean_ep_rew),
-    ]
-
+  def _define_log_info(self):
     custom_log_info = self._custom_log_info()
-    log_info = default_info + custom_log_info
-
-    self.log_info = rltf.log.format_tabular(log_info)
-
-
-  def _stats_ep_length(self, *args):
-    ep_lengths = self.env_monitor.get_episode_lengths()
-    if len(ep_lengths) > 0:
-      return np.mean(ep_lengths)
-    return float("nan")
-
-  def _stats_frac_good_episodes(self, *args):
-    if self.episode_rewards.size == 0:
-      return float("nan")
-    ep_rews   = self.episode_rewards[-self.stats_n:]
-    best_rew  = ep_rews.max()
-    if best_rew >= 0:
-      thresh  = 0.8 * best_rew
-    else:
-      thresh  = 1.2 * best_rew
-    good_eps  = ep_rews >= thresh
-    return np.sum(good_eps) / float(self.stats_n)
-
-  def _stats_best_reward(self, *args):
-    if self.episode_rewards.size == 0:
-      return float("nan")
-    return self.episode_rewards.max()
-
-  def _stats_steps_per_sec(self, *args):
-    now  = time.time()
-    if self.last_log_time is None:
-      t_per_s = float("nan")
-    else:
-      t_per_s = self.log_freq / (now - self.last_log_time)
-    self.last_log_time  = now
-    return t_per_s
+    self.env_monitor.define_log_info(custom_log_info)
 
 
   def _custom_log_info(self):
@@ -288,30 +226,26 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _log_progress(self, t):
+  def _log_stats(self, t):
     """Log the training progress and append the TensorBoard summary.
-    Note that the TensorBoard summary might be 1 step older.
-
+    Note that the TensorBoard summary might be 1 step old.
     Args:
       t: int. Current timestep
     """
 
-    # Run the update only 2 step before the actual logging happens in order to
-    # make sure that the most recent possible values will be stored in
-    # self.summary. This is a hacky workaround in order to support OffPolicyAgent
-    # which runs 2 threads without coordination
+    # NOTE: self.mean_ep_rew stays the same for self.log_freq steps. We only update it
+    # 2 step before the actual logging happens in order to make sure that the most
+    # up-to-date value is passed as input to the TensorBoard summary via feed_dict.
+    # This is a hacky workaround for implementations such as OffPolicyAgent which runs
+    # 2 threads without coordination. During the rest of the time, we do not care about
+    # self.mean_ep_rew as the summary is not used and thus we skip the update in order
+    # to save computation time
     if (t+2) % self.log_freq == 0 and self.learn_started:
-      episode_rewards = self.env_monitor.get_episode_rewards()
-      self.episode_rewards = np.asarray(episode_rewards)
-      if self.episode_rewards.size > 0:
-        self.mean_ep_rew      = np.mean(episode_rewards[-self.stats_n:])
-        self.best_mean_ep_rew = max(self.best_mean_ep_rew, self.mean_ep_rew)
+      self.mean_ep_rew = self.env_monitor.get_mean_ep_rew()
 
+    # Log the statistics from the environment Monitor
     if t % self.log_freq == 0 and self.learn_started:
-      stats_logger.info("")
-      for s, lambda_v in self.log_info:
-        stats_logger.info(s.format(lambda_v(t)))
-      stats_logger.info("")
+      self.env_monitor.log_stats(t)
 
       if self.summary:
         # Log with TensorBoard
@@ -321,11 +255,17 @@ class Agent:
   def _save(self):
     # Save model
     if self.learn_started and self.save:
-      logger.info("Saving model")
+      logger.info("Saving model and stats")
+
+      # Save the monitor statistics
+      self.env_monitor.save()
+
+      # Save the model
       self.saver.save(self.sess, self.model_dir, global_step=self.t_tf)
       # logger.info("Saving memory")
       # self.replay_buf.save(self.model_dir)
       # pickle_save(self.env_file, self.env)
+      logger.info("Save finished successfully")
 
 
   def _get_sess(self):
@@ -434,7 +374,7 @@ class OffPolicyAgent(Agent):
         last_obs = self.env.reset()
         self.reset()
 
-      self._log_progress(t)
+      self._log_stats(t)
 
 
   def _train_model(self):

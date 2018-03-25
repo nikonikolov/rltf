@@ -1,34 +1,16 @@
-import argparse
-import glob
+import datetime
+import logging
 import os
-import random
 
 import gym
-try:
-  import roboschool
-except ModuleNotFoundError:
-  pass
-import numpy      as np
-import tensorflow as tf
 
 import rltf.conf
+import rltf.utils.seeding
+import rltf.monitoring
+# from    rltf.utils import set_global_seeds
 
 
-def str2bool(v):
-  """Parse command line bool argument"""
-  if v.lower() in ('yes', 'true', 't', 'y', '1'):
-    return True
-  elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-    return False
-  else:
-    raise argparse.ArgumentTypeError('Boolean value expected.')
-
-
-def set_global_seeds(i):
-  tf.set_random_seed(i)
-  np.random.seed(i)
-  random.seed(i)
-  rltf.conf.SEED = i
+logger = logging.getLogger(__name__)
 
 
 def make_env(env_id, seed, model_dir, save_video, video_freq=None):
@@ -41,20 +23,18 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=None):
     model_dir: std. Path where videos from the Monitor class will be saved
     save_video: bool. If False, no videos will be recorded
     video_freq: int. Every `video_freq` episode will be recorded. If `None`,
-      then every perfect cube episode number 1, 8, 27 ... 1000 will be recorded.
-      After that, every 1000-th episode will be recorded
+      then the monitor default is used
   Returns:
     The environment wrapped inside a Monitor class
   """
 
+  if ("Roboschool") in env_id:
+    import roboschool
+
   # Set all seeds
-  set_global_seeds(seed)
+  rltf.utils.seeding.set_global_seeds(seed)
 
-  env_file = model_dir + "Env.pkl"
-  if os.path.isfile(env_file):
-    return pickle_restore(env_file)
-
-  gym_dir = model_dir + "gym_video"
+  monitor_dir = os.path.join(model_dir, "env_monitor")
   if save_video:
     if video_freq is None:
       video_callable = None
@@ -65,16 +45,18 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=None):
 
   env = gym.make(env_id)
   env.seed(seed)
-  env = gym.wrappers.Monitor(env, gym_dir, force=True, video_callable=video_callable)
+  # env = gym.wrappers.Monitor(env, monitor_dir, video_callable=video_callable)
+  env = rltf.monitoring.Monitor(env, monitor_dir, video_callable=video_callable)
 
   return env
 
 
-def make_model_dir(model_type, env_id):
+def make_model_dir(model_type, env_id, dest=rltf.conf.MODELS_DIR):
   """
   Args:
     model_type: python class or str. The class of the model
     env_id: str. The environment name
+    dest: str. The absolute path of the directory where all models are saved
   Returns:
     The absolute path for the model directory
   """
@@ -84,18 +66,15 @@ def make_model_dir(model_type, env_id):
   else:
     model_name  = model_type.__name__.lower()
 
-  model_dir   = os.path.join(rltf.conf.MODELS_DIR,   model_name)
-  model_dir   = os.path.join(model_dir,   env_id)
+  model_dir   = os.path.join(dest,      model_name)
+  model_dir   = os.path.join(model_dir, env_id)
 
-  # Get the number of existing models
-  pattern     = model_dir + "_m*/"
-  models      = glob.glob(pattern)
-
-  # Get the number of the new model dir
-  model_dir  += "_m" + str(len(models)+1)
+  model_id    = datetime.datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
+  model_dir   = model_dir + "_" + model_id
   model_dir   = os.path.join(model_dir, "")
 
   # Create the directory for the model
+  logger.info('Creating model directory %s', model_dir)
   os.makedirs(model_dir)
 
   return model_dir

@@ -54,7 +54,7 @@ class AgentDQN(OffPolicyAgent):
     self.replay_buf = ReplayBuffer(memory_size, buf_obs_shape, np.uint8, [], np.uint8, obs_hist_len)
 
     # Configure what information to log
-    super()._build_log_info()
+    self._define_log_info()
 
     # Custom TF Tensors and Ops
     self.learn_rate_ph  = None
@@ -101,7 +101,6 @@ class AgentDQN(OffPolicyAgent):
       self.learn_rate_ph:        self.opt_conf.lr_value(t),
       self.epsilon_ph:           self.exploration.value(t),
       self.mean_ep_rew_ph:       self.mean_ep_rew,
-      self.best_mean_ep_rew_ph:  self.best_mean_ep_rew,
     }
 
     return feed_dict

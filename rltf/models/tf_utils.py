@@ -73,3 +73,10 @@ def init_glorot_normal():
 
 def init_default():
   return None
+
+def cholesky_inverse(A):
+  N     = tf.shape(A)[0]
+  L     = tf.linalg.cholesky(A)
+  L_inv = tf.matrix_triangular_solve(L, tf.eye(N))
+  A_inv = tf.matmul(L_inv, L_inv, transpose_a=True)
+  return A_inv
