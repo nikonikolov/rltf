@@ -1,4 +1,4 @@
-# rltf
+# RLTF
 Reinforcement Learning Library in TensorFlow and OpenAI gym
 
 **NOTE: This is work in progress and structure of some parts of the library is likely to change. More functionality and documentation are coming soon.**
@@ -26,7 +26,7 @@ git clone https://github.com/nikonikolov/rltf.git
 ### Dependencies
 - Python >= 3.5
 - Tensorflow >= 1.4.0
-- OpenAI gym
+- OpenAI gym >= 0.9.6
 
 
 ## Implemented Algorithms

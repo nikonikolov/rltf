@@ -1,3 +1,5 @@
+from collections import deque
+
 import cv2
 import gym
 import numpy as np
@@ -12,8 +14,11 @@ class NoopResetEnv(gym.Wrapper):
     self.noop_max = noop_max
     assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
 
-  def _reset(self, **kwargs):
-    """ Do no-op action for a number of steps in [1, noop_max]."""
+  def step(self, action):
+    return self.env.step(action)
+
+  def reset(self, **kwargs):
+    """Do no-op action for a number of steps in [1, noop_max]."""
     self.env.reset(**kwargs)
     noops = np.random.randint(1, self.noop_max + 1)
     for _ in range(noops):
@@ -30,7 +35,10 @@ class FireResetEnv(gym.Wrapper):
     assert env.unwrapped.get_action_meanings()[1] == 'FIRE'
     assert len(env.unwrapped.get_action_meanings()) >= 3
 
-  def _reset(self, **kwargs):
+  def step(self, action):
+    return self.env.step(action)
+
+  def reset(self, **kwargs):
     self.env.reset(**kwargs)
     obs, _, done, _ = self.env.step(1)
     if done:
@@ -48,9 +56,9 @@ class EpisodicLifeEnv(gym.Wrapper):
     """
     super().__init__(env)
     self.lives = 0
-    self.was_real_done  = True
+    self.was_real_done = True
 
-  def _step(self, action):
+  def step(self, action):
     obs, reward, done, info = self.env.step(action)
     self.was_real_done = done
     # check current lives, make loss of life terminal,
@@ -64,7 +72,7 @@ class EpisodicLifeEnv(gym.Wrapper):
     self.lives = lives
     return obs, reward, done, info
 
-  def _reset(self, **kwargs):
+  def reset(self, **kwargs):
     """Reset only when lives are exhausted.
     This way all states are still reachable even though lives are episodic,
     and the learner need not know about any of this behind-the-scenes.
@@ -83,27 +91,30 @@ class MaxAndSkipEnv(gym.Wrapper):
     """Return only every `skip`-th frame"""
     super().__init__(env)
     # most recent raw observations (for max pooling across time steps)
-    self._obs_buffer = np.zeros((2,)+env.observation_space.shape, dtype='uint8')
+    self._obs_buffer = deque(maxlen=2)
     self._skip       = skip
 
-  def _step(self, action):
+  def step(self, action):
     """Repeat action, sum reward, and max over last observations."""
     total_reward = 0.0
     done = None
-    for i in range(self._skip):
+    for _ in range(self._skip):
       obs, reward, done, info = self.env.step(action)
-      if i == self._skip - 2:
-        self._obs_buffer[0] = obs
-      if i == self._skip - 1:
-        self._obs_buffer[1] = obs
+      self._obs_buffer.append(obs)
       total_reward += reward
       if done:
         break
-    # Note that the observation on the done=True frame
-    # doesn't matter
-    max_frame = self._obs_buffer.max(axis=0)
+
+    max_frame = np.max(np.stack(self._obs_buffer), axis=0)
 
     return max_frame, total_reward, done, info
+
+  def reset(self, **kwargs):
+    """Clear past frame buffer and init to first obs. from inner env."""
+    self._obs_buffer.clear()
+    obs = self.env.reset()
+    self._obs_buffer.append(obs)
+    return obs
 
 
 class WarpFrame(gym.ObservationWrapper):
@@ -112,9 +123,10 @@ class WarpFrame(gym.ObservationWrapper):
     super().__init__(env)
     self.width = 84
     self.height = 84
-    self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self.height, self.width, 1))
+    shape = (self.height, self.width, 1)
+    self.observation_space = gym.spaces.Box(low=0, high=255, shape=shape, dtype=np.uint8)
 
-  def _observation(self, observation):
+  def observation(self, observation):
     # COLOR_RGB2GRAY is eqivalent to Y channel
     # See CV docs at https://docs.opencv.org/3.1.0/de/d25/imgproc_color_conversions.html
     observation = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
@@ -122,10 +134,11 @@ class WarpFrame(gym.ObservationWrapper):
     return observation[:, :, None]
 
 
-class ClippedRewardsWrapper(gym.Wrapper):
-  def _step(self, action):
-    obs, reward, done, info = self.env.step(action)
-    return obs, np.sign(reward), done, info
+class ClippedRewardsWrapper(gym.RewardWrapper):
+
+  def reward(self, reward):
+    return np.sign(reward)
+
 
 # def wrap_deepmind_ram(env):
 #   env = EpisodicLifeEnv(env)
@@ -136,6 +149,7 @@ class ClippedRewardsWrapper(gym.Wrapper):
 #   env = ClippedRewardsWrapper(env)
 #   return env
 
+
 def wrap_deepmind_atari(env):
   """Wraps an Atari environment to have the same settings as in the original
   DQN Nature paper by Deepmind.
@@ -145,7 +159,10 @@ def wrap_deepmind_atari(env):
   Returns:
     The wrapped environment
   """
+  if not isinstance(env.unwrapped, gym.envs.atari.AtariEnv):
+    raise ValueError("Applying atari wrappers to the non-atari env {} is not allowed".format(env.spec.id))
   assert 'NoFrameskip' in env.spec.id
+
   env = EpisodicLifeEnv(env)
   env = NoopResetEnv(env, noop_max=30)
   env = MaxAndSkipEnv(env, skip=4)

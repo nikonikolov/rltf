@@ -10,7 +10,7 @@ class ScaleReward(gym.RewardWrapper):
     super().__init__(env)
     self.scale = scale
 
-  def _reward(self, reward):
+  def reward(self, reward):
     return self.scale * reward
 
 
@@ -24,10 +24,10 @@ class NormalizeAction(gym.ActionWrapper):
     self.act_std  = (self.action_space.high - self.action_space.low) / 2.0
     self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=self.action_space.shape)
 
-  def _action(self, action):
+  def action(self, action):
     return self.act_std * action + self.act_mean
 
-  def _reverse_action(self, action):
+  def reverse_action(self, action):
     return (action - self.act_mean) / self.act_std
 
 
@@ -40,10 +40,10 @@ class ClipAction(gym.ActionWrapper):
     self.high = high
     self.low  = low
 
-  def _action(self, action):
+  def action(self, action):
     return np.clip(action, self.low, self.high)
 
-  def _reverse_action(self, action):
+  def reverse_action(self, action):
     return action
 
 
@@ -70,7 +70,7 @@ class ClipAction(gym.ActionWrapper):
 #     self.observation_space = gym.spaces.Box(low=low, high=high, shape=obs_shape)
 
 
-#   def _step(self, action):
+#   def step(self, action):
 #     """Repeat action, sum reward, and stack observations. Note that if
 #     episode terminates in the middle, the last observation is duplicated"""
 
@@ -108,7 +108,7 @@ class ClipAction(gym.ActionWrapper):
 #     self.observation_space = gym.spaces.Box(low=0, high=255, shape=obs_shape)
 
 
-#   def _step(self, action):
+#   def step(self, action):
 #     """Repeat action, sum reward, and stack observations. Note that if
 #     episode terminates in the middle, the last observation is duplicated"""
 
@@ -132,7 +132,7 @@ class ClipAction(gym.ActionWrapper):
 #     self.height = height
 #     self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self.height, self.width, 1))
 
-#   def _observation(self, frame):
+#   def observation(self, frame):
 #     # COLOR_RGB2GRAY is eqivalent to Y channel
 #     # See CV docs at https://docs.opencv.org/3.1.0/de/d25/imgproc_color_conversions.html
 #     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
