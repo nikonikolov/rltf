@@ -7,6 +7,7 @@ from rltf.env_wrap      import wrap_deepmind_atari
 from rltf.models        import BstrapDQN
 from rltf.models        import DDQN
 from rltf.models        import DQN
+from rltf.models        import DQN_IDS_BLR
 from rltf.models        import C51
 from rltf.models        import QRDQN
 from rltf.optimizers    import OptimizerConf
@@ -19,7 +20,7 @@ from rltf.utils.cmdargs import str2bool
 
 
 def parse_args():
-  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN"]
+  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "DQN_IDS_BLR"]
 
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--env-id',       required=True,  type=str,       help='full environment name')
@@ -71,6 +72,9 @@ def main():
   elif args.model == "BstrapDQN":
     model_type    = BstrapDQN
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
+  elif args.model == "DQN_IDS_BLR":
+    model_type    = DQN_IDS_BLR
+    model_kwargs  = dict(huber_loss=args.huber_loss, sigma=1.0, tau=25.0, rho=0.5)
   elif args.model == "C51":
     model_type    = C51
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)

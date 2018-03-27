@@ -107,16 +107,20 @@ class AgentDQN(OffPolicyAgent):
 
 
   def _action_train(self, t):
-    # Run epsilon greedy policy
-    epsilon = self.exploration.value(t)
-    if np.random.uniform(0,1) < epsilon:
-      action = self.env.action_space.sample()
-    else:
-      # Run the network to select an action
-      state   = self.replay_buf.encode_recent_obs()
-      action  = self.model.control_action(self.sess, state)
-    return action
+    # # Run epsilon greedy policy
+    # epsilon = self.exploration.value(t)
+    # if np.random.uniform(0,1) < epsilon:
+    #   action = self.env.action_space.sample()
+    # else:
+    #   # Run the network to select an action
+    #   state   = self.replay_buf.encode_recent_obs()
+    #   action  = self.model.control_action(self.sess, state)
+    # return action
 
+    # Run the network to select an action
+    state   = self.replay_buf.encode_recent_obs()
+    action  = self.model.control_action(self.sess, state)
+    return action
 
   # def _action_eval(self, t):
   #   state   = self.replay_buf.encode_recent_obs()
