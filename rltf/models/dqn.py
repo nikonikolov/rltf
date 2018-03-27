@@ -65,10 +65,12 @@ class BaseDQN(Model):
     # Build the optimizer
     optimizer   = self.opt_conf.build()
     # Create the training Op
-    self._train_op = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
-
+    train_op    = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
     # Create the Op to update the target
-    self._update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
+    target_op   = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
+
+    self._train_op      = train_op
+    self._update_target = target_op
 
     # Add summaries
     tf.summary.scalar("loss", loss)

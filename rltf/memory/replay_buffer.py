@@ -30,17 +30,10 @@ class ReplayBuffer(BaseBuffer):
   def store_frame(self, frame):
     """Store a single frame in the buffer at the next available index, overwriting
     old frames if necessary.
-
-    Parameters
-    ----------
-    frame: np.array
-      Array of shape (img_h, img_w, img_c) and dtype np.uint8
-      the frame to be stored
-
-    Returnsр
-    -------
-    idx: int
-      Index at which the frame is stored. To be used for `store_effect` later.
+    Args:
+      frame: np.array, shape=[img_h, img_w, img_c], dtype=np.uint8. The frame to be stored
+    Returns:
+      int: Index at which the frame is stored. To be used for `store_effect` later.
     """
     self.obs[self.next_idx] = frame
 
@@ -57,16 +50,11 @@ class ReplayBuffer(BaseBuffer):
     up into two functions is so that once can call `encode_recent_obs`
     in between.
 
-    Paramters
-    ---------
-    idx: int
-      Index in buffer of recently observed frame (returned by `store_frame`).
-    action: int
-      Action that was performed upon observing this frame.
-    reward: float
-      Reward that was received when the actions was performed.
-    done: bool
-      True if episode was finished after performing that action.
+    Args:
+      idx: int. Index in buffer of recently observed frame (returned by `store_frame`).
+      action: int. Action that was performed upon observing this frame.
+      reward: float. Reward that was received when the actions was performed.
+      done: bool. True if episode was finished after performing that action.
     """
     self.action[idx] = action
     self.reward[idx] = reward
@@ -83,7 +71,7 @@ class ReplayBuffer(BaseBuffer):
 
   def sample(self, batch_size):
     """
-    Sample uniformyl `batch_size` different transitions. Note that the
+    Sample uniformly `batch_size` different transitions. Note that the
     implementation is thread-safe and allows for another thread to be currently
     adding a new transition to the buffer.
 
@@ -96,9 +84,7 @@ class ReplayBuffer(BaseBuffer):
       batch_size: int. Size of the batch to sample
     Returns:
       Python dictionary with keys
-      "obs": np.array, shape=[batch_size, obs_shape], dtype=obs_dtype, Batch state
-        FIX obs_shape - must be times state_len
-
+      "obs": np.array, shape=[batch_size, obs_shape], dtype=obs_dtype, Batch states
       "act": np.array, shape=[batch_size, act_shape], dtype=act_dtype. Batch actions
       "rew": np.array, shape=[batch_size, 1], dtype=np.float32. Batch rewards
       "obs_tp1": np.array, shape=[batch_size, obs_shape], dtype=obs_dtype. Batch next state
@@ -214,17 +200,11 @@ class ReplayBuffer(BaseBuffer):
   #   at index idx. The reason `store_frame` and `store_effect` is broken
   #   up into two functions is so that once can call `encode_recent_obs`
   #   in between.
-
-  #   Paramters
-  #   ---------
-  #   idx: int
-  #     Index in buffer of recently observed frame (returned by `store_frame`).
-  #   action: int
-  #     Action that was performed upon observing this frame.
-  #   reward: float
-  #     Reward that was received when the actions was performed.
-  #   done: bool
-  #     True if episode was finished after performing that action.
+  #   Args:
+  #     obs: np.array. ??
+  #     action: int. Action that was performed upon observing this frame.
+  #     reward: float. Reward that was received when the actions was performed.
+  #     done: bool. True if episode was finished after performing that action.
   #   """
   #   self.obs[self.next_idx]     = action
   #   self.action[self.next_idx]  = action

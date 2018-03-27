@@ -7,7 +7,6 @@ import gym
 import rltf.conf
 import rltf.utils.seeding
 import rltf.monitoring
-# from    rltf.utils import set_global_seeds
 
 
 logger = logging.getLogger(__name__)

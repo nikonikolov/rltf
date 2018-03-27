@@ -74,9 +74,35 @@ def init_glorot_normal():
 def init_default():
   return None
 
+
 def cholesky_inverse(A):
+  """Compute the inverse of `A` using Choselky decomposition. NOTE: `A` must be
+  symmetric positive definite. This method of inversion is not completely stable since
+  tf.cholesky is not always stable. Might raise `tf.errors.InvalidArgumentError`
+  """
   N     = tf.shape(A)[0]
-  L     = tf.linalg.cholesky(A)
+  L     = tf.cholesky(A)
   L_inv = tf.matrix_triangular_solve(L, tf.eye(N))
   A_inv = tf.matmul(L_inv, L_inv, transpose_a=True)
   return A_inv
+
+
+def sherman_morrison_inverse(A_inv, u, v):
+  """Compute the inverse of (A + uv^T) using Sherman-Morrison formula:
+  https://en.wikipedia.org/wiki/Sherman%E2%80%93Morrison_formula
+  Args:
+    A_inv: tf.Tensor. The inverse of A or batch. Last two dimensions should have shape [N, N]
+    u: tf.Tensor. (Batch of) column vector(s). Last two dimensions should have shape [N, 1]
+    v: tf.Tensor. (Batch of) column vector(s). Last two dimensions should have shape [N, 1]
+  Returns: (A + uv^T)^{-1} with the same shape as `A_inv`
+  """
+  assert u.shape.as_list()[-1] == 1 and len(u.shape) >= 2
+  assert v.shape.as_list()[-1] == 1 and len(v.shape) >= 2
+
+  A_inv_u = tf.matmul(A_inv, u)
+  num     = tf.matmul(A_inv_u, tf.matmul(v, A_inv, transpose_a=True))
+  denom   = tf.matmul(v, A_inv_u, transpose_a=True)
+  denom   = 1 + tf.squeeze(denom, axis=[-2, -1])
+  inverse = A_inv - num / denom
+
+  return inverse

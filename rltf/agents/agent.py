@@ -356,7 +356,7 @@ class OffPolicyAgent(Agent):
       # Signal to net_thread that action is chosen
       self._signal_act_chosen()
 
-      # Increement the TF timestep variable
+      # Increment the TF timestep variable
       self.sess.run(self.t_tf_inc)
 
       # Run action

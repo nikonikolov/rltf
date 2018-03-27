@@ -192,17 +192,10 @@ class Monitor(Wrapper):
     if not self._enabled:
       return done
 
-    self.done = done
-
-    # From gym.Monitor: For envs with BlockingReset wrapping VNCEnv,
-    # this observation will be the first one of the new episode
-    # if done and self.env_semantics_autoreset:
-    #   self.reset_video_recorder()
-    #   self.episode_id += 1
-
     # Record stats and video
     self.stats_recorder.after_step(obs, reward, done, info)
     self.video_recorder.capture_frame()
+    self.done = done
 
     return done
 
