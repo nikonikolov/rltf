@@ -27,7 +27,7 @@ class BaseBuffer():
     self.done   = np.empty([self.max_size],             dtype=np.bool)
 
 
-  def add(self, obs_t, action, reward, done):
+  def store(self, obs_t, act_t, reward_tp1, done_tp1):
     raise NotImplementedError()
 
 

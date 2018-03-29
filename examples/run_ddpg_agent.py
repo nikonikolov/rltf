@@ -135,7 +135,7 @@ def main():
     action_noise=action_noise,
     update_target_freq=args.update_freq,
     memory_size=int(1e6),
-    obs_hist_len=1,
+    obs_len=1,
   )
 
   kwargs = {**ddpg_agent_kwargs, **agent_kwargs}

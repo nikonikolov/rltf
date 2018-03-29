@@ -120,7 +120,7 @@ def main():
     exploration=exploration,
     update_target_freq=10000,
     memory_size=int(1e6),
-    obs_hist_len=4,
+    obs_len=4,
   )
 
   kwargs = {**dqn_agent_kwargs, **agent_kwargs}

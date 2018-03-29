@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 import numpy as np
 
 from gym        import error
@@ -23,11 +24,12 @@ class StatsRecorder:
     """
 
     # Member data
-    # self.log_dir    = os.path.join(log_dir, "data")
     self.log_dir    = log_dir
     self.n_ep_stats = n_ep_stats
-    # self.t_last_log = None          # Time at which the last runtime log happened
     self.log_info   = None
+    self.steps_p_s  = None
+    self.t_last_log     = time.time()   # Time at which the last runtime log happened
+    self.step_last_log  = 0             # Step at which the last runtime log happened
 
     # Training statistics
     self.train_ep_rews = []
@@ -94,12 +96,6 @@ class StatsRecorder:
   def before_reset(self):
     assert not self.disabled
 
-    # This should be disabled since it does not allow for early episode termination
-    # if self.done is not None and not self.done and self.ep_steps > 0:
-    #   raise error.Error("Tried to reset environment which is not done. \
-    #     While the monitor is active for {}, you cannot call reset() \
-    #     unless the episode is over.".format(self.env_id))
-
 
   def after_reset(self, obs):
     self.ep_steps   = 0
@@ -142,7 +138,7 @@ class StatsRecorder:
 
     default_info = [
       ("train/agent_steps",                     "d",    lambda t: t),
-      # ("train/mean_steps_per_sec",              ".3f",  self._stats_steps_per_sec),
+      ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
 
       ("train/env_steps",                       "d",    lambda t: self.train_steps),
       ("train/episodes",                        "d",    lambda t: len(self.train_ep_rews)),
@@ -171,7 +167,7 @@ class StatsRecorder:
     return float("nan")
 
 
-  def _compute_runtime_stats(self):
+  def _compute_runtime_stats(self, step):
     """Update the values of the runtime statistics variables"""
 
     def _stats_max(data, i=0):
@@ -196,6 +192,14 @@ class StatsRecorder:
     self.eval_stats["best_ep_rew"] = max(self.eval_stats["best_ep_rew"], best_ep_rew)
     self.eval_stats["ep_last_stats"] = len(self.eval_ep_rews)
 
+    t_now  = time.time()
+    if self._mode == 't':
+      steps_per_s = (step - self.step_last_log) / (t_now - self.t_last_log)
+      steps_per_s = steps_per_s if self.steps_p_s is None else (steps_per_s + self.steps_p_s) / 2.0
+      self.steps_p_s = steps_per_s
+      self.step_last_log = step
+    self.t_last_log = t_now
+
 
   def get_mean_ep_rew(self):
     return self._stats_mean(self.train_ep_rews)
@@ -208,7 +212,7 @@ class StatsRecorder:
     """
 
     # Update the statistics
-    self._compute_runtime_stats()
+    self._compute_runtime_stats(t)
 
     stats_logger.info("")
     for s, lambda_v in self.log_info:
@@ -228,6 +232,7 @@ class StatsRecorder:
       "train_episodes":   len(self.train_ep_rews),
       "eval_steps":       self.eval_steps,
       "eval_episodes":    len(self.eval_ep_rews),
+      "steps_per_s":      self.steps_p_s,
     }
 
     with atomic_write.atomic_write(summary_file) as f:

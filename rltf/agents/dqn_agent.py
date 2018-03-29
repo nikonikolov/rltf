@@ -15,7 +15,7 @@ class AgentDQN(OffPolicyAgent):
                exploration,
                update_target_freq=10000,
                memory_size=int(1e6),
-               obs_hist_len=4,
+               obs_len=4,
                **agent_kwargs
               ):
     """
@@ -26,7 +26,7 @@ class AgentDQN(OffPolicyAgent):
       exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
       update_target_freq: Period in number of steps at which to update the target net
       memory_size: int. Size of the replay buffer
-      obs_hist_len: int. How many environment observations comprise a single state.
+      obs_len: int. How many environment observations comprise a single state.
       agent_kwargs: Keyword arguments that will be passed to the Agent base class
     """
 
@@ -41,17 +41,16 @@ class AgentDQN(OffPolicyAgent):
     self.update_target_freq = update_target_freq
 
     # Get environment specs
-    img_h, img_w, img_c = self.env.observation_space.shape
-    obs_shape = [img_h, img_w, obs_hist_len * img_c]
-    buf_obs_shape = [img_h, img_w, img_c]
     n_actions = self.env.action_space.n
+    obs_shape = self.env.observation_space.shape
+    obs_shape = list(obs_shape)
 
     model_kwargs["obs_shape"] = obs_shape
     model_kwargs["n_actions"] = n_actions
     model_kwargs["opt_conf"]  = opt_conf
 
     self.model      = model_type(**model_kwargs)
-    self.replay_buf = ReplayBuffer(memory_size, buf_obs_shape, np.uint8, [], np.uint8, obs_hist_len)
+    self.replay_buf = ReplayBuffer(memory_size, obs_shape, np.uint8, [], np.uint8, obs_len)
 
     # Configure what information to log
     self._define_log_info()
@@ -106,20 +105,18 @@ class AgentDQN(OffPolicyAgent):
     return feed_dict
 
 
-  def _action_train(self, t):
+  def _action_train(self, state, t):
     # Run epsilon greedy policy
     epsilon = self.exploration.value(t)
     if np.random.uniform(0,1) < epsilon:
       action = self.env.action_space.sample()
     else:
       # Run the network to select an action
-      state   = self.replay_buf.encode_recent_obs()
       action  = self.model.control_action(self.sess, state)
     return action
 
 
-  # def _action_eval(self, t):
-  #   state   = self.replay_buf.encode_recent_obs()
+  # def _action_eval(self, state, t):
   #   action  = self.model.control_action(self.sess, state)
   #   return action
 

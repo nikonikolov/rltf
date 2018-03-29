@@ -18,7 +18,7 @@ class AgentDDPG(OffPolicyAgent):
                action_noise,
                update_target_freq=1,
                memory_size=int(1e6),
-               obs_hist_len=1,
+               obs_len=1,
                **agent_kwargs
               ):
     """
@@ -32,7 +32,7 @@ class AgentDDPG(OffPolicyAgent):
       action_noise: rltf.exploration.ExplorationNoise. Action exploration noise
         to add to the selected action
       memory_size: int. Size of the replay buffer
-      obs_hist_len: int. How many environment observations comprise a single state.
+      obs_len: int. How many environment observations comprise a single state.
     """
 
     super().__init__(**agent_kwargs)
@@ -53,8 +53,8 @@ class AgentDDPG(OffPolicyAgent):
 
     # Image observation
     if len(obs_shape) == 3:
+      assert obs_len > 1
       obs_dtype = np.uint8
-      obs_shape[-1] *= obs_hist_len
     else:
       obs_dtype = np.float32
 
@@ -64,7 +64,7 @@ class AgentDDPG(OffPolicyAgent):
     model_kwargs["critic_opt_conf"] = critic_opt_conf
 
     self.model      = model_type(**model_kwargs)
-    self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_hist_len)
+    self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_len)
 
     # Configure what information to log
     self._define_log_info()
@@ -140,9 +140,8 @@ class AgentDDPG(OffPolicyAgent):
     return feed_dict
 
 
-  def _action_train(self, t):
+  def _action_train(self, state, t):
     noise   = self.action_noise.sample()
-    state   = self.replay_buf.encode_recent_obs()
     action  = self.model.control_action(self.sess, state)
     action  = action + noise
 

@@ -310,17 +310,19 @@ class OffPolicyAgent(Agent):
     # self.sess.close()
 
 
-  def _action_train(self, t):
+  def _action_train(self, state, t):
     """Return action selected by the agent for a training step
     Args:
+      state: np.array. Current state
       t: int. Current timestep
     """
     raise NotImplementedError()
 
 
-  def _action_eval(self, t):
+  def _action_eval(self, state, t):
     """Return action selected by the agent for an evaluation step
     Args:
+      state: np.array. Current state
       t: int. Current timestep
     """
     raise NotImplementedError()
@@ -334,7 +336,7 @@ class OffPolicyAgent(Agent):
     `self._train_model()` thread to start a new training step
     """
 
-    last_obs  = self.env.reset()
+    obs = self.env.reset()
 
     for t in range (self.start_step, self.max_steps+1):
       # sess.run(t_inc_op)
@@ -342,12 +344,9 @@ class OffPolicyAgent(Agent):
       # Wait until net_thread is done
       self._wait_train_done()
 
-      # Store the latest obesrvation in the buffer
-      idx = self.replay_buf.store_frame(last_obs)
-
       # Get an action to run
       if self.learn_started:
-        action = self._action_train(t)
+        action = self._action_train(obs, t)
 
       # Choose random action if learning has not started
       else:
@@ -360,19 +359,16 @@ class OffPolicyAgent(Agent):
       self.sess.run(self.t_tf_inc)
 
       # Run action
-      # next_obs, reward, done, info = self.env.step(action)
-      last_obs, reward, done, _ = self.env.step(action)
+      next_obs, reward, done, _ = self.env.step(action)
 
-      # Store the effect of the action taken upon last_obs
-      # self.replay_buf.store(obs, action, reward, done)
-      self.replay_buf.store_effect(idx, action, reward, done)
+      # Store the effect of the action taken upon obs
+      self.replay_buf.store(obs, action, reward, done)
 
       # Reset the environment if end of episode
-      # if done: next_obs = self.env.reset()
-      # obs = next_obs
       if done:
-        last_obs = self.env.reset()
+        next_obs = self.env.reset()
         self.reset()
+      obs = next_obs
 
       self._log_stats(t)
 
