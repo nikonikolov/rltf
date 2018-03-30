@@ -43,11 +43,15 @@ def parse_args():
   parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
-  parser.add_argument('--log_level',    default="INFO", type=str,       help='logger lvl')
-  parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
-  parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
+  parser.add_argument('--eval-freq',    default=10**6,  type=int,   help='how often to evaluate model')
+  parser.add_argument('--eval-len',     default=50000,  type=int,   help='for how many steps to eval')
+
+  parser.add_argument('--log-lvl',      default="INFO", type=str,   help='logger lvl')
+  parser.add_argument('--save-freq',    default=0,      type=int,   help='how often to save model')
+  parser.add_argument('--log-freq',     default=10000,  type=int,   help='how often to log stats')
   parser.add_argument('--video-freq',   default=500,    type=int,
                       help='period in number of episodes at which to record videos')
+
 
   args = parser.parse_args()
 
@@ -66,7 +70,7 @@ def main():
   model_dir = maker.make_model_dir(args.model, args.env_id)
 
   # Configure loggers
-  rltf_log.conf_logs(model_dir, args.log_level)
+  rltf_log.conf_logs(model_dir, args.log_lvl)
 
   # Set the model-specific keyword arguments
   model_kwargs = dict(
@@ -85,7 +89,7 @@ def main():
 
 
   # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
+  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
   env = wrap_deepmind_ddpg(env, args.reward_scale)
 
   # Set additional arguments
@@ -121,10 +125,13 @@ def main():
     env=env,
     train_freq=args.train_freq,
     start_train=args.start_train,
-    max_steps=int(2.5e6),
+    stop_step=int(2.5e6),
+    eval_freq=args.eval_freq,
+    eval_len=args.eval_len,
     batch_size=args.batch_size,
     model_dir=model_dir,
-    save=args.save,
+    log_freq=args.log_freq,
+    save_freq=args.save_freq,
   )
 
   ddpg_agent_kwargs = dict(

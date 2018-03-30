@@ -73,7 +73,7 @@ class BaseDQN(Model):
     self._update_target = target_op
 
     # Add summaries
-    tf.summary.scalar("loss", loss)
+    tf.summary.scalar("train/loss", loss)
 
 
   def _nn_model(self, x, scope):
@@ -110,12 +110,14 @@ class BaseDQN(Model):
     pass
 
 
-  def control_action(self, sess, state):
+  def action_train(self, sess, state):
     q_vals  = sess.run(self._q, feed_dict={self.obs_t_ph: state[None,:]})
     action  = np.argmax(q_vals)
-
     return action
 
+
+  def action_eval(self, sess, state):
+    return self.action_train(sess, state)
 
 
 class DQN(BaseDQN):

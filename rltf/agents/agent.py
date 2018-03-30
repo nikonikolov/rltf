@@ -1,82 +1,74 @@
 import logging
-import os
 import threading
 
 import tensorflow as tf
 
-import rltf.conf
-from rltf.env_wrap.utils import get_env_monitor
+from rltf.conf            import STATS_LOGGER_NAME
+from rltf.env_wrap.utils  import get_env_monitor
 
-stats_logger  = logging.getLogger(rltf.conf.STATS_LOGGER_NAME)
+stats_logger  = logging.getLogger(STATS_LOGGER_NAME)
 logger        = logging.getLogger(__name__)
 
 
 class Agent:
-  """The base class for a Reinforcement Learning agent"""
+  """Base class for a Reinforcement Learning agent"""
 
   def __init__(self,
                env,
                train_freq,
                start_train,
-               max_steps,
+               stop_step,
+               eval_freq,
+               eval_len,
                batch_size,
                model_dir,
                log_freq=10000,
-               save=False,
-               save_freq=int(1e5),
+               save_freq=100000,
               ):
     """
     Args:
       env: gym.Env. Environment in which the model will be trained.
-      model_dir: string. Directory path for the model logs and checkpoints
-      start_train: int. Time step at which the agent starts learning
-      max_steps: int. Training step at which learning stops
       train_freq: int. How many environment actions to take between every 2 learning steps
+      start_train: int. Time step at which the agent starts learning
+      stop_step: int. Training step at which learning stops
+      eval_freq: int. How many agent steps to take between every 2 evaluation runs
+      eval_len: int. How many agent steps an evaluation run lasts. `<=0` means no evaluation
       batch_size: int. Batch size for training the model
-      log_freq: int. Add TensorBoard summary and print progress every log_freq
-        number of environment steps
-      save: bool. If true, save the model every
-      save_freq: int. Save the model every `save_freq` training steps
-
-
-      exploration: rltf.schedules.Schedule. Exploration schedule for the model
+      model_dir: string. Directory path for the model logs and checkpoints
+      log_freq: int. Add TensorBoard summary and print progress every log_freq agent steps
+      save_freq: int. Save the model every `save_freq` training steps. `<=0` means no saving
     """
 
-    # Store parameters
-    self.env          = env
-    self.env_monitor  = get_env_monitor(env)
+    self.env            = env
+    self.env_monitor    = get_env_monitor(env)
 
-    self.train_freq   = train_freq
-    self.start_train  = start_train
-    self.max_steps    = max_steps
+    self.batch_size     = batch_size
+    self.model_dir      = model_dir
+    self.save_freq      = save_freq
+    self.log_freq       = log_freq
 
-    self.batch_size   = batch_size
-    self.model_dir    = model_dir
+    self.start_step     = None          # Step from which the agent starts
+    self.start_train    = start_train   # Step from which training starts
+    self.stop_step      = stop_step     # Step at which training stops
+    self.learn_started  = None          # Bool: Indicates if learning has started or not
+    self.train_freq     = train_freq    # How often to run a training step
 
-    self.log_freq     = log_freq
-    self.save         = save
-    self.save_freq    = save_freq
+    self.eval_freq      = eval_freq     # How often to take an evaluation run
+    self.eval_len       = eval_len      # How many steps to an evaluation run lasts
+    self.eval_runs      = -1            # Number of evaluation runs so far
 
+    # TensorFlow attributes
+    self.model            = None
+    self.summary          = None
 
-    self.env_file     = os.path.join(self.model_dir, "Env.pkl")
+    self.t_tf             = None
+    self.t_tf_inc         = None
+    self.summary_op       = None
 
-    # Stats
-    self.mean_ep_rew  = -float('nan')
-    self.summary      = None
-
-    # Attributes that are set during build
-    self.model          = None
-    self.start_step     = None
-    self.learn_started  = None
-
-    self.t_tf           = None
-    self.t_tf_inc       = None
-    self.summary_op     = None
-    self.mean_ep_rew_ph = None
-
-    self.sess           = None
-    self.saver          = None
-    self.tb_writer      = None
+    self.sess             = None
+    self.saver            = None
+    self.tb_train_writer  = None
+    self.tb_eval_writer   = None
 
 
   def build(self):
@@ -92,7 +84,6 @@ class Agent:
     # ------------------ BUILD THE MODEL ----------------
     if not restore:
       logger.info("Building model")
-      # tf.reset_default_graph()
 
       # Call the subclass _build function
       self._build()
@@ -100,14 +91,10 @@ class Agent:
       # Build the model
       self.model.build()
 
-      # Create timestep variable and logs placeholders
+      # Create timestep variable
       with tf.device('/cpu:0'):
-        self.mean_ep_rew_ph      = tf.placeholder(tf.float32, shape=(), name="mean_ep_rew_ph")
-
         self.t_tf                = tf.Variable(1, dtype=tf.int32, trainable=False, name="t_tf")
         self.t_tf_inc            = tf.assign(self.t_tf, self.t_tf + 1, name="t_inc_op")
-
-        tf.summary.scalar("mean_ep_rew",      self.mean_ep_rew_ph)
 
         # Create an Op for all summaries
         self.summary_op = tf.summary.merge_all()
@@ -136,7 +123,6 @@ class Agent:
       # Get the general variables and placeholders
       self.t_tf                 = graph.get_tensor_by_name("t_tf:0")
       self.t_tf_inc             = graph.get_operation_by_name("t_tf_inc")
-      self.mean_ep_rew_ph       = graph.get_tensor_by_name("mean_ep_rew_ph:0")
 
       # Restore the model variables
       self.model.restore(graph)
@@ -157,29 +143,37 @@ class Agent:
 
     # Create the Saver object: NOTE that you must do it after building the whole graph
     self.saver     = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
-    self.tb_writer = tf.summary.FileWriter(self.model_dir + "tb/", self.sess.graph)
+    tb_dir = self.model_dir + "tb/"
+    # Create TensorBoard summary writers
+    self.tb_train_writer  = tf.summary.FileWriter(tb_dir + "train/", self.sess.graph)
+    self.tb_eval_writer   = tf.summary.FileWriter(tb_dir + "eval/")
 
 
   def train(self):
     raise NotImplementedError()
 
 
+  def eval(self):
+    raise NotImplementedError()
+
+
   def reset(self):
     """This method must be called at the end of every episode. Allows for
-    executing changes that stay the same for the duration of the whole episode"""
+    executing changes that stay the same for the duration of the whole episode.
+    Note that it gets called both in train and eval mode
+    Returns:
+      obs: np.array. The result of self.env.reset()
+    """
     if self.learn_started:
       self.model.reset(self.sess)
       self._reset()
-
-
-  def _reset(self):
-    """Reset method to be implemented by the inheriting class"""
-    raise NotImplementedError()
+    return self.env.reset()
 
 
   def close(self):
     # Close session on exit
-    self.tb_writer.close()
+    self.tb_train_writer.close()
+    self.tb_eval_writer.close()
     self.sess.close()
 
 
@@ -187,6 +181,11 @@ class Agent:
     """Used by the subclass to build class specific TF objects. Must not call
     `self.model.build()`
     """
+    raise NotImplementedError()
+
+
+  def _reset(self):
+    """Reset method to be implemented by the inheriting class"""
     raise NotImplementedError()
 
 
@@ -210,11 +209,11 @@ class Agent:
 
 
   def _define_log_info(self):
-    custom_log_info = self._custom_log_info()
+    custom_log_info = self._append_log_info()
     self.env_monitor.define_log_info(custom_log_info)
 
 
-  def _custom_log_info(self):
+  def _append_log_info(self):
     """
     Returns:
       List of tuples `(name, format, lambda)` with information of custom subclass
@@ -226,6 +225,16 @@ class Agent:
     raise NotImplementedError()
 
 
+  def _append_summary(self, summary, t):
+    """Append the tf.Summary that will be written to disk at timestep t with custom data.
+    Used only in train mode
+    Args:
+      summary: tf.Summary. The summary to append
+      t: int. Current time step
+    """
+    raise NotImplementedError()
+
+
   def _log_stats(self, t):
     """Log the training progress and append the TensorBoard summary.
     Note that the TensorBoard summary might be 1 step old.
@@ -233,38 +242,32 @@ class Agent:
       t: int. Current timestep
     """
 
-    # NOTE: self.mean_ep_rew stays the same for self.log_freq steps. We only update it
-    # 2 step before the actual logging happens in order to make sure that the most
-    # up-to-date value is passed as input to the TensorBoard summary via feed_dict.
-    # This is a hacky workaround for implementations such as OffPolicyAgent which runs
-    # 2 threads without coordination. During the rest of the time, we do not care about
-    # self.mean_ep_rew as the summary is not used and thus we skip the update in order
-    # to save computation time
-    if (t+2) % self.log_freq == 0 and self.learn_started:
-      self.mean_ep_rew = self.env_monitor.get_mean_ep_rew()
-
     # Log the statistics from the environment Monitor
     if t % self.log_freq == 0 and self.learn_started:
       self.env_monitor.log_stats(t)
 
       if self.summary:
+        # Append the summary with custom data
+        byte_summary = self.summary
+        summary = tf.Summary()
+        summary.ParseFromString(byte_summary)
+        summary.value.add(tag="train/mean_ep_rew", simple_value=self.env_monitor.get_mean_ep_rew())
+        self._append_summary(summary, t)
+
         # Log with TensorBoard
-        self.tb_writer.add_summary(self.summary, global_step=t)
+        self.tb_train_writer.add_summary(summary, global_step=t)
 
 
-  def _save(self):
-    # Save model
-    if self.learn_started and self.save:
-      logger.info("Saving model and stats")
+  def save(self):
+    if self.learn_started:
+      logger.info("Saving the TF model and stats")
 
       # Save the monitor statistics
       self.env_monitor.save()
 
       # Save the model
       self.saver.save(self.sess, self.model_dir, global_step=self.t_tf)
-      # logger.info("Saving memory")
-      # self.replay_buf.save(self.model_dir)
-      # pickle_save(self.env_file, self.env)
+
       logger.info("Save finished successfully")
 
 
@@ -287,8 +290,8 @@ class OffPolicyAgent(Agent):
     super().__init__(*args, **kwargs)
 
     # Create synchronization events
-    self._act_chosen       = threading.Event()
-    self._train_done       = threading.Event()
+    self._act_chosen = threading.Event()
+    self._train_done = threading.Event()
 
 
   def train(self):
@@ -296,8 +299,8 @@ class OffPolicyAgent(Agent):
     self._act_chosen.clear()
     self._train_done.set()
 
-    env_thread  = threading.Thread(name='environment_thread', target=self._run_env)
-    nn_thread   = threading.Thread(name='network_thread',     target=self._train_model)
+    env_thread  = threading.Thread(name='env_thread', target=self._run_env)
+    nn_thread   = threading.Thread(name='net_thread', target=self._train_model)
 
     nn_thread.start()
     env_thread.start()
@@ -306,8 +309,43 @@ class OffPolicyAgent(Agent):
     env_thread.join()
     nn_thread.join()
 
-    # self.tb_writer.close()
-    # self.sess.close()
+
+  def eval(self):
+
+    logger.info("Starting evaluation")
+
+    # Set the monitor in evaluation mode
+    self.env_monitor.mode = 'e'
+    self.eval_runs +=1
+
+    start_step  = self.eval_len * self.eval_runs + 1
+    stop_step   = self.eval_len + start_step
+
+    obs = self.env.reset()
+
+    for t in range (start_step, stop_step):
+
+      action = self._action_eval(obs, t)
+      next_obs, _, done, _ = self.env.step(action)
+
+      # Reset the environment if end of episode
+      if done:
+        next_obs = self.reset()
+      obs = next_obs
+
+      if t % self.log_freq == 0:
+        # Log the statistics
+        self.env_monitor.log_stats(t)
+
+        # Add a TB summary
+        summary = tf.Summary()
+        summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.get_mean_ep_rew())
+        self.tb_eval_writer.add_summary(summary)
+
+    # Set the monitor back to train mode
+    self.env_monitor.mode = 't'
+
+    logger.info("Evaluation finished")
 
 
   def _action_train(self, state, t):
@@ -336,13 +374,17 @@ class OffPolicyAgent(Agent):
     `self._train_model()` thread to start a new training step
     """
 
-    obs = self.env.reset()
+    obs = self.reset()
 
-    for t in range (self.start_step, self.max_steps+1):
+    for t in range (self.start_step, self.stop_step+1):
       # sess.run(t_inc_op)
 
       # Wait until net_thread is done
       self._wait_train_done()
+
+      # Stop and run evaluation procedure
+      if self.eval_len > 0 and t % self.eval_freq == 0:
+        self.eval()
 
       # Get an action to run
       if self.learn_started:
@@ -366,8 +408,7 @@ class OffPolicyAgent(Agent):
 
       # Reset the environment if end of episode
       if done:
-        next_obs = self.env.reset()
-        self.reset()
+        next_obs = self.reset()
       obs = next_obs
 
       self._log_stats(t)
@@ -381,7 +422,7 @@ class OffPolicyAgent(Agent):
     `self._run_env()` thread to select a new action
     """
 
-    for t in range (self.start_step, self.max_steps+1):
+    for t in range (self.start_step, self.stop_step+1):
 
       if (t >= self.start_train and t % self.train_freq == 0):
 
@@ -402,8 +443,8 @@ class OffPolicyAgent(Agent):
       else:
         self._wait_act_chosen()
 
-      if t % self.save_freq == 0:
-        self._save()
+      if self.save_freq > 0 and t % self.save_freq == 0:
+        self.save()
 
       self._signal_train_done()
 

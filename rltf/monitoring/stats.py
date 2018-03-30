@@ -81,8 +81,7 @@ class StatsRecorder:
 
 
   def _finish_episode(self):
-    # If the user changes the mode in the middle of the episode,
-    # the mode at the end of the episode is used
+    # The mode at the end of the episode is used to determine how to record the statistics
     if self._mode == 't':
       self.train_steps += self.ep_steps
       self.train_ep_lens.append(np.int32(self.ep_steps))
@@ -153,8 +152,6 @@ class StatsRecorder:
       ("eval/mean_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.eval_stats["mean_ep_rew"]),
       ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
       ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
-
-      # ("mean/n_eps > 0.8*best_rew (%d eps)"%n,  ".3f",  self._stats_frac_good_episodes),
     ]
 
     log_info = default_info + custom_log_info
@@ -202,7 +199,14 @@ class StatsRecorder:
 
 
   def get_mean_ep_rew(self):
-    return self._stats_mean(self.train_ep_rews)
+    if self._mode == 't':
+      return self._stats_mean(self.train_ep_rews)
+    else:
+      return self._stats_mean(self.eval_ep_rews)
+
+
+  def get_episode_id(self):
+    return len(self.train_ep_rews) if self._mode == 't' else len(self.eval_ep_rews) + 1
 
 
   def log_stats(self, t):
@@ -216,7 +220,10 @@ class StatsRecorder:
 
     stats_logger.info("")
     for s, lambda_v in self.log_info:
-      stats_logger.info(s.format(lambda_v(t)))
+      if    self._mode == 't' and not s.startswith("| eval/"):
+        stats_logger.info(s.format(lambda_v(t)))
+      elif  self._mode == 'e' and not s.startswith("| train/"):
+        stats_logger.info(s.format(lambda_v(t)))
     stats_logger.info("")
 
 

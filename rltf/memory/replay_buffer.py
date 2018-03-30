@@ -31,6 +31,8 @@ class ReplayBuffer(BaseBuffer):
       assert state_shape[-1] % obs_len == 0
       obs_shape = list(state_shape)
       obs_shape[-1] = int(obs_shape[-1]/obs_len)
+    else:
+      obs_shape = state_shape
 
     super().__init__(size, obs_shape, obs_dtype, act_shape, act_dtype)
 

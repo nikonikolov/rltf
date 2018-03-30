@@ -139,9 +139,6 @@ class ClippedRewardsWrapper(gym.RewardWrapper):
   def reward(self, reward):
     return np.sign(reward)
 
-  def reset(self, **kwargs):
-    return self.env.reset(**kwargs)
-
 
 class StackFrames(gym.Wrapper):
   def __init__(self, env, k=4):

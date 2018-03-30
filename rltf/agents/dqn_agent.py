@@ -63,14 +63,12 @@ class AgentDQN(OffPolicyAgent):
   def _build(self):
     # Create Learning rate placeholders
     self.learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="learn_rate_ph")
-    self.epsilon_ph     = tf.placeholder(tf.float32, shape=(), name="epsilon_ph")
 
     # Set the learn rate placeholders for the model
     self.opt_conf.lr_ph = self.learn_rate_ph
 
     # Add summaries
-    tf.summary.scalar("learn_rate", self.learn_rate_ph)
-    tf.summary.scalar("epsilon",    self.epsilon_ph)
+    tf.summary.scalar("train/learn_rate", self.learn_rate_ph)
 
 
   def _restore(self, graph):
@@ -78,12 +76,16 @@ class AgentDQN(OffPolicyAgent):
     self.epsilon_ph     = graph.get_tensor_by_name("epsilon_ph:0")
 
 
-  def _custom_log_info(self):
+  def _append_log_info(self):
     log_info = [
-      ( "train/learn_rate",  "f", self.opt_conf.lr_value ),
-      ( "train/exploration", "f", self.exploration.value ),
+      ( "train/learn_rate", "f", self.opt_conf.lr_value ),
+      ( "train/epsilon",    "f", self.exploration.value ),
     ]
     return log_info
+
+
+  def _append_summary(self, summary, t):
+    summary.value.add(tag="train/epsilon", simple_value=self.exploration.value(t))
 
 
   def _get_feed_dict(self, t):
@@ -98,8 +100,6 @@ class AgentDQN(OffPolicyAgent):
       self.model.obs_tp1_ph:     batch["obs_tp1"],
       self.model.done_ph:        batch["done"],
       self.learn_rate_ph:        self.opt_conf.lr_value(t),
-      self.epsilon_ph:           self.exploration.value(t),
-      self.mean_ep_rew_ph:       self.mean_ep_rew,
     }
 
     return feed_dict
@@ -112,13 +112,13 @@ class AgentDQN(OffPolicyAgent):
       action = self.env.action_space.sample()
     else:
       # Run the network to select an action
-      action  = self.model.control_action(self.sess, state)
+      action  = self.model.action_train(self.sess, state)
     return action
 
 
-  # def _action_eval(self, state, t):
-  #   action  = self.model.control_action(self.sess, state)
-  #   return action
+  def _action_eval(self, state, t):
+    action  = self.model.action_eval(self.sess, state)
+    return action
 
 
   def _reset(self):

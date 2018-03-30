@@ -30,15 +30,18 @@ def parse_args():
 
   parser.add_argument('--train-freq',   default=4,      type=int,       help='learn frequency')
   parser.add_argument('--start-train',  default=50000,  type=int,       help='step to start training')
-  parser.add_argument('--max-steps',    default=10**8,  type=int,       help='steps to run the agent for')
+  parser.add_argument('--stop-step',    default=10**8,  type=int,       help='steps to run the agent for')
   parser.add_argument('--n-heads',      default=10,     type=int,       help='number of BstrapDQN heads')
   parser.add_argument('--seed',         default=0,      type=int,       help='seed')
   parser.add_argument('--huber-loss',   default=True,   type=str2bool,  help='use huber loss')
   parser.add_argument('--grad-clip',    default=None,   type=float,     help='value to clip gradinets to')
-  parser.add_argument('--extra-info',   default="",     type=str,       help='extra info to log')
+  parser.add_argument('--extra-info',   default="",     type=str,       help='extra cmd info to log')
 
-  parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
-  parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
+  parser.add_argument('--eval-freq',    default=10**6,  type=int,       help='how often to evaluate model')
+  parser.add_argument('--eval-len',     default=50000,  type=int,       help='for how many steps to eval')
+
+  parser.add_argument('--save-freq',    default=0,      type=int,       help='how often to save model')
+  parser.add_argument('--log-freq',     default=10000,  type=int,       help='how often to log stats')
   parser.add_argument('--video-freq',   default=1000,   type=int,
                       help='period in number of episodes at which to record videos')
 
@@ -82,7 +85,7 @@ def main():
 
 
   # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
+  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
   env = wrap_deepmind_atari(env)
 
   # Set the learning rate schedule
@@ -107,10 +110,13 @@ def main():
     env=env,
     train_freq=args.train_freq,
     start_train=args.start_train,
-    max_steps=args.max_steps,
+    stop_step=args.stop_step,
+    eval_freq=args.eval_freq,
+    eval_len=args.eval_len,
     batch_size=32,
     model_dir=model_dir,
-    save=args.save,
+    log_freq=args.log_freq,
+    save_freq=args.save_freq,
   )
 
   dqn_agent_kwargs = dict(

@@ -87,8 +87,8 @@ class AgentDDPG(OffPolicyAgent):
     self.critic_opt_conf.lr_ph = self.critic_learn_rate_ph
 
     # Create learn rate summaries
-    tf.summary.scalar("actor_learn_rate",  self.actor_learn_rate_ph)
-    tf.summary.scalar("critic_learn_rate", self.critic_learn_rate_ph)
+    tf.summary.scalar("train/actor_learn_rate",  self.actor_learn_rate_ph)
+    tf.summary.scalar("train/critic_learn_rate", self.critic_learn_rate_ph)
 
 
   def _restore(self, graph):
@@ -96,7 +96,7 @@ class AgentDDPG(OffPolicyAgent):
     self.critic_learn_rate_ph = graph.get_tensor_by_name("critic_learn_rate_ph:0")
 
 
-  def _custom_log_info(self):
+  def _append_log_info(self):
     t = self.log_freq
     log_info = [
       ( "train/actor_learn_rate",           "f", self.actor_opt_conf.lr_value   ),
@@ -105,6 +105,10 @@ class AgentDDPG(OffPolicyAgent):
       ( "mean/act_noise_std  (%d steps)"%t, "f", self._stats_act_noise_std      ),
     ]
     return log_info
+
+
+  def _append_summary(self, summary, t):
+    pass
 
 
   def _reset(self):
@@ -135,14 +139,13 @@ class AgentDDPG(OffPolicyAgent):
       self.model.done_ph:        batch["done"],
       self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
       self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
-      self.mean_ep_rew_ph:       self.mean_ep_rew,
     }
     return feed_dict
 
 
   def _action_train(self, state, t):
     noise   = self.action_noise.sample()
-    action  = self.model.control_action(self.sess, state)
+    action  = self.model.action_train(self.sess, state)
     action  = action + noise
 
     # Add action noise to stats
@@ -151,7 +154,6 @@ class AgentDDPG(OffPolicyAgent):
     return action
 
 
-  # def _action_eval(self, t):
-  #   state   = self.replay_buf.encode_recent_obs()
-  #   action  = self.model.control_action(self.sess, state)
-  #   return action
+  def _action_eval(self, state, t):
+    action  = self.model.action_eval(self.sess, state)
+    return action

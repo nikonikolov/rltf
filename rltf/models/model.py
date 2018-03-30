@@ -103,11 +103,21 @@ class Model:
     raise NotImplementedError()
 
 
-  def control_action(self, sess, state):
-    """Compute control action for the model. NOTE that this should NOT include
+  def action_train(self, sess, state):
+    """Compute the training action from the model. NOTE that this should NOT include
     any exploration policy, but should only return the action that would be
     performed if the model was being evaluated
+    Args:
+      sess: tf.Session(). Currently open session
+      state: np.array. Observation for the current state
+    Returns:
+      The calculated action. Type and shape varies based on the specific model
+    """
+    raise NotImplementedError()
 
+
+  def action_eval(self, sess, state):
+    """Compute the action that should be taken in evaluation mode
     Args:
       sess: tf.Session(). Currently open session
       state: np.array. Observation for the current state

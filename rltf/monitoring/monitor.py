@@ -42,9 +42,6 @@ class Monitor(Wrapper):
 
     self._enabled       = False
 
-    self.train_eps      = 0       # Count of train episodes
-    self.eval_eps       = 0       # Count of eval episodes
-
     self.videos         = []      # List of files for the recorded videos and their manifests
     self._mode          = None
     self.log_dir        = log_dir
@@ -164,13 +161,6 @@ class Monitor(Wrapper):
     logger.info("Monitor successfully closed and saved at %s", self.log_dir)
 
 
-  def _increment_episode_id(self):
-    if self._mode == 't':
-      self.train_eps += 1
-    else:
-      self.eval_eps  += 1
-
-
   def _before_step(self, action):
     if not self._enabled:
       return
@@ -215,8 +205,6 @@ class Monitor(Wrapper):
     self.env_started = True
     self.done = False
 
-    # Increment the episode id
-    self._increment_episode_id()
     # Start new video recording
     self.reset_video_recorder()
 
@@ -276,7 +264,7 @@ class Monitor(Wrapper):
 
 
   def get_episode_id(self):
-    return self.train_eps if self._mode == 't' else self.eval_eps
+    return self.stats_recorder.get_episode_id()
 
 
   def get_episode_rewards(self, mode='t'):

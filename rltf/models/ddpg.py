@@ -137,12 +137,12 @@ class DDPG(Model):
     self._init_op   = tf_utils.assign_vars(target_vars, agent_vars, name="init_op")
 
     # Summaries
-    tf.summary.scalar("actor_loss",   actor_loss)
-    tf.summary.scalar("critic_loss",  critic_loss)
+    tf.summary.scalar("train/actor_loss",   actor_loss)
+    tf.summary.scalar("train/critic_loss",  critic_loss)
 
-    tf.summary.scalar("actor_critic_q", -actor_loss)
-    tf.summary.scalar("act_t_q",        tf.reduce_mean(act_t_q))
-    tf.summary.scalar("target_q",       tf.reduce_mean(target_q))
+    tf.summary.scalar("train/actor_critic_q", -actor_loss)
+    tf.summary.scalar("train/act_t_q",        tf.reduce_mean(act_t_q))
+    tf.summary.scalar("train/target_q",       tf.reduce_mean(target_q))
 
 
   def _compute_target(self, target_q):
@@ -194,9 +194,13 @@ class DDPG(Model):
     pass
 
 
-  def control_action(self, sess, state):
+  def action_train(self, sess, state):
     feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
     return sess.run(self._action, feed_dict=feed_dict)[0]
+
+
+  def action_eval(self, sess, state):
+    return self.action_train(sess, state)
 
 
   def _actor_net(self, state, scope):
