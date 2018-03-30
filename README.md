@@ -107,4 +107,4 @@ requires that the environment used is of type `<env-name>NoFrameskip-v4`
 with some additional wrappers) are the ones corresponding to the training
 process described in the orginal DQN Nature paper. If you want to use other
 environment versions, you will need to add or remove some env wrappers 
-(see [](rltf/env_wrap/atari.py))
+(see [](rltf/envs/atari.py))

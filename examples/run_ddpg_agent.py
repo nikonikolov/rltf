@@ -3,7 +3,7 @@ import numpy      as np
 import tensorflow as tf
 
 from rltf.agents        import AgentDDPG
-from rltf.env_wrap      import wrap_deepmind_ddpg
+from rltf.envs          import wrap_deepmind_ddpg
 from rltf.exploration   import OrnsteinUhlenbeckNoise
 from rltf.exploration   import GaussianNoise
 from rltf.models        import DDPG

@@ -3,8 +3,8 @@ import threading
 
 import tensorflow as tf
 
-from rltf.conf            import STATS_LOGGER_NAME
-from rltf.env_wrap.utils  import get_env_monitor
+from rltf.conf        import STATS_LOGGER_NAME
+from rltf.envs.utils  import get_env_monitor
 
 stats_logger  = logging.getLogger(STATS_LOGGER_NAME)
 logger        = logging.getLogger(__name__)

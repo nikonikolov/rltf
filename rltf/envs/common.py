@@ -1,8 +1,8 @@
-# from rltf.env_wrap.wrappers import ResizeFrame
-# from rltf.env_wrap.wrappers import RepeatAndStackImage
-from rltf.env_wrap.wrappers import ScaleReward
-from rltf.env_wrap.wrappers import NormalizeAction
-from rltf.env_wrap.wrappers import ClipAction
+# from rltf.envs.wrappers import ResizeFrame
+# from rltf.envs.wrappers import RepeatAndStackImage
+from rltf.envs.wrappers import ScaleReward
+from rltf.envs.wrappers import NormalizeAction
+from rltf.envs.wrappers import ClipAction
 
 def wrap_deepmind_ddpg(env, rew_scale=1.0):
   env = NormalizeAction(env)

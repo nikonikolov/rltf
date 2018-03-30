@@ -2,8 +2,7 @@ import argparse
 import tensorflow as tf
 
 from rltf.agents        import AgentDQN
-from rltf.env_wrap      import wrap_deepmind_atari
-# from rltf.exploration   import EGreedy
+from rltf.envs          import wrap_deepmind_atari
 from rltf.models        import BstrapDQN
 from rltf.models        import DDQN
 from rltf.models        import DQN
