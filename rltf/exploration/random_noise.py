@@ -72,6 +72,7 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     self.sigma  = sigma
     self.theta  = theta
     self.dt     = dt
+    self.x      = None
     self.reset()
 
   def sample(self):

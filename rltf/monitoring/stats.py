@@ -52,7 +52,10 @@ class StatsRecorder:
 
     if not os.path.exists(self.log_dir):
       logger.info('Creating stats directory %s', self.log_dir)
-      os.makedirs(self.log_dir, exist_ok=True)
+      os.makedirs(self.log_dir)
+    else:
+      logger.info('Resuming with stats data from %s', self.log_dir)
+      self._resume()
 
 
   @property
@@ -254,3 +257,20 @@ class StatsRecorder:
       eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
       with atomic_write.atomic_write(eval_rew_file, True) as f:
         np.save(f, np.asarray(self.eval_ep_rews, dtype=np.float32))
+
+
+  def _resume(self):
+    train_rew_file = os.path.join(self.log_dir, "train_ep_rews.npy")
+    if os.path.exists(train_rew_file):
+      self.train_ep_rews  = list(np.load(train_rew_file))
+
+    eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
+    if os.path.exists(eval_rew_file):
+      self.eval_ep_rews  = list(np.load(eval_rew_file))
+
+    with open(os.path.join(self.log_dir, "stats_summary.json"), 'r') as f:
+      data = json.load(f)
+
+    self.train_steps  = data["train_steps"]
+    self.eval_steps   = data["eval_steps"]
+    self.env_steps    = data["total_env_steps"]

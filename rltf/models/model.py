@@ -17,7 +17,6 @@ class Model:
     # TF Ops that should be set
     self._train_op      = None
     self._update_target = None  # Optional
-    self._action        = None  # Optional
 
     self.obs_dtype      = None
     self.obs_shape      = None
@@ -77,11 +76,6 @@ class Model:
 
     try:
       self._done_ph    = graph.get_tensor_by_name("done_ph:0")
-    except KeyError:
-      pass
-
-    try:
-      self._action     = graph.get_tensor_by_name("action:0")
     except KeyError:
       pass
 

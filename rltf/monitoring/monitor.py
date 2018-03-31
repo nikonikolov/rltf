@@ -113,7 +113,7 @@ class Monitor(Wrapper):
   def _make_log_dir(self):
     if not os.path.exists(self.log_dir):
       logger.info('Creating monitor directory %s', self.log_dir)
-      os.makedirs(self.log_dir, exist_ok=True)
+      os.makedirs(self.log_dir)
 
 
   def _detect_wrapped_env(self):
@@ -172,7 +172,7 @@ class Monitor(Wrapper):
       return
 
     # First save all the data
-    self.save()
+    # self.save()
 
     # Close stats and video recorders
     self.stats_recorder.close()
@@ -183,7 +183,8 @@ class Monitor(Wrapper):
     monitor_closer.unregister(self._monitor_id)
     self._enabled = False
 
-    logger.info("Monitor successfully closed and saved at %s", self.log_dir)
+    # logger.info("Monitor successfully closed and saved at %s", self.log_dir)
+    # logger.info("Monitor successfully closed")
 
 
   def _before_step(self, action):

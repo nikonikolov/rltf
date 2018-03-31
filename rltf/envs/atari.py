@@ -173,7 +173,8 @@ class StackFrames(gym.Wrapper):
     self.obs_buf  = deque([], maxlen=k)
     state_shape   = list(env.observation_space.shape)
     state_shape[-1] *= k
-    self.observation_space = gym.spaces.Box(low=0, high=255, shape=state_shape)
+    dtype         = env.observation_space.dtype
+    self.observation_space = gym.spaces.Box(low=0, high=255, shape=state_shape, dtype=dtype)
 
   def step(self, action):
     obs, reward, done, info = self.env.step(action)

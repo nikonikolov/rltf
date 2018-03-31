@@ -1,4 +1,5 @@
 import argparse
+import os
 import numpy      as np
 import tensorflow as tf
 
@@ -35,7 +36,7 @@ def parse_args():
   parser.add_argument('--noise-type',   default="OU",   type=str,   help='action noise type',
                       choices=["OU", "Gaussian"])
 
-  parser.add_argument('--start-train',  default=10000,  type=int,   help='step at which to start training')
+  parser.add_argument('--warm-up',      default=10000,  type=int,   help='# steps before training starts')
   parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')
@@ -47,10 +48,14 @@ def parse_args():
   parser.add_argument('--eval-len',     default=50000,  type=int,   help='for how many steps to eval')
 
   parser.add_argument('--log-lvl',      default="INFO", type=str,   help='logger lvl')
-  parser.add_argument('--save-freq',    default=0,      type=int,   help='how often to save model')
+  parser.add_argument('--save-freq',    default=0,      type=int,   help='how often to save the model')
   parser.add_argument('--log-freq',     default=10000,  type=int,   help='how often to log stats')
-  parser.add_argument('--video-freq',   default=500,    type=int,
+  parser.add_argument('--video-freq',   default=1000,    type=int,
                       help='period in number of episodes at which to record videos')
+  parser.add_argument('--restore-model',default=None,   type=str,
+                      help='path existing dir; continue training with the network and the env in the dir')
+  parser.add_argument('--reuse-model',  default=None,   type=str,
+                      help='path existing dir; use the network weights there but train on a new env')
 
 
   args = parser.parse_args()
@@ -58,6 +63,19 @@ def parse_args():
   if args.grad_clip is not None:
     assert args.grad_clip > 0
     assert not args.huber_loss
+
+  # Only one of args.restore_model and args.reuse_model can be set
+  assert not (args.restore_model is not None and args.reuse_model is not None)
+
+  if args.restore_model is not None:
+    args.restore_model = os.path.abspath(args.restore_model)
+    assert os.path.exists(args.restore_model)
+    assert os.path.basename(args.restore_model).startswith(args.env_id)
+
+  elif args.reuse_model is not None:
+    args.reuse_model = os.path.abspath(args.reuse_model)
+    assert os.path.exists(args.reuse_model)
+    assert os.path.exists(os.path.join(args.reuse_model, "tf"))
 
   return args
 
@@ -67,7 +85,12 @@ def main():
   args = parse_args()
 
   # Get the model directory path
-  model_dir = maker.make_model_dir(args.model, args.env_id)
+  if args.restore_model is None:
+    model_dir   = maker.make_model_dir(args.model, args.env_id)
+    restore_dir = args.reuse_model
+  else:
+    model_dir   = args.restore_model
+    restore_dir = args.restore_model
 
   # Configure loggers
   rltf_log.conf_logs(model_dir, args.log_lvl)
@@ -124,7 +147,7 @@ def main():
   agent_kwargs = dict(
     env=env,
     train_freq=args.train_freq,
-    start_train=args.start_train,
+    warm_up=args.warm_up,
     stop_step=int(2.5e6),
     eval_freq=args.eval_freq,
     eval_len=args.eval_len,
@@ -132,6 +155,7 @@ def main():
     model_dir=model_dir,
     log_freq=args.log_freq,
     save_freq=args.save_freq,
+    restore_dir=restore_dir,
   )
 
   ddpg_agent_kwargs = dict(
@@ -163,7 +187,7 @@ def main():
 
   # Close on exit
   ddpg_agent.close()
-  env.close()
+
 
 if __name__ == "__main__":
   main()

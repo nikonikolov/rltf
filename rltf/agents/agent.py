@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 
 import tensorflow as tf
@@ -16,7 +17,7 @@ class Agent:
   def __init__(self,
                env,
                train_freq,
-               start_train,
+               warm_up,
                stop_step,
                eval_freq,
                eval_len,
@@ -24,12 +25,13 @@ class Agent:
                model_dir,
                log_freq=10000,
                save_freq=100000,
+               restore_dir=None,
               ):
     """
     Args:
       env: gym.Env. Environment in which the model will be trained.
       train_freq: int. How many environment actions to take between every 2 learning steps
-      start_train: int. Time step at which the agent starts learning
+      warm_up: int. Number of random steps before training starts
       stop_step: int. Training step at which learning stops
       eval_freq: int. How many agent steps to take between every 2 evaluation runs
       eval_len: int. How many agent steps an evaluation run lasts. `<=0` means no evaluation
@@ -37,32 +39,38 @@ class Agent:
       model_dir: string. Directory path for the model logs and checkpoints
       log_freq: int. Add TensorBoard summary and print progress every log_freq agent steps
       save_freq: int. Save the model every `save_freq` training steps. `<=0` means no saving
+      restore_dir: str. Path to a directory which contains an existing model to restore. If
+        `restore_dir==model_dir`, then training is continued from the saved model time step and
+        the existing model is overwritten. Otherwise, the saved weights are used but training
+        starts from step 0 and the model is saved in `model_dir`. If `None`, no restoring
     """
 
     self.env            = env
     self.env_monitor    = get_env_monitor(env)
 
     self.batch_size     = batch_size
-    self.model_dir      = model_dir
+    self.model_dir      = os.path.join(model_dir, "tf/")
     self.save_freq      = save_freq
     self.log_freq       = log_freq
+    self.restore_dir    = os.path.join(restore_dir, "tf/") if restore_dir is not None else None
 
     self.start_step     = None          # Step from which the agent starts
-    self.start_train    = start_train   # Step from which training starts
+    self.warm_up        = warm_up       # Step from which training starts
     self.stop_step      = stop_step     # Step at which training stops
-    self.learn_started  = None          # Bool: Indicates if learning has started or not
+    self.learn_started  = False         # Bool: Indicates if learning has started or not
     self.train_freq     = train_freq    # How often to run a training step
 
     self.eval_freq      = eval_freq     # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
-    self.eval_runs      = -1            # Number of evaluation runs so far
 
     # TensorFlow attributes
     self.model            = None
     self.summary          = None
 
-    self.t_tf             = None
-    self.t_tf_inc         = None
+    self.t_train          = None
+    self.t_train_inc      = None
+    self.t_eval           = None
+    self.t_eval_inc       = None
     self.summary_op       = None
 
     self.sess             = None
@@ -72,81 +80,23 @@ class Agent:
 
 
   def build(self):
-    """Build the graph. If there is already a checkpoint in `self.model_dir`,
-    then it will be restored instead. Calls either `self._build()` and
-    `self.model.build()` or `self._restore()` and `self.model.restore()`.
+    """Build the graph. If `restore_dir is not None`, the graph will be restored from
+    `restore_dir`. Automatically calls (in order) `self._build()` and `self.model.build()`
+    or `self._restore()` and `self.model.restore()`.
     """
 
-    # Check for checkpoint
-    ckpt    = tf.train.get_checkpoint_state(self.model_dir)
-    restore = ckpt and ckpt.model_checkpoint_path
-
-    # ------------------ BUILD THE MODEL ----------------
-    if not restore:
-      logger.info("Building model")
-
-      # Call the subclass _build function
-      self._build()
-
-      # Build the model
-      self.model.build()
-
-      # Create timestep variable
-      with tf.device('/cpu:0'):
-        self.t_tf                = tf.Variable(1, dtype=tf.int32, trainable=False, name="t_tf")
-        self.t_tf_inc            = tf.assign(self.t_tf, self.t_tf + 1, name="t_inc_op")
-
-        # Create an Op for all summaries
-        self.summary_op = tf.summary.merge_all()
-
-      # Set control variables
-      self.start_step     = 1
-      self.learn_started  = False
-
-      # Create a session and initialize the model
-      self.sess = self._get_sess()
-      self.sess.run(tf.global_variables_initializer())
-      self.sess.run(tf.local_variables_initializer())
-
-      # Initialize the model
-      self.model.initialize(self.sess)
-
-    # ------------------ RESTORE THE MODEL ----------------
+    # Build the model from scratch
+    if self.restore_dir is None:
+      self._build_base()
+    # Restore an existing model
     else:
-      logger.info("Restoring model")
+      self._restore_base()
 
-      # Restore the graph
-      ckpt_path = ckpt.model_checkpoint_path + '.meta'
-      saver = tf.train.import_meta_graph(ckpt_path)
-      graph = tf.get_default_graph()
-
-      # Get the general variables and placeholders
-      self.t_tf                 = graph.get_tensor_by_name("t_tf:0")
-      self.t_tf_inc             = graph.get_operation_by_name("t_tf_inc")
-
-      # Restore the model variables
-      self.model.restore(graph)
-
-      # Restore the agent subclass variables
-      self._restore(graph)
-
-      # Restore the session
-      self.sess = self._get_sess()
-      saver.restore(self.sess, ckpt.model_checkpoint_path)
-
-      # Get the summary Op
-      self.summary_op = graph.get_tensor_by_name("Merge/MergeSummary:0")
-
-      # Set control variables
-      self.start_step     = self.sess.run(self.t_tf)
-      self.learn_started  = True
-
-    # Create the Saver object: NOTE that you must do it after building the whole graph
+    # NOTE: Create the tf.train.Saver  **after** building the whole graph
     self.saver     = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
-    tb_dir = self.model_dir + "tb/"
     # Create TensorBoard summary writers
-    self.tb_train_writer  = tf.summary.FileWriter(tb_dir + "train/", self.sess.graph)
-    self.tb_eval_writer   = tf.summary.FileWriter(tb_dir + "eval/")
+    self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tb_train/", self.sess.graph)
+    self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tb_eval/")
 
 
   def train(self):
@@ -171,10 +121,93 @@ class Agent:
 
 
   def close(self):
-    # Close session on exit
+    # Save before closing
+    self.save()
+
+    # Close the writers, the env and the session on exit
     self.tb_train_writer.close()
     self.tb_eval_writer.close()
     self.sess.close()
+    self.env.close()
+
+
+  def _build_base(self):
+    logger.info("Building model")
+
+    # Call the subclass _build method
+    self._build()
+
+    # Build the model
+    self.model.build()
+
+    # Create timestep variable
+    with tf.device('/cpu:0'):
+      self.t_train     = tf.Variable(0, dtype=tf.int32, trainable=False, name="t_train")
+      self.t_eval      = tf.Variable(0, dtype=tf.int32, trainable=False, name="t_eval")
+      self.t_train_inc = tf.assign_add(self.t_train, 1, name="t_train_inc")
+      self.t_eval_inc  = tf.assign_add(self.t_eval,  1, name="t_eval_inc")
+
+      # Create an Op for all summaries
+      self.summary_op = tf.summary.merge_all()
+
+    # Set control variables
+    self.start_step = 1
+
+    # Create a session and initialize the model
+    self.sess = self._get_sess()
+    self.sess.run(tf.global_variables_initializer())
+    self.sess.run(tf.local_variables_initializer())
+
+    # Initialize the model
+    self.model.initialize(self.sess)
+
+
+  def _restore_base(self):
+
+    resume = self.restore_dir == self.model_dir
+
+    logger.info("%s model", "Resuming" if resume else "Reusing")
+
+    # Get the checkpoint
+    ckpt = tf.train.get_checkpoint_state(self.restore_dir)
+    if ckpt is None:
+      raise ValueError("No checkpoint found in {}".format(self.restore_dir))
+    ckpt_path = ckpt.model_checkpoint_path
+
+    # Restore the graph structure
+    saver = tf.train.import_meta_graph(ckpt_path + '.meta')
+    graph = tf.get_default_graph()
+
+    # Recover the train and eval step variables
+    global_vars       = graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+    self.t_train      = [v for v in global_vars if v.name == "t_train:0"][0]
+    self.t_eval       = [v for v in global_vars if v.name == "t_eval:0"][0]
+    self.t_train_inc  = graph.get_operation_by_name("t_train_inc")
+    self.t_eval_inc   = graph.get_operation_by_name("t_eval_inc")
+
+    # Recover the model variables
+    self.model.restore(graph)
+
+    # Recover the agent subclass variables
+    self._restore(graph)
+
+    # Restore the values of all tf.Variables
+    self.sess = self._get_sess()
+    saver.restore(self.sess, ckpt_path)
+
+    # Get the summary Op
+    self.summary_op = graph.get_tensor_by_name("Merge/MergeSummary:0")
+
+    # Set control variables
+    if resume:
+      self.start_step = self.sess.run(self.t_train)
+      # Ensure that you have enough random experience before training starts
+      self.warm_up    = self.start_step + self.warm_up
+    else:
+      # Reset all step variables
+      self.start_step = 1
+      self.sess.run(tf.assign(self.t_train, 0))
+      self.sess.run(tf.assign(self.t_eval,  0))
 
 
   def _build(self):
@@ -266,7 +299,7 @@ class Agent:
       self.env_monitor.save()
 
       # Save the model
-      self.saver.save(self.sess, self.model_dir, global_step=self.t_tf)
+      self.saver.save(self.sess, self.model_dir, global_step=self.t_train)
 
       logger.info("Save finished successfully")
 
@@ -293,6 +326,9 @@ class OffPolicyAgent(Agent):
     self._act_chosen = threading.Event()
     self._train_done = threading.Event()
 
+    self._stop_run_env  = False
+    self._stop_train    = False
+
 
   def train(self):
 
@@ -306,8 +342,15 @@ class OffPolicyAgent(Agent):
     env_thread.start()
 
     # Wait for threads
-    env_thread.join()
-    nn_thread.join()
+    try:
+      env_thread.join()
+      nn_thread.join()
+    except KeyboardInterrupt:
+      logger.info("EXITING")
+      self._stop_run_env  = True
+      self._stop_train    = True
+      env_thread.join()
+      nn_thread.join()
 
 
   def eval(self):
@@ -316,14 +359,19 @@ class OffPolicyAgent(Agent):
 
     # Set the monitor in evaluation mode
     self.env_monitor.mode = 'e'
-    self.eval_runs +=1
 
-    start_step  = self.eval_len * self.eval_runs + 1
-    stop_step   = self.eval_len + start_step
+    start_step  = self.sess.run(self.t_eval) + 1
+    stop_step   = start_step + self.eval_len
+    stop_step   = stop_step - stop_step % self.eval_len + 1   # Restore point might be the middle of eval
 
     obs = self.env.reset()
 
     for t in range (start_step, stop_step):
+      if self._stop_run_env:
+        break
+
+      # Increment the current eval step
+      self.sess.run(self.t_eval_inc)
 
       action = self._action_eval(obs, t)
       next_obs, _, done, _ = self.env.step(action)
@@ -340,7 +388,7 @@ class OffPolicyAgent(Agent):
         # Add a TB summary
         summary = tf.Summary()
         summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.get_mean_ep_rew())
-        self.tb_eval_writer.add_summary(summary)
+        self.tb_eval_writer.add_summary(summary, t)
 
     # Set the monitor back to train mode
     self.env_monitor.mode = 't'
@@ -377,7 +425,9 @@ class OffPolicyAgent(Agent):
     obs = self.reset()
 
     for t in range (self.start_step, self.stop_step+1):
-      # sess.run(t_inc_op)
+      if self._stop_run_env:
+        self._signal_act_chosen()
+        break
 
       # Wait until net_thread is done
       self._wait_train_done()
@@ -398,7 +448,7 @@ class OffPolicyAgent(Agent):
       self._signal_act_chosen()
 
       # Increment the TF timestep variable
-      self.sess.run(self.t_tf_inc)
+      self.sess.run(self.t_train_inc)
 
       # Run action
       next_obs, reward, done, _ = self.env.step(action)
@@ -423,8 +473,11 @@ class OffPolicyAgent(Agent):
     """
 
     for t in range (self.start_step, self.stop_step+1):
+      if self._stop_train:
+        self._signal_train_done()
+        break
 
-      if (t >= self.start_train and t % self.train_freq == 0):
+      if (t >= self.warm_up and t % self.train_freq == 0):
 
         self.learn_started = True
 
@@ -466,5 +519,5 @@ class OffPolicyAgent(Agent):
     self._act_chosen.set()
 
   def _signal_train_done(self):
-    # Signal to main that the training step is done running
+    # Signal to env thread that the training step is done running
     self._train_done.set()

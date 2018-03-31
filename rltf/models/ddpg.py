@@ -59,6 +59,7 @@ class DDPG(Model):
     # Custom TF Tensors and Ops
     self._init_op   = None
     self._training  = None
+    self._action    = None
 
 
   def build(self):
@@ -183,6 +184,7 @@ class DDPG(Model):
     # Retrieve the Ops for changing between train and eval modes
     self._training  = graph.get_tensor_by_name("training:0")
     self._init_op   = graph.get_operation_by_name("init_op")
+    self._action    = graph.get_tensor_by_name("action:0")
 
 
   def initialize(self, sess):

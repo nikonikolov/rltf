@@ -57,7 +57,6 @@ class AgentDQN(OffPolicyAgent):
 
     # Custom TF Tensors and Ops
     self.learn_rate_ph  = None
-    self.epsilon_ph     = None
 
 
   def _build(self):
@@ -73,7 +72,6 @@ class AgentDQN(OffPolicyAgent):
 
   def _restore(self, graph):
     self.learn_rate_ph  = graph.get_tensor_by_name("learn_rate_ph:0")
-    self.epsilon_ph     = graph.get_tensor_by_name("epsilon_ph:0")
 
 
   def _append_log_info(self):
