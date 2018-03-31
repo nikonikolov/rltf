@@ -12,6 +12,7 @@ from rltf.models        import QRDDPG
 from rltf.optimizers    import OptimizerConf
 from rltf.optimizers    import AdamGradClipOptimizer
 from rltf.schedules     import ConstSchedule
+from rltf.schedules     import PiecewiseSchedule
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
 from rltf.utils.cmdargs import str2bool
@@ -28,13 +29,14 @@ def parse_args():
   parser.add_argument('--tau',          default=0.001,  type=float, help='target soft update weight')
   parser.add_argument('--critic-reg',   default=0.02,   type=float, help='network weight regularization')
   parser.add_argument('--batch-size',   default=None,   type=int,   help='batch size')
-  parser.add_argument('--adam-epsilon', default=1e-08,  type=float, help='expsilon for Adam optimizer')
+  parser.add_argument('--adam-epsilon', default=1e-08,  type=float, help='epsilon for Adam optimizer')
   parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
   parser.add_argument('--sigma',        default=0.2,    type=float, help='action noise sigma')
   parser.add_argument('--theta',        default=0.15,   type=float, help='action noise theta')
   parser.add_argument('--dt',           default=1e-2,   type=float, help='action noise dt')
   parser.add_argument('--noise-type',   default="OU",   type=str,   help='action noise type',
                       choices=["OU", "Gaussian"])
+  parser.add_argument('--epsilon',      default=50000,  type=int,   help='epsilon e-grredy exploration')
 
   parser.add_argument('--warm-up',      default=10000,  type=int,   help='# steps before training starts')
   parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
@@ -141,6 +143,7 @@ def main():
     action_noise  = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
   elif args.noise_type == "Gaussian":
     action_noise  = GaussianNoise(mu, sigma)
+  epsilon = PiecewiseSchedule([(0, 1.0), (args.epsilon, 0.0)], outside_value=0.0)
 
 
   # Set the Agent class keyword arguments
@@ -164,6 +167,7 @@ def main():
     actor_opt_conf=actor_opt_conf,
     critic_opt_conf=critic_opt_conf,
     action_noise=action_noise,
+    epsilon=epsilon,
     update_target_freq=args.update_freq,
     memory_size=int(1e6),
     obs_len=1,
