@@ -223,9 +223,9 @@ class StatsRecorder:
 
     stats_logger.info("")
     for s, lambda_v in self.log_info:
-      if    self._mode == 't' and not s.startswith("| eval/"):
+      if self._mode == 't' and not s.startswith("| eval/"):
         stats_logger.info(s.format(lambda_v(t)))
-      elif  self._mode == 'e' and not s.startswith("| train/"):
+      elif self._mode == 'e' and s.startswith("| eval/"):
         stats_logger.info(s.format(lambda_v(t)))
     stats_logger.info("")
 

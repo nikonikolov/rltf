@@ -24,7 +24,7 @@ def init_output_uniform_conv():
 class DDPG(Model):
 
   def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
-               tau, gamma, huber_loss=False):
+               tau, gamma, batch_norm, obs_norm, huber_loss=False):
     """
     Args:
       obs_shape: list. Shape of a single state input
@@ -33,6 +33,8 @@ class DDPG(Model):
       critic_reg: float. Regularization parameter for the weights of the critic
       tau: float. Rate of update for the target network
       gamma: float. Discount factor
+      batch_norm: bool. Whether to add batch normalization layers
+      obs_norm: bool. Whether to normalize input observations
       huber_loss: bool. Whether to use Huber loss or not
     """
 
@@ -42,6 +44,8 @@ class DDPG(Model):
     self.huber_loss   = huber_loss
     self.gamma        = gamma
     self.critic_reg   = critic_reg
+    self.batch_norm   = batch_norm
+    self.obs_norm     = obs_norm
 
     self.actor_opt_conf   = actor_opt_conf
     self.critic_opt_conf  = critic_opt_conf
@@ -80,13 +84,16 @@ class DDPG(Model):
 
     # Low-dimensionsal net
     else:
-      obs_t_float       = tf.layers.flatten(self._obs_t_ph)
-      obs_tp1_float     = tf.layers.flatten(self._obs_tp1_ph)
+      # obs_t_float       = tf.layers.flatten(self._obs_t_ph)
+      # obs_tp1_float     = tf.layers.flatten(self._obs_tp1_ph)
+      obs_t_float       = self._obs_t_ph
+      obs_tp1_float     = self._obs_tp1_ph
 
       # Normalize observations
-      obs_t_float       = tf.layers.batch_normalization(obs_t_float, axis=-1, trainable=False,
+      if self.obs_norm:
+        obs_t_float     = tf.layers.batch_normalization(obs_t_float, axis=-1, trainable=False,
                                     center=False, scale=False, training=self._training)
-      obs_tp1_float     = tf.layers.batch_normalization(obs_tp1_float, axis=-1, trainable=False,
+        obs_tp1_float   = tf.layers.batch_normalization(obs_tp1_float, axis=-1, trainable=False,
                                     center=False, scale=False, training=self._training)
       actor   = self._actor_net
       critic  = self._critic_net
@@ -162,7 +169,8 @@ class DDPG(Model):
       critic_loss = tf.losses.huber_loss(target_q, agent_q)
     else:
       critic_loss = tf.losses.mean_squared_error(target_q, agent_q)
-    critic_loss    += tf.losses.get_regularization_loss(scope="agent_net/critic")
+    if self.critic_reg != 0.0:
+      critic_loss += tf.losses.get_regularization_loss(scope="agent_net/critic")
 
     return critic_loss
 
@@ -219,11 +227,13 @@ class DDPG(Model):
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
 
       x = tf.layers.dense(x, 400, kernel_initializer=self.hidden_init(), name="dense1")
-      x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
+      if self.batch_norm:
+        x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
       x = tf.nn.relu(x)
 
       x = tf.layers.dense(x, 300, kernel_initializer=self.hidden_init(), name="dense2")
-      x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
+      if self.batch_norm:
+        x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
       x = tf.nn.relu(x)
 
       x = tf.layers.dense(x, n_actions, tf.nn.tanh, kernel_initializer=self.output_init(), name="dense3")
@@ -248,7 +258,8 @@ class DDPG(Model):
 
       x = tf.layers.dense(x, 400, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense1")
-      x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
+      if self.batch_norm:
+        x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm1")
       x = tf.nn.relu(x)
 
       x = tf.concat([x, action], axis=-1)
@@ -256,7 +267,8 @@ class DDPG(Model):
       # No batch norm after action input, as in the original paper
       x = tf.layers.dense(x, 300, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense2")
-      x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
+      if self.batch_norm:
+        x = tf.layers.batch_normalization(x, axis=-1, training=self._training, name="batch_norm2")
       x = tf.nn.relu(x)
 
       x = tf.layers.dense(x, 1, kernel_initializer=self.output_init(),

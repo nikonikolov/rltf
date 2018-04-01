@@ -20,6 +20,8 @@ class NormalizeAction(gym.ActionWrapper):
   def __init__(self, env):
     assert isinstance(env.action_space, gym.spaces.Box)
     super().__init__(env)
+    assert np.any(self.action_space.high !=  float("inf"))
+    assert np.any(self.action_space.low  != -float("inf"))
     self.act_mean = (self.action_space.high + self.action_space.low) / 2.0
     self.act_std  = (self.action_space.high - self.action_space.low) / 2.0
     self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=self.action_space.shape)
@@ -46,6 +48,23 @@ class ClipAction(gym.ActionWrapper):
   def reverse_action(self, action):
     return action
 
+
+class MaxEpisodeLen(gym.Wrapper):
+  def __init__(self, env, max_steps):
+    """Limit episode length to max_steps"""
+    super().__init__(env)
+    self.max_steps  = max_steps
+    self.steps      = None
+
+  def step(self, action):
+    self.steps += 1
+    obs, reward, done, info = self.env.step(action)
+    done = done or (self.steps >= self.max_steps)
+    return obs, reward, done, info
+
+  def reset(self, **kwargs):
+    self.steps = 0
+    return self.env.reset(**kwargs)
 
 
 # class RepeatAndStackLowDim(gym.Wrapper):

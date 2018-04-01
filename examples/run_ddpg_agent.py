@@ -31,18 +31,20 @@ def parse_args():
   parser.add_argument('--batch-size',   default=None,   type=int,   help='batch size')
   parser.add_argument('--adam-epsilon', default=1e-08,  type=float, help='epsilon for Adam optimizer')
   parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
-  parser.add_argument('--sigma',        default=0.2,    type=float, help='action noise sigma')
+  parser.add_argument('--sigma',        default=0.5,    type=float, help='action noise sigma')
   parser.add_argument('--theta',        default=0.15,   type=float, help='action noise theta')
   parser.add_argument('--dt',           default=1e-2,   type=float, help='action noise dt')
   parser.add_argument('--noise-type',   default="OU",   type=str,   help='action noise type',
                       choices=["OU", "Gaussian"])
-  parser.add_argument('--epsilon',      default=50000,  type=int,   help='epsilon e-grredy exploration')
+  parser.add_argument('--explore-decay',default=50000,  type=int,   help='decay exploration noise scale')
 
   parser.add_argument('--warm-up',      default=10000,  type=int,   help='# steps before training starts')
   parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
   parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
   parser.add_argument('--seed',         default=0,      type=int,   help='seed')
   parser.add_argument('--huber-loss',   default=False,  type=str2bool,  help='use huber loss')
+  parser.add_argument('--batch-norm',   default=False,  type=str2bool,  help='apply batch normalization')
+  parser.add_argument('--obs-norm',     default=False,  type=str2bool,  help='normalize observations')
   parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
@@ -103,6 +105,8 @@ def main():
     tau=args.tau,
     gamma=0.99,
     huber_loss=args.huber_loss,
+    batch_norm=args.batch_norm,
+    obs_norm=args.obs_norm,
   )
 
   # Get the model-specific settings
@@ -115,7 +119,7 @@ def main():
 
   # Create the environment
   env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
-  env = wrap_deepmind_ddpg(env, args.reward_scale)
+  env = wrap_deepmind_ddpg(env, args.reward_scale, 500)
 
   # Set additional arguments
   if args.batch_size is None:
@@ -143,7 +147,11 @@ def main():
     action_noise  = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
   elif args.noise_type == "Gaussian":
     action_noise  = GaussianNoise(mu, sigma)
-  epsilon = PiecewiseSchedule([(0, 1.0), (args.epsilon, 0.0)], outside_value=0.0)
+
+  if args.explore_decay > 0:
+    explore_decay = PiecewiseSchedule([(0, 1.0), (args.explore_decay, 0.0)], outside_value=0.0)
+  else:
+    explore_decay = ConstSchedule(1.0)
 
 
   # Set the Agent class keyword arguments
@@ -167,7 +175,7 @@ def main():
     actor_opt_conf=actor_opt_conf,
     critic_opt_conf=critic_opt_conf,
     action_noise=action_noise,
-    epsilon=epsilon,
+    explore_decay=explore_decay,
     update_target_freq=args.update_freq,
     memory_size=int(1e6),
     obs_len=1,
