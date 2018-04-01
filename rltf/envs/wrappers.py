@@ -24,7 +24,7 @@ class NormalizeAction(gym.ActionWrapper):
     assert np.any(self.action_space.low  != -float("inf"))
     self.act_mean = (self.action_space.high + self.action_space.low) / 2.0
     self.act_std  = (self.action_space.high - self.action_space.low) / 2.0
-    self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=self.action_space.shape)
+    self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=self.action_space.shape, dtype=np.float32)
 
   def action(self, action):
     return self.act_std * action + self.act_mean

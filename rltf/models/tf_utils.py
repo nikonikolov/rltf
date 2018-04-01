@@ -1,7 +1,6 @@
 import logging
 import tensorflow as tf
 
-import rltf.conf
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ def init_he_relu():
 
 
 def init_glorot_normal():
-  return tf.glorot_normal_initializer(seed=rltf.conf.SEED)
+  return tf.glorot_normal_initializer()
 
 
 def init_default():

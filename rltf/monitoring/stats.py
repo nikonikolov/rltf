@@ -222,11 +222,13 @@ class StatsRecorder:
     self._compute_runtime_stats(t)
 
     stats_logger.info("")
-    for s, lambda_v in self.log_info:
+    stats_logger.info(self.log_info[0][0].format(self.log_info[0][1](t)))
+    for s, lambda_v in self.log_info[1:-1]:
       if self._mode == 't' and not s.startswith("| eval/"):
         stats_logger.info(s.format(lambda_v(t)))
       elif self._mode == 'e' and s.startswith("| eval/"):
         stats_logger.info(s.format(lambda_v(t)))
+    stats_logger.info(self.log_info[-1][0].format(self.log_info[-1][1](t)))
     stats_logger.info("")
 
 
