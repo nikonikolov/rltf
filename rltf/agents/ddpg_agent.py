@@ -16,7 +16,6 @@ class AgentDDPG(OffPolicyAgent):
                actor_opt_conf,
                critic_opt_conf,
                action_noise,
-               explore_decay,
                update_target_freq=1,
                memory_size=int(1e6),
                obs_len=1,
@@ -42,8 +41,7 @@ class AgentDDPG(OffPolicyAgent):
     assert isinstance(self.env.action_space,      gym.spaces.Box)
     assert update_target_freq % self.train_freq == 0
 
-    self.action_noise   = action_noise
-    self.explore_decay  = explore_decay
+    self.action_noise = action_noise
 
     self.actor_opt_conf   = actor_opt_conf
     self.critic_opt_conf  = critic_opt_conf
@@ -146,8 +144,7 @@ class AgentDDPG(OffPolicyAgent):
 
 
   def _action_train(self, state, t):
-    # noise   = self.action_noise.sample()
-    noise   = self.action_noise.sample() * self.explore_decay.value(t)
+    noise   = self.action_noise.sample(t)
     action  = self.model.action_train(self.sess, state)
     action  = action + noise
 

@@ -1,5 +1,3 @@
-import argparse
-import os
 import tensorflow as tf
 
 from rltf.agents        import AgentDQN
@@ -15,61 +13,34 @@ from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
-from rltf.utils.cmdargs import str2bool
+from rltf.utils         import cmdargs
 
 
 def parse_args():
-  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN"]
 
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('--env-id',       required=True,  type=str,   help='full environment name')
-  parser.add_argument('--model',        required=True,  type=str,       choices=model_choices)
+  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN"]
+  s2b         = cmdargs.str2bool
 
-  parser.add_argument('--learn-rate',   default=None,   type=float, help='learn rate',)
-  parser.add_argument('--adam-epsilon', default=.01/32, type=float, help='epsilon for Adam optimizer')
+  args = [
+    ('--env-id',       dict(required=True,  type=str,   help='full environment name')),
+    ('--model',        dict(required=True,  type=str,   choices=model_types)),
 
-  parser.add_argument('--train-freq',   default=4,      type=int,   help='learn frequency')
-  parser.add_argument('--warm-up',      default=50000,  type=int,   help='# steps before training starts')
-  parser.add_argument('--stop-step',    default=10**8,  type=int,   help='steps to run the agent for')
-  parser.add_argument('--n-heads',      default=10,     type=int,   help='number of BstrapDQN heads')
-  parser.add_argument('--seed',         default=0,      type=int,   help='seed')
-  parser.add_argument('--huber-loss',   default=True,   type=str2bool,  help='use huber loss')
-  parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
-  parser.add_argument('--extra-info',   default="",     type=str,   help='extra cmd info to log')
+    ('--learn-rate',   dict(default=None,   type=float, help='learn rate',)),
+    ('--adam-epsilon', dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
+    ('--n-heads',      dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
 
-  parser.add_argument('--eval-freq',    default=10**6,  type=int,   help='how often to evaluate model')
-  parser.add_argument('--eval-len',     default=50000,  type=int,   help='for how many steps to eval')
+    ('--warm-up',      dict(default=50000,  type=int,   help='# steps before training starts')),
+    ('--train-freq',   dict(default=4,      type=int,   help='learn frequency')),
+    ('--update-freq',  dict(default=10000,  type=int,   help='how often to update target')),
+    ('--stop-step',    dict(default=10**8,  type=int,   help='steps to run the agent for')),
+    ('--huber-loss',   dict(default=True,   type=s2b,   help='use huber loss')),
+    ('--grad-clip',    dict(default=None,   type=float, help='value to clip gradient norms to')),
 
-  parser.add_argument('--save-freq',    default=0,      type=int,   help='how often to save the model')
-  parser.add_argument('--log-freq',     default=10000,  type=int,   help='how often to log stats')
-  parser.add_argument('--video-freq',   default=1000,   type=int,
-                      help='period in number of episodes at which to record videos')
-  parser.add_argument('--restore-model',default=None,   type=str,
-                      help='path existing dir; continue training with the network and the env in the dir')
-  parser.add_argument('--reuse-model',  default=None,   type=str,
-                      help='path existing dir; use the network weights there but train on a new env')
+    ('--eval-freq',    dict(default=10**6,  type=int,   help='how often to evaluate model')),
+    ('--eval-len',     dict(default=50000,  type=int,   help='for how many steps to eval each time')),
+  ]
 
-
-  args = parser.parse_args()
-
-  if args.grad_clip is not None:
-    assert args.grad_clip > 0
-    assert not args.huber_loss
-
-  # Only one of args.restore_model and args.reuse_model can be set
-  assert not (args.restore_model is not None and args.reuse_model is not None)
-
-  if args.restore_model is not None:
-    args.restore_model = os.path.abspath(args.restore_model)
-    assert os.path.exists(args.restore_model)
-    assert os.path.basename(args.restore_model).startswith(args.env_id)
-
-  elif args.reuse_model is not None:
-    args.reuse_model = os.path.abspath(args.reuse_model)
-    assert os.path.exists(args.reuse_model)
-    assert os.path.exists(os.path.join(args.reuse_model, "tf"))
-
-  return args
+  return cmdargs.parse_args(args)
 
 
 def main():
@@ -148,7 +119,7 @@ def main():
     model_kwargs=model_kwargs,
     opt_conf=opt_conf,
     exploration=exploration,
-    update_target_freq=10000,
+    update_target_freq=args.update_freq,
     memory_size=int(1e6),
     obs_len=4,
   )

@@ -110,12 +110,12 @@ class AgentDQN(OffPolicyAgent):
       action = self.env.action_space.sample()
     else:
       # Run the network to select an action
-      action  = self.model.action_train(self.sess, state)
+      action = self.model.action_train(self.sess, state)
     return action
 
 
   def _action_eval(self, state, t):
-    action  = self.model.action_eval(self.sess, state)
+    action = self.model.action_eval(self.sess, state)
     return action
 
 
