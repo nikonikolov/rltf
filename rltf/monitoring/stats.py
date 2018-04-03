@@ -194,9 +194,7 @@ class StatsRecorder:
 
     t_now  = time.time()
     if self._mode == 't':
-      steps_per_s = (step - self.step_last_log) / (t_now - self.t_last_log)
-      steps_per_s = steps_per_s if self.steps_p_s is None else (steps_per_s + self.steps_p_s) / 2.0
-      self.steps_p_s = steps_per_s
+      self.steps_p_s = (step - self.step_last_log) / (t_now - self.t_last_log)
       self.step_last_log = step
     self.t_last_log = t_now
 

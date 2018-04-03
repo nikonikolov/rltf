@@ -45,6 +45,7 @@ def parse_args():
   parser.add_argument('--huber-loss',   default=False,  type=str2bool,  help='use huber loss')
   parser.add_argument('--batch-norm',   default=False,  type=str2bool,  help='apply batch normalization')
   parser.add_argument('--obs-norm',     default=False,  type=str2bool,  help='normalize observations')
+  parser.add_argument('--max-ep-steps', default=None,   type=int,   help='max # steps for an episode')
   parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
   parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
 
@@ -119,7 +120,7 @@ def main():
 
   # Create the environment
   env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
-  env = wrap_deepmind_ddpg(env, args.reward_scale, 500)
+  env = wrap_deepmind_ddpg(env, args.reward_scale, args.max_ep_steps)
 
   # Set additional arguments
   if args.batch_size is None:
