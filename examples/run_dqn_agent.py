@@ -28,6 +28,7 @@ def parse_args():
     ('--learn-rate',   dict(default=None,   type=float, help='learn rate',)),
     ('--adam-epsilon', dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
     ('--n-heads',      dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
+    ('--explore-decay',dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
 
     ('--warm-up',      dict(default=50000,  type=int,   help='# steps before training starts')),
     ('--train-freq',   dict(default=4,      type=int,   help='learn frequency')),
@@ -96,8 +97,12 @@ def main():
     opt_conf = OptimizerConf(AdamGradClipOptimizer, learn_rate, **opt_args)
 
   # Create the exploration schedule
-  # exploration = PiecewiseSchedule([(0, 1.0), (1e7, 0.01)], outside_value=0.01)
-  exploration = PiecewiseSchedule([(0, 1.0), (1e6, 0.1)], outside_value=0.01)
+  if args.explore_decay > 0:
+    # exploration = PiecewiseSchedule([(0, 1.0), (1e7, 0.01)], outside_value=0.01)
+    exploration = PiecewiseSchedule([(0, 1.0), (1e6, 0.1)], outside_value=0.01)
+  else:
+    exploration = ConstSchedule(0.0)
+
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(

@@ -38,7 +38,7 @@ def parse_args():
     ('--dt',           dict(default=1e-2,   type=float, help='action noise dt (for OU noise)')),
     ('--noise-type',   dict(default="OU",   type=str,   help='action noise type', choices=noise_types)),
     ('--noise-decay',  dict(default=500000, type=int,   help='action noise decay; \
-      # steps to decay noise weight from 1 to 0; if <0, no decay')),
+      # steps to decay noise weight from 1 to 0; if <=0, no decay')),
 
     ('--warm-up',      dict(default=10000,  type=int,   help='# steps before training starts')),
     ('--update-freq',  dict(default=1,      type=int,   help='how often to update target')),

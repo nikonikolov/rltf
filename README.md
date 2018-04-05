@@ -1,38 +1,44 @@
 # RLTF
 Reinforcement Learning Library in TensorFlow and OpenAI gym
 
-**NOTE: This is work in progress and structure of some parts of the library is likely to change. More functionality and documentation are coming soon.**
+**Disclaimer: This is work in progress and the library structure is likely to change. Documentation coming soon.**
 
 ## About
 
-The goal of this library is to provide standard implementations of core
-Reinforcement Learning algorithms. The library is specifically targetted at
-research applications and aims to provide reusable constructs for easy
-implementations of new algorithms. Furthermore, it includes detailed
-hyperparameter and training logs, real-time training metrics plots (currently
-in TensorBoard, configurable matplotlib plots coming soon). The code is written
-in TensorFlow and supports gym-compatible envornments.
+The goal of this library is to provide implementations of standard RL
+algorithms. The framework is designed for research purposes. Some of its
+current distinctive features are:
+- Unified framework for algorithm implementation and reusable modules
+- Easy control over algorithm behavior
+- Detailed logs of hyperparameters, training and evaluation scores
+- TensorBoard plots. Configurable matplotlib plots coming soon
+- Saving network weights, train/eval scores or any additional custom metrics
+- Restoring the training process from where it stopped or retraining on a new task
 
-All currently-implemented algorithms achieve competitive performance with the
-results reported in the original papers (the default hyperparameters are not
-optimal for all environments).
+All currently-implemented algorithms achieve competitive performance with results
+reported in the original papers. While all implementations are as close as
+possible to the ones reported in the original paper, sometimes there might be
+very slight differences for the purpose of improving results.
 
 
 ## Installation
-```
-git clone https://github.com/nikonikolov/rltf.git
-```
 
 ### Dependencies
 - Python >= 3.5
 - Tensorflow >= 1.4.0
 - OpenAI gym >= 0.9.6
 
+### Install
+```
+git clone https://github.com/nikonikolov/rltf.git
+```
+pip package coming soon
+
 
 ## Implemented Algorithms
 
 | Algorithm     | Model                             | Agent                                       | Orignal Paper |
-| ---           | ---                               | ---                                         | --- |  
+| ---           | ---                               | ---                                         | --- |
 | DQN           | [dqn.py](rltf/models/dqn.py)      | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [DQN](https://www.nature.com/articles/nature14236) |
 | Double DQN    | [ddqn.py](rltf/models/ddqn.py)    | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [Double DQN](https://arxiv.org/abs/1509.06461) |
 | Dueling DQN   | next                              | next                                        | [Dueling DQN](https://arxiv.org/abs/1511.06581) |
@@ -43,68 +49,64 @@ git clone https://github.com/nikonikolov/rltf.git
 | Bootstrapped DQN | [bstrap_dqn.py](rltf/models/bstrap_dqn.py) | [dqn_agent.py](rltf/agents/dqn_agent.py) | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf) |
 | PPO           | next                              | next                                        | [PPO](https://arxiv.org/abs/1707.06347) |
 
-Other algorithms are also coming soon:
+Other algorithms which are also coming soon:
 - [TRPO](https://arxiv.org/abs/1502.05477)
 - [REINFORCE]()
 - ...
 
 ## Structure
 
-An implemntation of an algorithm is composed of two parts: agent and model
+An algorithm is composed of two parts: `Agent` and `Model`
 
 ### Agent
-- Should inherit from the [Agent](rltf/agents/agent.py) class
-- Provides communication between the [Model](rltf/models/model.py) and the environment
-- Responsible for stepping the environment and running the train procedure
-- Manages the replay buffer (if any)
+- Should inherit from the [`Agent`](rltf/agents/agent.py) class
+- Provides communication interface between the [`Model`](rltf/models/model.py) and the environment
+- Responsible for
+  - Stepping the environment
+  - Running a training step
+  - Saving data in the replay buffer (if any)
 
 ### Model
-- Should inherit from the [Model](rltf/models/model.py) class
-- A passive component which only implements the Tensorflow computation graph for the algorithm
-- Implements the graph training procedure
-- Exposes the graph input and output Tensors so they can be run by the [Agent](rltf/agents/agent.py)
+- Should inherit from the [`Model`](rltf/models/model.py) class
+- A passive component which only implements the Tensorflow computation graph for the network
+- Implements all network related operations and exposes input and output Tensors
+- Controlled by the [`Agent`](rltf/agents/agent.py) during training and evaluation
 
 
 ## Running Examples
 
-After running any of the examples below, your logs will be saved in 
-`trained_models/<model>/<env-id>_<run-number>`. If you enabled model saving,
-the NN and its weights will be saved in the same folder. Furthermore, the
-folder will contain:
-- `params.txt` - file containing the values of the hyperparameters used
-- `run.log` - runtime log of the program
-- `tb/` - folder containing the TensorBoard plots of the training process
+After running any of the examples below, the relevant data will be saved in the
+directory `trained_models/<model-name>/<env-id>_<date>_<time>`. For example:
+`trained_models/dqn/PongNoFrameskip-v4_2018-03-31_19.27.33/`. The directory will
+contain:
+- `run.log` - Log file with all logs from the training run
+- `params.txt` - Log containing the values of all parameter used
+- `env_monitor/data/` - data for the training and evaluation statistics. Can be used for plots later
+- `env_monitor/*.mp4` - video recordings of episodes, if any were made
+- `tf/tb_train/` - TensorBoard file with training data
+- `tf/tb_eval/` - TensorBoard file with evaluation data
+- `tf/` - will also contain the saved graph, which can be restored later
 
-To see the TensorBoard plots, run:
-```
-tensorboard --logdir="<path/to/tb/dir>"
-```
-and then go to http://localhost:6006 in your browser
 
 ### DDPG
+To see configurable parameters, run:
 ```
-python3 -m examples.run_ddpg_agent --model <model-name> --env-id <env-id>
+python3 -m examples.run_dqn_agent --help
 ```
-For more details run:
+An example configuration is:
+```
+python3 -m examples.run_ddpg_agent --model DDPG --env-id RoboschoolHopper-v1 --critic-reg 0.0 --sigma 0.5 --max-ep-steps 2500 --noise-decay 500000
+```
+
+### DQN, C51, QR-DQN, Double DQN
+To see configurable parameters, run:
 ```
 python3 -m examples.run_dqn_agent --help
 ```
 
-### DQN, C51, QR-DQN
-
-```
-python3 -m examples.run_dqn_agent --model <model-name> --env-id <env-id>
-```
-For more details run:
-```
-python3 -m examples.run_dqn_agent --help
-```
-
-
-Note that `run_dqn_agent` enforces only Atari environments. Moreover, it
-requires that the environment used is of type `<env-name>NoFrameskip-v4`
-(e.g. `PongNoFrameskip-v4`). The `NoFrameskip-v4` gym environments (combined 
-with some additional wrappers) are the ones corresponding to the training
-process described in the orginal DQN Nature paper. If you want to use other
-environment versions, you will need to add or remove some env wrappers 
-(see [](rltf/envs/atari.py))
+At the moment `run_dqn_agent.py` enforces only Atari environments and image
+observations. It also requires that the environment is of the `NoFrameskip-v4`
+OpenAI gym family. The `NoFrameskip-v4` environments (together with some
+additional wrappers) replicate the training process desribed in the orginal DQN
+Nature paper. To make modifications, you need to add/remove some wrappers (see
+[atari.py](rltf/envs/atari.py)).
