@@ -27,7 +27,7 @@ class BaseBuffer():
     self.done   = np.empty([self.max_size],             dtype=np.bool)
 
 
-  def add(self, obs_t, action, reward, done):
+  def store(self, obs_t, act_t, reward_tp1, done_tp1):
     raise NotImplementedError()
 
 
@@ -44,49 +44,44 @@ class BaseBuffer():
     return self.size_now
 
 
-  def save(self, model_dir, obj_name=None):
+  def save(self, model_dir):
     """Store the data to disk
-
-    NOTE: Undefined behavior if another thread accesses the object
-
     Args:
       model_dir: Full path of the directory to save the buffer
-      obj_name: Name of the object - used to uniquely identify the created files
     """
+    name = self.__class__.__name__
 
-    if obj_name is None:
-      obj_name = self.__class__.__name__
-
-    np.save(os.path.join(model_dir, obj_name + "_obs.npy"),   self.obs)
-    np.save(os.path.join(model_dir, obj_name + "_act.npy"),   self.action)
-    np.save(os.path.join(model_dir, obj_name + "_done.npy"),  self.done)
-    np.save(os.path.join(model_dir, obj_name + "_rew.npy"),   self.reward)
-
-    obs     = self.obs
-    action  = self.action
-    reward  = self.reward
-    done    = self.done
-    self.obs    = None
-    self.action = None
-    self.reward = None
-    self.done   = None
-
-    pickle_save(os.path.join(model_dir, obj_name + ".pkl"), self)
-
-    self.obs    = obs
-    self.action = action
-    self.reward = reward
-    self.done   = done
+    np.save(os.path.join(model_dir, name + "_obs.npy"),   self.obs[:self.size_now])
+    np.save(os.path.join(model_dir, name + "_act.npy"),   self.action[:self.size_now])
+    np.save(os.path.join(model_dir, name + "_rew.npy"),   self.reward[:self.size_now])
+    np.save(os.path.join(model_dir, name + "_done.npy"),  self.done[:self.size_now])
 
 
-  def restore(self, model_dir, obj_name):
-    self        = pickle_restore(os.path.join(model_dir, obj_name + ".pkl"))
-    self.obs    = np.load(os.path.join(model_dir, obj_name + "_obs.npy"))
-    self.action = np.load(os.path.join(model_dir, obj_name + "_act.npy"))
-    self.done   = np.load(os.path.join(model_dir, obj_name + "_done.npy"))
-    self.reward = np.load(os.path.join(model_dir, obj_name + "_rew.npy"))
+  def resume(self, model_dir):
+    """Populate the buffer from data previously saved to disk
+    Args:
+      model_dir: Full path of the directory of the data
+    """
+    name = self.__class__.__name__
 
-    return self
+    obs    = np.load(os.path.join(model_dir, name + "_obs.npy"))
+    action = np.load(os.path.join(model_dir, name + "_act.npy"))
+    done   = np.load(os.path.join(model_dir, name + "_done.npy"))
+    reward = np.load(os.path.join(model_dir, name + "_rew.npy"))
+
+    assert len(obs) == len(action) == len(reward) == len(done)
+    assert self.obs.shape[1:]     == obs.shape[1:]
+    assert self.action.shape[1:]  == action.shape[1:]
+    assert self.reward.shape[1:]  == reward.shape[1:]
+    assert self.done.shape[1:]    == done.shape[1:]
+
+    self.size_now = len(obs)
+    self.next_idx = self.size_now % self.max_size
+
+    self.obs[:self.size_now]    = obs
+    self.action[:self.size_now] = action
+    self.reward[:self.size_now] = reward
+    self.done[:self.size_now]   = done
 
 
   def _sample_n_unique(self, n, low, high, exclude=None):

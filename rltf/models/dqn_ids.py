@@ -32,9 +32,9 @@ class DQN_IDS_BLR(DQN):
     self.blr_models = [BayesianLinearRegression(**blr_params) for _ in range(self.n_actions)]
 
     # Custom TF Tensors and Ops
-    self.phi        = None
     self.act_ids    = None
     # self.blr_train  = None
+
 
   def build(self):
 
@@ -146,10 +146,13 @@ class DQN_IDS_BLR(DQN):
     sess.run(self._update_target)
 
 
-  def control_action(self, sess, state):
-    # q_vals  = sess.run(self._q, feed_dict={self.obs_t_ph: state[None,:]})
-    # action  = np.argmax(q_vals)
+  def action_train(self, sess, state):
     q_vals  = sess.run(self.act_ids, feed_dict={self.obs_t_ph: state[None,:]})
     action  = np.argmin(q_vals)
 
+    return action
+
+  def action_eval(self, sess, state):
+    q_vals  = sess.run(self._q, feed_dict={self.obs_t_ph: state[None,:]})
+    action  = np.argmax(q_vals)
     return action

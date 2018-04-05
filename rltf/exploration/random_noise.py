@@ -6,10 +6,7 @@ from rltf.exploration.exploration import ExplorationNoise
 class NoNoise(ExplorationNoise):
   """Returns 0 as noise"""
 
-  def __init__(self):
-    super().__init__()
-
-  def sample(self):
+  def sample(self, t):
     return 0.0
 
   def reset(self):
@@ -17,6 +14,30 @@ class NoNoise(ExplorationNoise):
 
   def __repr__(self):
     return 'NoNoise()'
+
+
+class DecayedExplorationNoise(ExplorationNoise):
+  """Use any `ExplorationNoise` type but decay the amount of noise over time"""
+
+  def __init__(self, noise, decay):
+    """
+    Args:
+      noise: `ExplorationNoise`. The type of noise to use. Object must already be initalized
+      decay: `rltf.schedule.Schedule`. Schedule for decaying the noise
+    """
+    super().__init__()
+    self.noise = noise
+    self.decay = decay
+
+  def sample(self, t):
+    noise = self.noise.sample(t) * self.decay.value(t)
+    return noise
+
+  def reset(self):
+    self.noise.reset()
+
+  def __repr__(self):
+    return 'DecayedExplorationNoise(type={}, decay={})'.format(self.noise, self.decay)
 
 
 class GaussianNoise(ExplorationNoise):
@@ -33,7 +54,7 @@ class GaussianNoise(ExplorationNoise):
     self.mu     = mu
     self.sigma  = sigma
 
-  def sample(self):
+  def sample(self, t):
     return np.random.normal(self.mu, self.sigma)
 
   def reset(self):
@@ -72,9 +93,10 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     self.sigma  = sigma
     self.theta  = theta
     self.dt     = dt
+    self.x      = None
     self.reset()
 
-  def sample(self):
+  def sample(self, t):
     x = self.x + self.theta * (self.mu - self.x) * self.dt + \
         self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.sigma.shape)
     self.x = x

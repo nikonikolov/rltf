@@ -21,14 +21,14 @@ class BstrapDQN(BaseDQN):
     self.n_heads      = n_heads
 
     # Custom TF Tensors and Ops
-    self.active_head  = None
-    self.set_act_head = None
+    self._active_head   = None
+    self._set_act_head  = None
 
 
   def build(self):
-    self.active_head  = tf.Variable([0], trainable=False, name="active_head")
-    sample_head       = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
-    self.set_act_head = tf.assign(self.active_head, sample_head, name="set_act_head")
+    self._active_head   = tf.Variable([0], trainable=False, name="active_head")
+    sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
+    self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
 
     super().build()
 
@@ -68,7 +68,7 @@ class BstrapDQN(BaseDQN):
 
 
   def _compute_q(self, nn_out):
-    head_mask = tf.one_hot(self.active_head, self.n_heads, on_value=True, off_value=False, dtype=tf.bool)
+    head_mask = tf.one_hot(self._active_head, self.n_heads, on_value=True, off_value=False, dtype=tf.bool)
     q_head    = tf.boolean_mask(nn_out, head_mask)
     return q_head
 
@@ -111,4 +111,11 @@ class BstrapDQN(BaseDQN):
 
 
   def reset(self, sess):
-    sess.run(self.set_act_head)
+    sess.run(self._set_act_head)
+
+
+  def _restore(self, graph):
+    # Get Q-function Tensor
+    self._q             = graph.get_tensor_by_name("q_fn:0")
+    self._active_head   = graph.get_tensor_by_name("active_head:0")
+    self._set_act_head  = graph.get_operation_by_name("set_act_head")

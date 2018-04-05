@@ -1,3 +1,28 @@
+# Partially based on https://github.com/openai/gym under the following license:
+#
+# The MIT License
+#
+# Copyright (c) 2016 OpenAI (http://openai.com)
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
 import json
 import logging
 import os
@@ -41,9 +66,6 @@ class Monitor(Wrapper):
     super().__init__(env)
 
     self._enabled       = False
-
-    self.train_eps      = 0       # Count of train episodes
-    self.eval_eps       = 0       # Count of eval episodes
 
     self.videos         = []      # List of files for the recorded videos and their manifests
     self._mode          = None
@@ -91,7 +113,7 @@ class Monitor(Wrapper):
   def _make_log_dir(self):
     if not os.path.exists(self.log_dir):
       logger.info('Creating monitor directory %s', self.log_dir)
-      os.makedirs(self.log_dir, exist_ok=True)
+      os.makedirs(self.log_dir)
 
 
   def _detect_wrapped_env(self):
@@ -150,7 +172,7 @@ class Monitor(Wrapper):
       return
 
     # First save all the data
-    self.save()
+    # self.save()
 
     # Close stats and video recorders
     self.stats_recorder.close()
@@ -161,14 +183,8 @@ class Monitor(Wrapper):
     monitor_closer.unregister(self._monitor_id)
     self._enabled = False
 
-    logger.info("Monitor successfully closed and saved at %s", self.log_dir)
-
-
-  def _increment_episode_id(self):
-    if self._mode == 't':
-      self.train_eps += 1
-    else:
-      self.eval_eps  += 1
+    # logger.info("Monitor successfully closed and saved at %s", self.log_dir)
+    # logger.info("Monitor successfully closed")
 
 
   def _before_step(self, action):
@@ -215,8 +231,6 @@ class Monitor(Wrapper):
     self.env_started = True
     self.done = False
 
-    # Increment the episode id
-    self._increment_episode_id()
     # Start new video recording
     self.reset_video_recorder()
 
@@ -276,7 +290,7 @@ class Monitor(Wrapper):
 
 
   def get_episode_id(self):
-    return self.train_eps if self._mode == 't' else self.eval_eps
+    return self.stats_recorder.get_episode_id()
 
 
   def get_episode_rewards(self, mode='t'):

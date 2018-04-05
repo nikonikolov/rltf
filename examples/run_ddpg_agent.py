@@ -1,61 +1,60 @@
-import argparse
 import numpy      as np
 import tensorflow as tf
 
 from rltf.agents        import AgentDDPG
-from rltf.env_wrap      import wrap_deepmind_ddpg
-from rltf.exploration   import OrnsteinUhlenbeckNoise
+from rltf.envs          import wrap_deepmind_ddpg
+from rltf.exploration   import DecayedExplorationNoise
 from rltf.exploration   import GaussianNoise
+from rltf.exploration   import OrnsteinUhlenbeckNoise
 from rltf.models        import DDPG
 from rltf.models        import QRDDPG
 from rltf.optimizers    import OptimizerConf
-from rltf.optimizers    import AdamGradClipOptimizer
+from rltf.schedules     import PiecewiseSchedule
 from rltf.schedules     import ConstSchedule
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
-from rltf.utils.cmdargs import str2bool
+from rltf.utils         import cmdargs
 
 
 def parse_args():
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('--env-id',       required=True,  type=str,   help='full environment name')
-  parser.add_argument('--model',        required=True,  type=str,   choices=["DDPG", "QRDDPG"])
 
-  parser.add_argument('--N',            default=100,    type=int,   help='number of quantiles')
-  parser.add_argument('--actor-lr',     default=1e-4,   type=float, help='actor learn rate')
-  parser.add_argument('--critic-lr',    default=1e-3,   type=float, help='critic learn rate')
-  parser.add_argument('--tau',          default=0.001,  type=float, help='target soft update weight')
-  parser.add_argument('--critic-reg',   default=0.02,   type=float, help='network weight regularization')
-  parser.add_argument('--batch-size',   default=None,   type=int,   help='batch size')
-  parser.add_argument('--adam-epsilon', default=1e-08,  type=float, help='expsilon for Adam optimizer')
-  parser.add_argument('--reward-scale', default=1.0,    type=float, help='scale env reward')
-  parser.add_argument('--sigma',        default=0.2,    type=float, help='action noise sigma')
-  parser.add_argument('--theta',        default=0.15,   type=float, help='action noise theta')
-  parser.add_argument('--dt',           default=1e-2,   type=float, help='action noise dt')
-  parser.add_argument('--noise-type',   default="OU",   type=str,   help='action noise type',
-                      choices=["OU", "Gaussian"])
+  model_types = ["DDPG", "QRDDPG"]
+  noise_types = ["OU", "Gaussian"]
+  s2b         = cmdargs.str2bool
 
-  parser.add_argument('--start-train',  default=10000,  type=int,   help='step at which to start training')
-  parser.add_argument('--update-freq',  default=1,      type=int,   help='update target frequency')
-  parser.add_argument('--train-freq',   default=1,      type=int,   help='learn frequency')
-  parser.add_argument('--seed',         default=0,      type=int,   help='seed')
-  parser.add_argument('--huber-loss',   default=False,  type=str2bool,  help='use huber loss')
-  parser.add_argument('--grad-clip',    default=None,   type=float, help='value to clip gradinets to')
-  parser.add_argument('--extra-info',   default="",     type=str,   help='extra info to log')
+  args = [
+    ('--env-id',       dict(required=True,  type=str,   help='full environment name')),
+    ('--model',        dict(required=True,  type=str,   choices=model_types)),
 
-  parser.add_argument('--log_level',    default="INFO", type=str,       help='logger lvl')
-  parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
-  parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
-  parser.add_argument('--video-freq',   default=500,    type=int,
-                      help='period in number of episodes at which to record videos')
+    ('--N',            dict(default=100,    type=int,   help='number of quantiles for QRDDPG')),
+    ('--actor-lr',     dict(default=1e-4,   type=float, help='actor learn rate')),
+    ('--critic-lr',    dict(default=1e-3,   type=float, help='critic learn rate')),
+    ('--tau',          dict(default=0.001,  type=float, help='weight for soft target update')),
+    ('--critic-reg',   dict(default=0.02,   type=float, help='network weight regularization param')),
+    ('--batch-size',   dict(default=None,   type=int,   help='batch size')),
 
-  args = parser.parse_args()
+    ('--sigma',        dict(default=0.5,    type=float, help='action noise sigma')),
+    ('--theta',        dict(default=0.15,   type=float, help='action noise theta (for OU noise)')),
+    ('--dt',           dict(default=1e-2,   type=float, help='action noise dt (for OU noise)')),
+    ('--noise-type',   dict(default="OU",   type=str,   help='action noise type', choices=noise_types)),
+    ('--noise-decay',  dict(default=500000, type=int,   help='action noise decay; \
+      # steps to decay noise weight from 1 to 0; if <=0, no decay')),
 
-  if args.grad_clip is not None:
-    assert args.grad_clip > 0
-    assert not args.huber_loss
+    ('--warm-up',      dict(default=10000,  type=int,   help='# steps before training starts')),
+    ('--update-freq',  dict(default=1,      type=int,   help='how often to update target')),
+    ('--train-freq',   dict(default=1,      type=int,   help='training frequency in # steps')),
+    ('--stop-step',    dict(default=2500000,type=int,   help='steps to run the agent for')),
+    ('--batch-norm',   dict(default=False,  type=s2b,   help='apply batch normalization')),
+    ('--obs-norm',     dict(default=False,  type=s2b,   help='normalize observations')),
+    ('--huber-loss',   dict(default=False,  type=s2b,   help='use huber loss for critic')),
+    ('--reward-scale', dict(default=1.0,    type=float, help='scale env reward')),
+    ('--max-ep-steps', dict(default=None,   type=int,   help='max # steps for an episode')),
 
-  return args
+    ('--eval-freq',    dict(default=500000, type=int,   help='how often to evaluate model')),
+    ('--eval-len',     dict(default=50000,  type=int,   help='for how many steps to eval each time')),
+  ]
+
+  return cmdargs.parse_args(args)
 
 
 def main():
@@ -63,10 +62,15 @@ def main():
   args = parse_args()
 
   # Get the model directory path
-  model_dir = maker.make_model_dir(args.model, args.env_id)
+  if args.restore_model is None:
+    model_dir   = maker.make_model_dir(args.model, args.env_id)
+    restore_dir = args.reuse_model
+  else:
+    model_dir   = args.restore_model
+    restore_dir = args.restore_model
 
   # Configure loggers
-  rltf_log.conf_logs(model_dir, args.log_level)
+  rltf_log.conf_logs(model_dir, args.log_lvl)
 
   # Set the model-specific keyword arguments
   model_kwargs = dict(
@@ -74,6 +78,8 @@ def main():
     tau=args.tau,
     gamma=0.99,
     huber_loss=args.huber_loss,
+    batch_norm=args.batch_norm,
+    obs_norm=args.obs_norm,
   )
 
   # Get the model-specific settings
@@ -85,46 +91,43 @@ def main():
 
 
   # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
-  env = wrap_deepmind_ddpg(env, args.reward_scale)
+  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
+  env = wrap_deepmind_ddpg(env, rew_scale=args.reward_scale, max_ep_len=args.max_ep_steps)
 
   # Set additional arguments
   if args.batch_size is None:
     args.batch_size = 16 if len(env.observation_space.shape) == 3 else 64
-  if args.adam_epsilon is None:
-    args.adam_epsilon = 0.01 / float(args.batch_size)
 
-  # Set learning rates and optimizer configuration
-  actor_lr  = ConstSchedule(args.actor_lr)
-  critic_lr = ConstSchedule(args.critic_lr)
-
-  if args.grad_clip is None:
-    actor_opt_conf  = OptimizerConf(tf.train.AdamOptimizer, actor_lr,  epsilon=args.adam_epsilon)
-    critic_opt_conf = OptimizerConf(tf.train.AdamOptimizer, critic_lr, epsilon=args.adam_epsilon)
-  else:
-    opt_args = dict(epsilon=args.adam_epsilon, grad_clip=args.grad_clip)
-    actor_opt_conf  = OptimizerConf(AdamGradClipOptimizer, actor_lr,  **opt_args)
-    critic_opt_conf = OptimizerConf(AdamGradClipOptimizer, critic_lr, **opt_args)
+  # Set learning rates and optimizer
+  actor_opt_conf  = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.actor_lr))
+  critic_opt_conf = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.critic_lr))
 
   # Create the exploration noise
-  act_shape     = env.action_space.shape
-  mu            = np.zeros(act_shape, dtype=np.float32)
-  sigma         = np.ones(act_shape,  dtype=np.float32) * args.sigma
+  mu            = np.zeros(env.action_space.shape, dtype=np.float32)
+  sigma         = np.ones(env.action_space.shape,  dtype=np.float32) * args.sigma
   if args.noise_type == "OU":
-    action_noise  = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
+    action_noise = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
   elif args.noise_type == "Gaussian":
-    action_noise  = GaussianNoise(mu, sigma)
+    action_noise = GaussianNoise(mu, sigma)
+
+  if args.noise_decay > 0:
+    noise_decay  = PiecewiseSchedule([(0, 1.0), (args.noise_decay, 0.0)], outside_value=0.0)
+    action_noise = DecayedExplorationNoise(action_noise, noise_decay)
 
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(
     env=env,
     train_freq=args.train_freq,
-    start_train=args.start_train,
-    max_steps=int(2.5e6),
+    warm_up=args.warm_up,
+    stop_step=args.stop_step,
+    eval_freq=args.eval_freq,
+    eval_len=args.eval_len,
     batch_size=args.batch_size,
     model_dir=model_dir,
-    save=args.save,
+    log_freq=args.log_freq,
+    save_freq=args.save_freq,
+    restore_dir=restore_dir,
   )
 
   ddpg_agent_kwargs = dict(
@@ -135,7 +138,7 @@ def main():
     action_noise=action_noise,
     update_target_freq=args.update_freq,
     memory_size=int(1e6),
-    obs_hist_len=1,
+    obs_len=1,
   )
 
   kwargs = {**ddpg_agent_kwargs, **agent_kwargs}
@@ -156,7 +159,7 @@ def main():
 
   # Close on exit
   ddpg_agent.close()
-  env.close()
+
 
 if __name__ == "__main__":
   main()

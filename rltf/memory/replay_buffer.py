@@ -8,65 +8,76 @@ class ReplayBuffer(BaseBuffer):
   observations
   """
 
-  def __init__(self, size, obs_shape, obs_dtype, act_shape, act_dtype, state_len=1):
+  def __init__(self, size, state_shape, obs_dtype, act_shape, act_dtype, obs_len=1):
     """
     Args:
       Check super().__init__()
-      state_len: int. Number of observations that comprise one state
+      obs_len: int. The number of observations that comprise one state. Must be `>= 1`.
+        If `obs_len=1`, then `obs_shape == state_shape`. If `obs_len>=1`, then observations
+        are assumed to be images and `obs_shape[-1] == state_shape[-1] / obs_len`. Corresponds
+        to the observation order of the MDP.
     """
-    assert state_len > 0
-    assert isinstance(state_len, int)
+    assert obs_len > 0
+    assert isinstance(obs_len, int)
     # Only image observations support stacking observations
-    if state_len > 1:
-      assert len(obs_shape) == 3
+    if obs_len > 1:
+      assert len(state_shape) == 3
     # Make sure that the type of the observation is np.uint8 for images
-    if len(obs_shape) == 3:
+    if len(state_shape) == 3:
       assert obs_dtype == np.uint8
 
+    # Images assume that the last dimension of the shape is the channel dimension
+    if obs_len > 1 and len(state_shape) == 3:
+      assert state_shape[-1] % obs_len == 0
+      obs_shape = list(state_shape)
+      obs_shape[-1] = int(obs_shape[-1]/obs_len)
+    else:
+      obs_shape = state_shape
+
     super().__init__(size, obs_shape, obs_dtype, act_shape, act_dtype)
-    self.state_len = state_len
+
+    # state_shape: The shape of the state: the shape receieved as observation from the environment
+    # and the shape returned by the buffer
+    # obs_shape: The shape of a single observation: several observations make one state (k-th order MDP).
+    # This is the shape of the data stored in the buffer in order to avoid storing the same values
+    # several times
+    self.obs_len      = obs_len
+    self.obs_shape    = obs_shape
+    self.state_shape  = state_shape
 
 
-  def store_frame(self, frame):
-    """Store a single frame in the buffer at the next available index, overwriting
-    old frames if necessary.
-    Args:
-      frame: np.array, shape=[img_h, img_w, img_c], dtype=np.uint8. The frame to be stored
-    Returns:
-      int: Index at which the frame is stored. To be used for `store_effect` later.
+
+  def store(self, obs_t, act_t, reward_tp1, done_tp1):
     """
-    self.obs[self.next_idx] = frame
+    Store the observed transition defined as: Given `obs_t`, action `act_t` was taken.
+    Then reward `reward_tp1` was observed. If after action `act_t` the episode terminated,
+    then `done_tp1` will be `True`, otherwise `False`. Note that the observation after taking
+    `act_t` should be passed as `obs_t` on the next call to `store()`. NOTE: if `done_tp1 == True`,
+    then there is no need to call `store()` on `obs_tp1`: we do NOT need to know it since we never
+    use it in computing the backup value
+    Args:
+      obs_t: `np.array`, `shape=state_shape`. Observation directly from the env
+      act_t: `np.array`, `shape=state_shape` or `float`
+      reward_tp1: `float`
+      done_tp1: `bool`
+    """
 
-    ret = self.next_idx
+    # To avoid storing the same data several times, if obs_len > 1, then store only the last
+    # observation from the stack of observations that comprise a state
+    if self.obs_len > 1:
+      self.obs[self.next_idx]   = obs_t[:, :, -self.obs_shape[-1]:]
+    else:
+      self.obs[self.next_idx]   = obs_t
+
+    self.action[self.next_idx]  = act_t
+    self.reward[self.next_idx]  = reward_tp1
+    self.done[self.next_idx]    = done_tp1
+
+    idx = self.next_idx
     self.next_idx = (self.next_idx + 1) % self.max_size
     self.size_now = min(self.max_size, self.size_now + 1)
 
-    return ret
-
-
-  def store_effect(self, idx, action, reward, done):
-    """Store effects of action taken after obeserving frame stored
-    at index idx. The reason `store_frame` and `store_effect` is broken
-    up into two functions is so that once can call `encode_recent_obs`
-    in between.
-
-    Args:
-      idx: int. Index in buffer of recently observed frame (returned by `store_frame`).
-      action: int. Action that was performed upon observing this frame.
-      reward: float. Reward that was received when the actions was performed.
-      done: bool. True if episode was finished after performing that action.
-    """
-    self.action[idx] = action
-    self.reward[idx] = reward
-    self.done[idx]   = done
-
-
-  def encode_recent_obs(self):
-    assert self.size_now > self.state_len
-    idx = (self.next_idx - 1) % self.max_size
-
-    if self.state_len == 1:   return self.obs[idx]
-    else:                     return self._encode_observation(idx)
+    return idx
 
 
   def sample(self, batch_size):
@@ -75,16 +86,16 @@ class ReplayBuffer(BaseBuffer):
     implementation is thread-safe and allows for another thread to be currently
     adding a new transition to the buffer.
 
-    i-th sample transition is as follows: when state `obs[i]`, action
+    i-th sample transition is as follows: when state was `obs[i]`, action
     `act[i]` was taken. After that reward `rew[i]` was received and subsequent
     state `obs_tp1[i]` was observed. If `done[i]` is True, then the episode was
-    finished after taking `act[i]`
+    finished after taking `act[i]` and `obs_tp1[i]` will be garbage
 
-    Arg:
+    Args:
       batch_size: int. Size of the batch to sample
     Returns:
       Python dictionary with keys
-      "obs": np.array, shape=[batch_size, obs_shape], dtype=obs_dtype, Batch states
+      "obs": np.array, shape=[batch_size, state_shape], dtype=obs_dtype, Batch states
       "act": np.array, shape=[batch_size, act_shape], dtype=act_dtype. Batch actions
       "rew": np.array, shape=[batch_size, 1], dtype=np.float32. Batch rewards
       "obs_tp1": np.array, shape=[batch_size, obs_shape], dtype=obs_dtype. Batch next state
@@ -109,7 +120,7 @@ class ReplayBuffer(BaseBuffer):
     Returns:
       See self.sample()
     """
-    if self.state_len == 1:
+    if self.obs_len == 1:
       obs_batch     = self.obs[idxes]
       obs_tp1_batch = self.obs[idxes+1]
     else:
@@ -131,85 +142,48 @@ class ReplayBuffer(BaseBuffer):
     """
 
     # Assume no other thread is modifying self.next_idx. Then idx points
-    # to the sample that will be overwritten next time. Then:
-    # - the idx-1 sample is invalid because the next obs is not the true one
-    # - the [idx : idx+state_len-1) samples are have inconsistent history
-    # If another thread can be currently incrementing the original value of
+    # to the observation that will be overwritten next time. Then:
+    # - the idx-1 observation is invalid because the next obs is not the true one
+    # - the [idx : idx+obs_len-1) observations have inconsistent history
+    # If another thread might be currently incrementing the original value of
     # self.next_idx, then the actual values that idx can have at this
     # point are self.next_idx or self.next_idx+1. Then we need to widen the
-    # exlude range by 1 at each end. However, the previous sample is no longer
+    # exlude range by 1 at each end. However, the previous observation is no longer
     # guaranteed to be correctly written, so we need to widen the min exclude
     # range by 1 more
 
     idx     = self.next_idx
-    exclude = np.arange(idx-3, idx+self.state_len) % self.max_size
+    exclude = np.arange(idx-3, idx+self.obs_len) % self.max_size
     return exclude
 
 
   def _encode_observation(self, idx):
-    """Encode the observation for idx by stacking state_len frames preceding
-    frames together. This function will always be called when there are more
-    than state_len frames in the buffer.
-
-    NOTE: This is used only for image observations
+    """Encode the observation for idx by stacking the `obs_len` preceding frames together.
+    Assume there are more than `obs_len` frames in the buffer.
+    NOTE: Used only for image observations
     """
-    end_idx   = idx + 1 # make noninclusive
-    start_idx = end_idx - self.state_len
+    hi = idx + 1 # make noninclusive
+    lo = hi - self.obs_len
 
-    for idx in range(start_idx, end_idx - 1):
-      if self.done[idx % self.max_size]:
-        start_idx = idx + 1
-    missing_context = self.state_len - (end_idx - start_idx)
+    for i in range(lo, hi - 1):
+      if self.done[i % self.max_size]:
+        lo = i + 1
+    missing = self.obs_len - (hi - lo)
 
-    # We need to duplicate the start_idx observation
-    if missing_context > 0:
-      # frames = [np.zeros_like(self.obs[0]) for _ in range(missing_context)]
-      frames = [self.obs[start_idx % self.max_size] for _ in range(missing_context)]
-      for idx in range(start_idx, end_idx):
-        frames.append(self.obs[idx % self.max_size])
+    # We need to duplicate the lo observation
+    if missing > 0:
+      frames = [self.obs[lo % self.max_size] for _ in range(missing)]
+      for i in range(lo, hi):
+        frames.append(self.obs[i % self.max_size])
       return np.concatenate(frames, 2)
     # We are on the boundary of the buffer
-    elif start_idx < 0:
+    elif lo < 0:
       img_h, img_w = self.obs.shape[1], self.obs.shape[2]
-      frames = [self.obs[start_idx:], self.obs[:end_idx]]
+      frames = [self.obs[lo:], self.obs[:hi]]
       frames = np.concatenate(frames, 0)
       return frames.transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
     # The standard case
     else:
       # This optimization has potential to saves about 30% compute time \o/
       img_h, img_w = self.obs.shape[1], self.obs.shape[2]
-      return self.obs[start_idx:end_idx].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
-
-
-  # def encode_observation(self, obs):
-  #   """Add obs on top of the most recent `state_len-1` observations.
-  #   Args:
-  #     obs. np.array, shape=obs_shape, dtype=obs_dtype
-  #   Returns:
-  #     np.array of the stacked observations
-  #     Array of shape (img_h, img_w, img_c * state_len)
-  #     and dtype np.uint8, where observation[:, :, i*img_c:(i+1)*img_c]
-  #     encodes frame at time `t - state_len + i`
-  #   """
-  #   assert self.size_now > 0
-  #   return self._encode_observation((self.next_idx - 1) % self.max_size)
-
-
-  # def store(self, obs, action, reward, done):
-  #   """Store effects of action taken after obeserving frame stored
-  #   at index idx. The reason `store_frame` and `store_effect` is broken
-  #   up into two functions is so that once can call `encode_recent_obs`
-  #   in between.
-  #   Args:
-  #     obs: np.array. ??
-  #     action: int. Action that was performed upon observing this frame.
-  #     reward: float. Reward that was received when the actions was performed.
-  #     done: bool. True if episode was finished after performing that action.
-  #   """
-  #   self.obs[self.next_idx]     = action
-  #   self.action[self.next_idx]  = action
-  #   self.reward[self.next_idx]  = reward
-  #   self.done[self.next_idx]    = done
-
-  #   self.next_idx = (self.next_idx + 1) % self.max_size
-  #   self.size_now     = min(self.max_size, self.size_now + 1)
+      return self.obs[lo:hi].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)

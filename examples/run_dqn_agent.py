@@ -1,9 +1,7 @@
-import argparse
 import tensorflow as tf
 
 from rltf.agents        import AgentDQN
-from rltf.env_wrap      import wrap_deepmind_atari
-# from rltf.exploration   import EGreedy
+from rltf.envs          import wrap_deepmind_atari
 from rltf.models        import BstrapDQN
 from rltf.models        import DDQN
 from rltf.models        import DQN
@@ -16,40 +14,35 @@ from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
-from rltf.utils.cmdargs import str2bool
+from rltf.utils         import cmdargs
 
 
 def parse_args():
-  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "DQN_IDS_BLR"]
 
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('--env-id',       required=True,  type=str,       help='full environment name')
-  parser.add_argument('--model',        required=True,  type=str,       choices=model_choices)
+  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "DQN_IDS_BLR"]
+  s2b         = cmdargs.str2bool
 
-  parser.add_argument('--learn-rate',   default=None,   type=float,     help='learn rate',)
-  parser.add_argument('--adam-epsilon', default=.01/32, type=float,     help='epsilon for Adam optimizer')
+  args = [
+    ('--env-id',       dict(required=True,  type=str,   help='full environment name')),
+    ('--model',        dict(required=True,  type=str,   choices=model_types)),
 
-  parser.add_argument('--train-freq',   default=4,      type=int,       help='learn frequency')
-  parser.add_argument('--start-train',  default=50000,  type=int,       help='step to start training')
-  parser.add_argument('--max-steps',    default=10**8,  type=int,       help='steps to run the agent for')
-  parser.add_argument('--n-heads',      default=10,     type=int,       help='number of BstrapDQN heads')
-  parser.add_argument('--seed',         default=0,      type=int,       help='seed')
-  parser.add_argument('--huber-loss',   default=True,   type=str2bool,  help='use huber loss')
-  parser.add_argument('--grad-clip',    default=None,   type=float,     help='value to clip gradinets to')
-  parser.add_argument('--extra-info',   default="",     type=str,       help='extra info to log')
+    ('--learn-rate',   dict(default=None,   type=float, help='learn rate',)),
+    ('--adam-epsilon', dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
+    ('--n-heads',      dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
+    ('--explore-decay',dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
 
-  parser.add_argument('--save',         default=False,  type=str2bool,  help='save model')
-  parser.add_argument('--save-video',   default=True,   type=str2bool,  help='save gym videos')
-  parser.add_argument('--video-freq',   default=1000,   type=int,
-                      help='period in number of episodes at which to record videos')
+    ('--warm-up',      dict(default=50000,  type=int,   help='# steps before training starts')),
+    ('--train-freq',   dict(default=4,      type=int,   help='learn frequency')),
+    ('--update-freq',  dict(default=10000,  type=int,   help='how often to update target')),
+    ('--stop-step',    dict(default=10**8,  type=int,   help='steps to run the agent for')),
+    ('--huber-loss',   dict(default=True,   type=s2b,   help='use huber loss')),
+    ('--grad-clip',    dict(default=None,   type=float, help='value to clip gradient norms to')),
 
-  args = parser.parse_args()
+    ('--eval-freq',    dict(default=10**6,  type=int,   help='how often to evaluate model')),
+    ('--eval-len',     dict(default=50000,  type=int,   help='for how many steps to eval each time')),
+  ]
 
-  if args.grad_clip is not None:
-    assert args.grad_clip > 0
-    assert not args.huber_loss
-
-  return args
+  return cmdargs.parse_args(args)
 
 
 def main():
@@ -57,7 +50,12 @@ def main():
   args = parse_args()
 
   # Get the model directory path
-  model_dir = maker.make_model_dir(args.model, args.env_id)
+  if args.restore_model is None:
+    model_dir   = maker.make_model_dir(args.model, args.env_id)
+    restore_dir = args.reuse_model
+  else:
+    model_dir   = args.restore_model
+    restore_dir = args.restore_model
 
   # Configure loggers
   rltf_log.conf_logs(model_dir)
@@ -86,7 +84,7 @@ def main():
 
 
   # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.save_video, args.video_freq)
+  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
   env = wrap_deepmind_atari(env)
 
   # Set the learning rate schedule
@@ -103,18 +101,26 @@ def main():
     opt_conf = OptimizerConf(AdamGradClipOptimizer, learn_rate, **opt_args)
 
   # Create the exploration schedule
-  # exploration = PiecewiseSchedule([(0, 1.0), (1e7, 0.01)], outside_value=0.01)
-  exploration = PiecewiseSchedule([(0, 1.0), (1e6, 0.1)], outside_value=0.01)
+  if args.explore_decay > 0:
+    # exploration = PiecewiseSchedule([(0, 1.0), (1e7, 0.01)], outside_value=0.01)
+    exploration = PiecewiseSchedule([(0, 1.0), (1e6, 0.1)], outside_value=0.01)
+  else:
+    exploration = ConstSchedule(0.0)
+
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(
     env=env,
     train_freq=args.train_freq,
-    start_train=args.start_train,
-    max_steps=args.max_steps,
+    warm_up=args.warm_up,
+    stop_step=args.stop_step,
+    eval_freq=args.eval_freq,
+    eval_len=args.eval_len,
     batch_size=32,
     model_dir=model_dir,
-    save=args.save,
+    log_freq=args.log_freq,
+    save_freq=args.save_freq,
+    restore_dir=restore_dir,
   )
 
   dqn_agent_kwargs = dict(
@@ -122,9 +128,9 @@ def main():
     model_kwargs=model_kwargs,
     opt_conf=opt_conf,
     exploration=exploration,
-    update_target_freq=10000,
+    update_target_freq=args.update_freq,
     memory_size=int(1e6),
-    obs_hist_len=4,
+    obs_len=4,
   )
 
   kwargs = {**dqn_agent_kwargs, **agent_kwargs}
@@ -145,7 +151,7 @@ def main():
 
   # Close on exit
   dqn_agent.close()
-  env.close()
+
 
 if __name__ == "__main__":
   main()

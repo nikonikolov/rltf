@@ -12,7 +12,7 @@ import rltf.monitoring
 logger = logging.getLogger(__name__)
 
 
-def make_env(env_id, seed, model_dir, save_video, video_freq=None):
+def make_env(env_id, seed, model_dir, video_freq=None):
   """Create an instance of a gym environment, wrap it in a Monitor class and
   set seeds for the environment and for other modules (tf, np, random)
 
@@ -20,9 +20,8 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=None):
     env_id: str. Full name of the gym environment
     seed: int. Seed for the environment and the modules
     model_dir: std. Path where videos from the Monitor class will be saved
-    save_video: bool. If False, no videos will be recorded
     video_freq: int. Every `video_freq` episode will be recorded. If `None`,
-      then the monitor default is used
+      then the monitor default is used. If `<=0`, then no videos are recorded
   Returns:
     The environment wrapped inside a Monitor class
   """
@@ -34,11 +33,10 @@ def make_env(env_id, seed, model_dir, save_video, video_freq=None):
   rltf.utils.seeding.set_global_seeds(seed)
 
   monitor_dir = os.path.join(model_dir, "env_monitor")
-  if save_video:
-    if video_freq is None:
-      video_callable = None
-    else:
-      video_callable = lambda e_id: e_id % video_freq == 0
+  if video_freq is None:
+    video_callable = None
+  elif video_freq > 0:
+    video_callable = lambda e_id: e_id % video_freq == 0
   else:
     video_callable = False
 

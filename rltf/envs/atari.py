@@ -1,3 +1,28 @@
+# Partially based on https://github.com/openai/baselines under the following license:
+#
+# The MIT License
+#
+# Copyright (c) 2017 OpenAI (http://openai.com)
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
 from collections import deque
 
 import cv2
@@ -6,7 +31,7 @@ import numpy as np
 
 
 class NoopResetEnv(gym.Wrapper):
-  def __init__(self, env=None, noop_max=30):
+  def __init__(self, env, noop_max=30):
     """Sample initial states by taking random number of no-ops on reset.
     No-op is assumed to be action 0.
     """
@@ -112,7 +137,7 @@ class MaxAndSkipEnv(gym.Wrapper):
   def reset(self, **kwargs):
     """Clear past frame buffer and init to first obs. from inner env."""
     self._obs_buffer.clear()
-    obs = self.env.reset()
+    obs = self.env.reset(**kwargs)
     self._obs_buffer.append(obs)
     return obs
 
@@ -138,6 +163,33 @@ class ClippedRewardsWrapper(gym.RewardWrapper):
 
   def reward(self, reward):
     return np.sign(reward)
+
+
+class StackFrames(gym.Wrapper):
+  def __init__(self, env, k=4):
+    """Stack the last k observations"""
+    super().__init__(env)
+    self.k        = k
+    self.obs_buf  = deque([], maxlen=k)
+    state_shape   = list(env.observation_space.shape)
+    state_shape[-1] *= k
+    dtype         = env.observation_space.dtype
+    self.observation_space = gym.spaces.Box(low=0, high=255, shape=state_shape, dtype=dtype)
+
+  def step(self, action):
+    obs, reward, done, info = self.env.step(action)
+    self.obs_buf.append(obs)
+    return self._obs(), reward, done, info
+
+  def reset(self, **kwargs):
+    obs = self.env.reset(**kwargs)
+    for _ in range(self.k):
+      self.obs_buf.append(obs)
+    return self._obs()
+
+  def _obs(self):
+    assert len(self.obs_buf) == self.k
+    return np.concatenate(self.obs_buf, axis=-1)
 
 
 # def wrap_deepmind_ram(env):
@@ -170,4 +222,5 @@ def wrap_deepmind_atari(env):
     env = FireResetEnv(env)
   env = WarpFrame(env)
   env = ClippedRewardsWrapper(env)
+  env = StackFrames(env, k=4)
   return env

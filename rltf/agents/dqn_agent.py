@@ -15,7 +15,7 @@ class AgentDQN(OffPolicyAgent):
                exploration,
                update_target_freq=10000,
                memory_size=int(1e6),
-               obs_hist_len=4,
+               obs_len=4,
                **agent_kwargs
               ):
     """
@@ -26,7 +26,7 @@ class AgentDQN(OffPolicyAgent):
       exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
       update_target_freq: Period in number of steps at which to update the target net
       memory_size: int. Size of the replay buffer
-      obs_hist_len: int. How many environment observations comprise a single state.
+      obs_len: int. How many environment observations comprise a single state.
       agent_kwargs: Keyword arguments that will be passed to the Agent base class
     """
 
@@ -41,50 +41,49 @@ class AgentDQN(OffPolicyAgent):
     self.update_target_freq = update_target_freq
 
     # Get environment specs
-    img_h, img_w, img_c = self.env.observation_space.shape
-    obs_shape = [img_h, img_w, obs_hist_len * img_c]
-    buf_obs_shape = [img_h, img_w, img_c]
     n_actions = self.env.action_space.n
+    obs_shape = self.env.observation_space.shape
+    obs_shape = list(obs_shape)
 
     model_kwargs["obs_shape"] = obs_shape
     model_kwargs["n_actions"] = n_actions
     model_kwargs["opt_conf"]  = opt_conf
 
     self.model      = model_type(**model_kwargs)
-    self.replay_buf = ReplayBuffer(memory_size, buf_obs_shape, np.uint8, [], np.uint8, obs_hist_len)
+    self.replay_buf = ReplayBuffer(memory_size, obs_shape, np.uint8, [], np.uint8, obs_len)
 
     # Configure what information to log
     self._define_log_info()
 
     # Custom TF Tensors and Ops
     self.learn_rate_ph  = None
-    self.epsilon_ph     = None
 
 
   def _build(self):
     # Create Learning rate placeholders
     self.learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="learn_rate_ph")
-    self.epsilon_ph     = tf.placeholder(tf.float32, shape=(), name="epsilon_ph")
 
     # Set the learn rate placeholders for the model
     self.opt_conf.lr_ph = self.learn_rate_ph
 
     # Add summaries
-    tf.summary.scalar("learn_rate", self.learn_rate_ph)
-    tf.summary.scalar("epsilon",    self.epsilon_ph)
+    tf.summary.scalar("train/learn_rate", self.learn_rate_ph)
 
 
   def _restore(self, graph):
     self.learn_rate_ph  = graph.get_tensor_by_name("learn_rate_ph:0")
-    self.epsilon_ph     = graph.get_tensor_by_name("epsilon_ph:0")
 
 
-  def _custom_log_info(self):
+  def _append_log_info(self):
     log_info = [
-      ( "train/learn_rate",  "f", self.opt_conf.lr_value ),
-      ( "train/exploration", "f", self.exploration.value ),
+      ( "train/learn_rate", "f", self.opt_conf.lr_value ),
+      ( "train/epsilon",    "f", self.exploration.value ),
     ]
     return log_info
+
+
+  def _append_summary(self, summary, t):
+    summary.value.add(tag="train/epsilon", simple_value=self.exploration.value(t))
 
 
   def _get_feed_dict(self, t):
@@ -99,33 +98,25 @@ class AgentDQN(OffPolicyAgent):
       self.model.obs_tp1_ph:     batch["obs_tp1"],
       self.model.done_ph:        batch["done"],
       self.learn_rate_ph:        self.opt_conf.lr_value(t),
-      self.epsilon_ph:           self.exploration.value(t),
-      self.mean_ep_rew_ph:       self.mean_ep_rew,
     }
 
     return feed_dict
 
 
-  def _action_train(self, t):
-    # # Run epsilon greedy policy
-    # epsilon = self.exploration.value(t)
-    # if np.random.uniform(0,1) < epsilon:
-    #   action = self.env.action_space.sample()
-    # else:
-    #   # Run the network to select an action
-    #   state   = self.replay_buf.encode_recent_obs()
-    #   action  = self.model.control_action(self.sess, state)
-    # return action
-
-    # Run the network to select an action
-    state   = self.replay_buf.encode_recent_obs()
-    action  = self.model.control_action(self.sess, state)
+  def _action_train(self, state, t):
+    # Run epsilon greedy policy
+    epsilon = self.exploration.value(t)
+    if np.random.uniform(0,1) < epsilon:
+      action = self.env.action_space.sample()
+    else:
+      # Run the network to select an action
+      action = self.model.action_train(self.sess, state)
     return action
 
-  # def _action_eval(self, t):
-  #   state   = self.replay_buf.encode_recent_obs()
-  #   action  = self.model.control_action(self.sess, state)
-  #   return action
+
+  def _action_eval(self, state, t):
+    action = self.model.action_eval(self.sess, state)
+    return action
 
 
   def _reset(self):

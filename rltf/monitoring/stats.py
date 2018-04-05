@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 import numpy as np
 
 from gym        import error
@@ -23,11 +24,12 @@ class StatsRecorder:
     """
 
     # Member data
-    # self.log_dir    = os.path.join(log_dir, "data")
     self.log_dir    = log_dir
     self.n_ep_stats = n_ep_stats
-    # self.t_last_log = None          # Time at which the last runtime log happened
     self.log_info   = None
+    self.steps_p_s  = None
+    self.t_last_log     = time.time()   # Time at which the last runtime log happened
+    self.step_last_log  = 0             # Step at which the last runtime log happened
 
     # Training statistics
     self.train_ep_rews = []
@@ -50,7 +52,10 @@ class StatsRecorder:
 
     if not os.path.exists(self.log_dir):
       logger.info('Creating stats directory %s', self.log_dir)
-      os.makedirs(self.log_dir, exist_ok=True)
+      os.makedirs(self.log_dir)
+    else:
+      logger.info('Resuming with stats data from %s', self.log_dir)
+      self._resume()
 
 
   @property
@@ -79,8 +84,7 @@ class StatsRecorder:
 
 
   def _finish_episode(self):
-    # If the user changes the mode in the middle of the episode,
-    # the mode at the end of the episode is used
+    # The mode at the end of the episode is used to determine how to record the statistics
     if self._mode == 't':
       self.train_steps += self.ep_steps
       self.train_ep_lens.append(np.int32(self.ep_steps))
@@ -93,12 +97,6 @@ class StatsRecorder:
 
   def before_reset(self):
     assert not self.disabled
-
-    # This should be disabled since it does not allow for early episode termination
-    # if self.done is not None and not self.done and self.ep_steps > 0:
-    #   raise error.Error("Tried to reset environment which is not done. \
-    #     While the monitor is active for {}, you cannot call reset() \
-    #     unless the episode is over.".format(self.env_id))
 
 
   def after_reset(self, obs):
@@ -142,7 +140,7 @@ class StatsRecorder:
 
     default_info = [
       ("train/agent_steps",                     "d",    lambda t: t),
-      # ("train/mean_steps_per_sec",              ".3f",  self._stats_steps_per_sec),
+      ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
 
       ("train/env_steps",                       "d",    lambda t: self.train_steps),
       ("train/episodes",                        "d",    lambda t: len(self.train_ep_rews)),
@@ -157,8 +155,6 @@ class StatsRecorder:
       ("eval/mean_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.eval_stats["mean_ep_rew"]),
       ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
       ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
-
-      # ("mean/n_eps > 0.8*best_rew (%d eps)"%n,  ".3f",  self._stats_frac_good_episodes),
     ]
 
     log_info = default_info + custom_log_info
@@ -171,7 +167,7 @@ class StatsRecorder:
     return float("nan")
 
 
-  def _compute_runtime_stats(self):
+  def _compute_runtime_stats(self, step):
     """Update the values of the runtime statistics variables"""
 
     def _stats_max(data, i=0):
@@ -196,9 +192,22 @@ class StatsRecorder:
     self.eval_stats["best_ep_rew"] = max(self.eval_stats["best_ep_rew"], best_ep_rew)
     self.eval_stats["ep_last_stats"] = len(self.eval_ep_rews)
 
+    t_now  = time.time()
+    if self._mode == 't':
+      self.steps_p_s = (step - self.step_last_log) / (t_now - self.t_last_log)
+      self.step_last_log = step
+    self.t_last_log = t_now
+
 
   def get_mean_ep_rew(self):
-    return self._stats_mean(self.train_ep_rews)
+    if self._mode == 't':
+      return self._stats_mean(self.train_ep_rews)
+    else:
+      return self._stats_mean(self.eval_ep_rews)
+
+
+  def get_episode_id(self):
+    return len(self.train_ep_rews) if self._mode == 't' else len(self.eval_ep_rews) + 1
 
 
   def log_stats(self, t):
@@ -208,11 +217,16 @@ class StatsRecorder:
     """
 
     # Update the statistics
-    self._compute_runtime_stats()
+    self._compute_runtime_stats(t)
 
     stats_logger.info("")
-    for s, lambda_v in self.log_info:
-      stats_logger.info(s.format(lambda_v(t)))
+    stats_logger.info(self.log_info[0][0].format(self.log_info[0][1](t)))
+    for s, lambda_v in self.log_info[1:-1]:
+      if self._mode == 't' and not s.startswith("| eval/"):
+        stats_logger.info(s.format(lambda_v(t)))
+      elif self._mode == 'e' and s.startswith("| eval/"):
+        stats_logger.info(s.format(lambda_v(t)))
+    stats_logger.info(self.log_info[-1][0].format(self.log_info[-1][1](t)))
     stats_logger.info("")
 
 
@@ -228,6 +242,7 @@ class StatsRecorder:
       "train_episodes":   len(self.train_ep_rews),
       "eval_steps":       self.eval_steps,
       "eval_episodes":    len(self.eval_ep_rews),
+      "steps_per_s":      self.steps_p_s,
     }
 
     with atomic_write.atomic_write(summary_file) as f:
@@ -242,3 +257,20 @@ class StatsRecorder:
       eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
       with atomic_write.atomic_write(eval_rew_file, True) as f:
         np.save(f, np.asarray(self.eval_ep_rews, dtype=np.float32))
+
+
+  def _resume(self):
+    train_rew_file = os.path.join(self.log_dir, "train_ep_rews.npy")
+    if os.path.exists(train_rew_file):
+      self.train_ep_rews  = list(np.load(train_rew_file))
+
+    eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
+    if os.path.exists(eval_rew_file):
+      self.eval_ep_rews  = list(np.load(eval_rew_file))
+
+    with open(os.path.join(self.log_dir, "stats_summary.json"), 'r') as f:
+      data = json.load(f)
+
+    self.train_steps  = data["train_steps"]
+    self.eval_steps   = data["eval_steps"]
+    self.env_steps    = data["total_env_steps"]
