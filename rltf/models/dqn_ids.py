@@ -1,4 +1,3 @@
-import numpy      as np
 import tensorflow as tf
 
 from rltf.models  import DQN
@@ -32,7 +31,6 @@ class DQN_IDS_BLR(DQN):
     self.blr_models = [BayesianLinearRegression(**blr_params) for _ in range(self.n_actions)]
 
     # Custom TF Tensors and Ops
-    self.act_ids    = None
     # self.blr_train  = None
 
 
@@ -45,18 +43,15 @@ class DQN_IDS_BLR(DQN):
     obs_tp1     = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
 
     # Construct the Q-network and the target network
-    q, phi      = self._nn_model(obs_t,   scope="agent_net")
-    target, _   = self._nn_model(obs_tp1, scope="target_net")
-
-    # Save the Q-function estimate tensor
-    self._q     = tf.identity(self._compute_q(q), name="q_fn")
+    agent_net, phi  = self._nn_model(obs_t,   scope="agent_net")
+    target_net, _   = self._nn_model(obs_tp1, scope="target_net")
 
     # Compute the estimated Q-function and its backup value
-    q           = self._compute_estimate(q)
-    target      = self._compute_target(target)
+    estimate    = self._compute_estimate(agent_net)
+    target      = self._compute_target(agent_net, target_net)
 
     # Compute the loss
-    loss        = self._compute_loss(q, target)
+    loss        = self._compute_loss(estimate, target)
 
     agent_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net')
     target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
@@ -105,7 +100,10 @@ class DQN_IDS_BLR(DQN):
     act_regret    = act_regret - (act_means - self.n_stds * act_stds)
     act_regret_sq = tf.square(act_regret)
     act_info_gain = tf.log(1 + tf.square(act_stds) / self.rho**2)
-    self.act_ids  = tf.div(act_regret_sq, act_info_gain, name="act_ids")
+    act_ids       = tf.div(act_regret_sq, act_info_gain)
+
+    self.a_train  = tf.argmin(act_ids, axis=-1, output_type=tf.int32, name="a_train")
+    self.a_eval   = self._act_eval(agent_net,  name="a_eval")
 
     # Add summaries
     tf.summary.scalar("loss", loss)
@@ -135,24 +133,12 @@ class DQN_IDS_BLR(DQN):
       return x, phi
 
 
-  def _restore(self, graph):
-    self._q         = graph.get_tensor_by_name("q_fn:0")
-    self.act_ids    = graph.get_tensor_by_name("act_ids:0")
-    # self.blr_train  = graph.get_operation_by_name("blr_train")
+  # def _restore(self, graph):
+  #   super()._restore()
+  #   # (TODO): Restore BLR variables
+  #   # self.blr_train  = graph.get_operation_by_name("blr_train")
 
 
-  def initialize(self, sess):
-    """Initialize the model. See Model.initialize()"""
-    sess.run(self._update_target)
-
-
-  def action_train(self, sess, state):
-    q_vals  = sess.run(self.act_ids, feed_dict={self.obs_t_ph: state[None,:]})
-    action  = np.argmin(q_vals)
-
-    return action
-
-  def action_eval(self, sess, state):
-    q_vals  = sess.run(self._q, feed_dict={self.obs_t_ph: state[None,:]})
-    action  = np.argmax(q_vals)
+  def _act_eval(self, agent_net, name):
+    action = tf.argmax(agent_net, axis=-1, output_type=tf.int32, name=name)
     return action
