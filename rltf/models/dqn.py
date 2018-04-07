@@ -1,4 +1,3 @@
-import numpy      as np
 import tensorflow as tf
 
 from rltf.models  import Model
@@ -28,33 +27,25 @@ class BaseDQN(Model):
     self.act_dtype  = tf.uint8
 
     # Custom TF Tensors and Ops
-    self._q         = None
+    self.a_train    = None
+    self.a_eval     = None
 
 
   def build(self):
 
     super()._build()
-    # Input placeholders
-    # self._obs_t_ph    = tf.placeholder(tf.uint8,   [None] + self.obs_shape, name="obs_t_ph")
-    # self._act_t_ph    = tf.placeholder(tf.uint8,   [None],                  name="act_t_ph")
-    # self._rew_t_ph    = tf.placeholder(tf.float32, [None],                  name="rew_t_ph")
-    # self._obs_tp1_ph  = tf.placeholder(tf.uint8,   [None] + self.obs_shape, name="obs_tp1_ph")
-    # self._done_ph     = tf.placeholder(tf.bool,    [None],                  name="done_ph")
 
     # In this case, casting on GPU ensures lower data transfer times
     obs_t       = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
     obs_tp1     = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
 
     # Construct the Q-network and the target network
-    estimate    = self._nn_model(obs_t,   scope="agent_net")
-    target      = self._nn_model(obs_tp1, scope="target_net")
-
-    # Save the Q-function estimate tensor
-    self._q     = tf.identity(self._compute_q(estimate), name="q_fn")
+    agent_net   = self._nn_model(obs_t,   scope="agent_net")
+    target_net  = self._nn_model(obs_tp1, scope="target_net")
 
     # Compute the estimated Q-function and its backup value
-    estimate    = self._compute_estimate(estimate)
-    target      = self._compute_target(target)
+    estimate    = self._compute_estimate(agent_net)
+    target      = self._compute_target(agent_net, target_net)
 
     # Compute the loss
     loss        = self._compute_loss(estimate, target)
@@ -69,6 +60,10 @@ class BaseDQN(Model):
     # Create the Op to update the target
     target_op   = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
+    # Compute the train and eval actions
+    self.a_train  = self._act_train(agent_net, name="a_train")
+    self.a_eval   = self._act_eval(agent_net,  name="a_eval")
+
     self._train_op      = train_op
     self._update_target = target_op
 
@@ -80,15 +75,19 @@ class BaseDQN(Model):
     raise NotImplementedError()
 
 
-  def _compute_q(self, nn_out):
+  def _act_train(self, agent_net, name):
     raise NotImplementedError()
 
 
-  def _compute_estimate(self, nn_out):
+  def _act_eval(self, agent_net, name):
     raise NotImplementedError()
 
 
-  def _compute_target(self, nn_out):
+  def _compute_estimate(self, agent_net):
+    raise NotImplementedError()
+
+
+  def _compute_target(self, agent_net, target_net):
     raise NotImplementedError()
 
 
@@ -97,8 +96,9 @@ class BaseDQN(Model):
 
 
   def _restore(self, graph):
-    # Get Q-function Tensor
-    self._q = graph.get_tensor_by_name("q_fn:0")
+    # Get the train and eval action tensors
+    self.a_train  = graph.get_tensor_by_name("a_train:0")
+    self.a_eval   = graph.get_tensor_by_name("a_eval:0")
 
 
   def initialize(self, sess):
@@ -111,13 +111,17 @@ class BaseDQN(Model):
 
 
   def action_train(self, sess, state):
-    q_vals  = sess.run(self._q, feed_dict={self.obs_t_ph: state[None,:]})
-    action  = np.argmax(q_vals)
+    assert list(state.shape) == self.obs_shape
+    action = sess.run(self.a_train, feed_dict={self.obs_t_ph: state[None,:]})
+    action = action[0]
     return action
 
 
   def action_eval(self, sess, state):
-    return self.action_train(sess, state)
+    assert list(state.shape) == self.obs_shape
+    action = sess.run(self.a_eval, feed_dict={self.obs_t_ph: state[None,:]})
+    action = action[0]
+    return action
 
 
 class DQN(BaseDQN):
@@ -161,31 +165,31 @@ class DQN(BaseDQN):
       return x
 
 
-  def _compute_q(self, nn_out):
-    return nn_out
+  def _act_train(self, agent_net, name):
+    action = tf.argmax(agent_net, axis=-1, output_type=tf.int32, name=name)
+    return action
 
 
-  def _compute_estimate(self, nn_out):
+  def _act_eval(self, agent_net, name):
+    return tf.identity(self.a_train, name=name)
+
+
+  def _compute_estimate(self, agent_net):
     # Get the Q value for the selected action; output shape [None]
-    q         = nn_out
     act_t     = tf.cast(self._act_t_ph, tf.int32)
     act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    q         = tf.boolean_mask(q, act_mask)
-
+    q         = tf.boolean_mask(agent_net, act_mask)
     return q
 
 
-  def _compute_target(self, nn_out):
-    target_q  = nn_out
+  def _compute_target(self, agent_net, target_net):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
-    target_q  = tf.reduce_max(target_q, axis=-1)
+    target_q  = tf.reduce_max(target_net, axis=-1)
     target_q  = self.rew_t_ph + self.gamma * done_mask * target_q
-
     return target_q
 
 
   def _compute_loss(self, estimate, target):
     loss_fn   = tf.losses.huber_loss if self.huber_loss else tf.losses.mean_squared_error
     loss      = loss_fn(target, estimate)
-
     return loss

@@ -69,23 +69,16 @@ class C51(BaseDQN):
       return x
 
 
-  def _compute_q(self, nn_out):
-    # Compute the Q-function as expectation of Z; output shape [None, n_actions]
-    return tf.reduce_sum(nn_out * self.bins, axis=-1)
-
-
-  def _compute_estimate(self, nn_out):
+  def _compute_estimate(self, agent_net):
     # Get the Z-distribution for the selected action; output shape [None, N]
-    z         = nn_out
     act_t     = tf.cast(self._act_t_ph, tf.int32)
     act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    z         = tf.boolean_mask(z, act_mask)
-
+    z         = tf.boolean_mask(agent_net, act_mask)
     return z
 
 
-  def _compute_target(self, nn_out):
-    target_z      = nn_out
+  def _compute_target(self, agent_net, target_net):
+    target_z      = target_net
 
     # Get the target Q probabilities for the greedy action; output shape [None, N]
     target_q      = tf.reduce_sum(target_z * self.bins, axis=-1)
@@ -139,3 +132,13 @@ class C51(BaseDQN):
     loss      = tf.reduce_mean(entropy)
 
     return loss
+
+  def _act_train(self, agent_net, name):
+    # Compute the Q-function as expectation of Z; output shape [None, n_actions]
+    q       = tf.reduce_sum(agent_net * self.bins, axis=-1)
+    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
+    return action
+
+
+  def _act_eval(self, agent_net, name):
+    return None

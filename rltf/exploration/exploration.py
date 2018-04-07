@@ -1,8 +1,5 @@
 
 
-# class ExplorationPolicy:
-#   pass
-
 class ExplorationNoise:
 
   def __init__(self):
