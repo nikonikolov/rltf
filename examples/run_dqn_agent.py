@@ -40,6 +40,8 @@ def parse_args():
 
     ('--eval-freq',    dict(default=10**6,  type=int,   help='how often to evaluate model')),
     ('--eval-len',     dict(default=50000,  type=int,   help='for how many steps to eval each time')),
+
+    ('--phi-norm',     dict(default=False,  type=s2b,   help='if True, normalize BLR features in IDS')),
   ]
 
   return cmdargs.parse_args(args)
@@ -72,7 +74,7 @@ def main():
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
   elif args.model == "DQN_IDS_BLR":
     model_type    = DQN_IDS_BLR
-    model_kwargs  = dict(huber_loss=args.huber_loss, sigma=1.0, tau=25.0, rho=0.5)
+    model_kwargs  = dict(huber_loss=args.huber_loss, sigma=1.0, tau=1.0/(1.0-0.99), phi_norm=args.phi_norm)
   elif args.model == "C51":
     model_type    = C51
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)

@@ -7,27 +7,27 @@ from rltf.models  import tf_utils
 
 class DQN_IDS_BLR(DQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, sigma, tau, rho, huber_loss=True):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, sigma, tau, phi_norm, huber_loss=True):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
       n_actions: int. Number of possible actions
       opt_conf: rltf.optimizers.OptimizerConf. Configuration for the optimizer
       gamma: float. Discount factor
-      sigma: float. Standard deviation of the noise observation for BLR
+      sigma: float. Standard deviation of the noise observation for BLR and for InfoGain
       tau: float. Standard deviation for the weight prior in BLR
-      rho: float. Reward observation noise for IDS
+      phi_norm: bool. Whether to normalize the features
       huber_loss: bool. Whether to use huber loss or not
     """
 
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss)
 
     self.dim_phi  = 512
-    self.rho      = rho
-    self.n_stds   = 1.0     # Number of standard deviations for computing the regret bound
+    self.rho      = sigma
+    self.n_stds   = 1.0       # Number of standard deviations for computing the regret bound
+    self.phi_norm = phi_norm
 
-    blr_params = {"sigma": sigma, "tau": tau, "w_dim": self.dim_phi+1, "auto_bias": False}
-
+    blr_params      = {"sigma": sigma, "tau": tau, "w_dim": self.dim_phi+1, "auto_bias": False}
     self.blr_models = [BayesianLinearRegression(**blr_params) for _ in range(self.n_actions)]
 
     # Custom TF Tensors and Ops
@@ -64,7 +64,9 @@ class DQN_IDS_BLR(DQN):
     net_train   = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
 
     # Normalize features
-    # phi = tf.layers.batch_normalization(phi, axis=-1, training=True, name="batch_norm1")
+    if self.phi_norm:
+      training  = tf.not_equal(tf.shape(self._obs_t_ph)[0], 1)
+      phi       = tf.layers.batch_normalization(phi, axis=-1, training=training)
 
     # Add bias to the feature transformations
     bias    = tf.ones(shape=[tf.shape(phi)[0], 1], dtype=tf.float32)
