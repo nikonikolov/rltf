@@ -38,9 +38,9 @@ class DQN_IDS_BLR(DQN):
 
     super()._build()
 
-    # In this case, casting on GPU ensures lower data transfer times
-    obs_t       = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
-    obs_tp1     = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
+    # Preprocess the observation
+    obs_t       = self._preprocess_obs(self._obs_t_ph)
+    obs_tp1     = self._preprocess_obs(self._obs_tp1_ph)
 
     # Construct the Q-network and the target network
     agent_net, phi  = self._nn_model(obs_t,   scope="agent_net")
@@ -111,28 +111,44 @@ class DQN_IDS_BLR(DQN):
     tf.summary.scalar("loss", loss)
 
 
-  def _nn_model(self, x, scope):
+  def _conv_nn(self, x):
     """ Build the DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
       scope: str. Scope in which all the model related variables should be created
-
     Returns:
       `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
     """
     n_actions = self.n_actions
 
-    with tf.variable_scope(scope, reuse=False):
-      with tf.variable_scope("convnet"):
-        # original architecture
-        x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
-      x = tf.layers.flatten(x)
-      with tf.variable_scope("action_value"):
-        phi = tf.layers.dense(x, units=self.dim_phi, activation=tf.nn.relu)
-        x = tf.layers.dense(phi, units=n_actions, activation=None)
-      return x, phi
+    with tf.variable_scope("conv_net"):
+      # original architecture
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
+    x = tf.layers.flatten(x)
+    with tf.variable_scope("action_value"):
+      phi = tf.layers.dense(x, units=self.dim_phi, activation=tf.nn.relu)
+      x = tf.layers.dense(phi, units=n_actions, activation=None)
+    return x, phi
+
+
+  def _dense_nn(self, x):
+    """ Build a Neural Network of dense layers only. Used for low-level observations
+    Args:
+      x: tf.Tensor. Tensor for the input
+      scope: str. Scope in which all the model related variables should be created
+    Returns:
+      `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
+    """
+    n_actions = self.n_actions
+
+    with tf.variable_scope("dense_net"):
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      phi = x
+      x = tf.layers.dense(x, units=n_actions, activation=None)
+    return x, phi
 
 
   # def _restore(self, graph):
