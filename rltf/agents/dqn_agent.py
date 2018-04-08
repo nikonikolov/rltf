@@ -44,6 +44,7 @@ class AgentDQN(OffPolicyAgent):
     n_actions = self.env.action_space.n
     obs_shape = self.env.observation_space.shape
     obs_shape = list(obs_shape)
+    obs_len   = obs_len if len(obs_shape) == 3 else 1
 
     model_kwargs["obs_shape"] = obs_shape
     model_kwargs["n_actions"] = n_actions

@@ -34,9 +34,9 @@ class BstrapDQN(BaseDQN):
     sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
     self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
 
-    # In this case, casting on GPU ensures lower data transfer times
-    obs_t       = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
-    obs_tp1     = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
+    # Preprocess the observation
+    obs_t       = self._preprocess_obs(self._obs_t_ph)
+    obs_tp1     = self._preprocess_obs(self._obs_tp1_ph)
 
     # Construct the Q-network and the target network
     agent_net, x  = self._nn_model(obs_t,   scope="agent_net")
@@ -73,8 +73,8 @@ class BstrapDQN(BaseDQN):
     tf.summary.scalar("train/loss", tf.add_n(losses)/self.n_heads)
 
 
-  def _nn_model(self, x, scope):
-    """ Build the DQN architecture - as described in the original paper
+  def _conv_nn(self, x):
+    """ Build the Bootstrapped DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
       scope: str. Scope in which all the model related variables should be created
@@ -95,17 +95,16 @@ class BstrapDQN(BaseDQN):
       return x
 
     n_actions = self.n_actions
-    with tf.variable_scope(scope, reuse=False):
-      with tf.variable_scope("convnet"):
-        x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
-      x = tf.layers.flatten(x)
-      conv_out = x
-      with tf.variable_scope("action_value"):
-        heads = [_build_head(x, n_actions) for _ in range(self.n_heads)]
-        x = tf.concat(heads, axis=-2)
-      return x, conv_out
+    with tf.variable_scope("conv_net"):
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
+    x = tf.layers.flatten(x)
+    conv_out = x
+    with tf.variable_scope("action_value"):
+      heads = [_build_head(x, n_actions) for _ in range(self.n_heads)]
+      x = tf.concat(heads, axis=-2)
+    return x, conv_out
 
 
   def _act_train(self, agent_net, name):
@@ -190,7 +189,7 @@ class BstrapDQN(BaseDQN):
   def _compute_grads(self, losses, x_heads, optimizer):
     # Get the conv net and the heads variables
     head_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/action_value')
-    conv_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/convnet')
+    conv_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/conv_net')
 
     # Compute the gradients of the variables in all heads as well as
     # the sum of gradients backpropagated from each head into the conv net

@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 from rltf.agents        import AgentDQN
-from rltf.envs          import wrap_deepmind_atari
+from rltf.envs          import wrap_dqn
 from rltf.models        import BstrapDQN
 from rltf.models        import DDQN
 from rltf.models        import DQN
@@ -87,7 +87,7 @@ def main():
 
   # Create the environment
   env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
-  env = wrap_deepmind_atari(env)
+  env = wrap_dqn(env)
 
   # Set the learning rate schedule
   if args.learn_rate is None:

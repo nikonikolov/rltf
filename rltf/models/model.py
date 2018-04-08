@@ -14,14 +14,15 @@ class Model:
     self._obs_tp1_ph    = None
     self._done_ph       = None
 
-    # TF Ops that should be set
-    self._train_op      = None
-    self._update_target = None  # Optional
-
+    # Properties that should be set by the subclass
     self.obs_dtype      = None
     self.obs_shape      = None
     self.act_dtype      = None
     self.act_shape      = None
+
+    # TF Ops that should be set
+    self._train_op      = None
+    self._update_target = None  # Optional
 
 
   def build(self):
