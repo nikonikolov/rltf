@@ -38,7 +38,7 @@ class C51(BaseDQN):
     super().build()
 
 
-  def _nn_model(self, x, scope):
+  def _conv_nn(self, x):
     """ Build the C51 architecture - as desribed in the original paper
 
     Args:
@@ -51,22 +51,21 @@ class C51(BaseDQN):
     n_actions = self.n_actions
     N         = self.N
 
-    with tf.variable_scope(scope, reuse=False):
-      with tf.variable_scope("convnet"):
-        # original architecture
-        x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
-      x = tf.layers.flatten(x)
-      with tf.variable_scope("action_value"):
-        x = tf.layers.dense(x, units=512,            activation=tf.nn.relu)
-        x = tf.layers.dense(x, units=N*n_actions,  activation=None)
+    with tf.variable_scope("conv_net"):
+      # original architecture
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
+    x = tf.layers.flatten(x)
+    with tf.variable_scope("action_value"):
+      x = tf.layers.dense(x, units=512,          activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=N*n_actions,  activation=None)
 
-      # Compute Softmax probabilities in numerically stable way
-      x = tf.reshape(x, [-1, n_actions, N])
-      x = x - tf.expand_dims(tf.reduce_max(x, axis=-1), axis=-1)
-      x = tf.nn.softmax(x, dim=-1)
-      return x
+    # Compute Softmax probabilities in numerically stable way
+    x = tf.reshape(x, [-1, n_actions, N])
+    x = x - tf.expand_dims(tf.reduce_max(x, axis=-1), axis=-1)
+    x = tf.nn.softmax(x, dim=-1)
+    return x
 
 
   def _compute_estimate(self, agent_net):

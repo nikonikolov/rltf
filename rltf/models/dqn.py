@@ -14,6 +14,7 @@ class BaseDQN(Model):
       opt_conf: rltf.optimizers.OptimizerConf. Configuration for the optimizer
       gamma: float. Discount factor
     """
+    assert len(obs_shape) == 3 or len(obs_shape) == 1
 
     super().__init__()
 
@@ -21,7 +22,7 @@ class BaseDQN(Model):
     self.opt_conf   = opt_conf
 
     self.obs_shape  = obs_shape
-    self.obs_dtype  = tf.uint8
+    self.obs_dtype  = tf.uint8 if len(obs_shape) == 3 else tf.float32
     self.n_actions  = n_actions
     self.act_shape  = []
     self.act_dtype  = tf.uint8
@@ -35,9 +36,9 @@ class BaseDQN(Model):
 
     super()._build()
 
-    # In this case, casting on GPU ensures lower data transfer times
-    obs_t       = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
-    obs_tp1     = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
+    # Preprocess the observation
+    obs_t       = self._preprocess_obs(self._obs_t_ph)
+    obs_tp1     = self._preprocess_obs(self._obs_tp1_ph)
 
     # Construct the Q-network and the target network
     agent_net   = self._nn_model(obs_t,   scope="agent_net")
@@ -71,7 +72,27 @@ class BaseDQN(Model):
     tf.summary.scalar("train/loss", loss)
 
 
+  def _preprocess_obs(self, obs):
+    if self.obs_dtype == tf.uint8:
+      # In this case, casting on GPU ensures lower data transfer times
+      return tf.cast(obs, tf.float32) / 255.0
+    else:
+      return obs
+
+
   def _nn_model(self, x, scope):
+    with tf.variable_scope(scope, reuse=False):
+      if len(self.obs_shape) == 3:
+        return self._conv_nn(x)
+      else:
+        return self._dense_nn(x)
+
+
+  def _conv_nn(self, x):
+    raise NotImplementedError()
+
+
+  def _dense_nn(self, x):
     raise NotImplementedError()
 
 
@@ -141,28 +162,43 @@ class DQN(BaseDQN):
     self.huber_loss = huber_loss
 
 
-  def _nn_model(self, x, scope):
+  def _conv_nn(self, x):
     """ Build the DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
       scope: str. Scope in which all the model related variables should be created
-
     Returns:
       `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
     """
     n_actions = self.n_actions
 
-    with tf.variable_scope(scope, reuse=False):
-      with tf.variable_scope("convnet"):
-        # original architecture
-        x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
-      x = tf.layers.flatten(x)
-      with tf.variable_scope("action_value"):
-        x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
-        x = tf.layers.dense(x, units=n_actions, activation=None)
-      return x
+    with tf.variable_scope("conv_net"):
+      # original architecture
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
+    x = tf.layers.flatten(x)
+    with tf.variable_scope("action_value"):
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=n_actions, activation=None)
+    return x
+
+
+  def _dense_nn(self, x):
+    """ Build a Neural Network of dense layers only. Used for low-level observations
+    Args:
+      x: tf.Tensor. Tensor for the input
+      scope: str. Scope in which all the model related variables should be created
+    Returns:
+      `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
+    """
+    n_actions = self.n_actions
+
+    with tf.variable_scope("dense_net"):
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=n_actions, activation=None)
+    return x
 
 
   def _act_train(self, agent_net, name):
