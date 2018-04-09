@@ -37,39 +37,36 @@ class BaseDQN(Model):
     super()._build()
 
     # Preprocess the observation
-    obs_t       = self._preprocess_obs(self._obs_t_ph)
-    obs_tp1     = self._preprocess_obs(self._obs_tp1_ph)
+    self._obs_t   = self._preprocess_obs(self._obs_t_ph)
+    self._obs_tp1 = self._preprocess_obs(self._obs_tp1_ph)
 
     # Construct the Q-network and the target network
-    agent_net   = self._nn_model(obs_t,   scope="agent_net")
-    target_net  = self._nn_model(obs_tp1, scope="target_net")
+    agent_net     = self._nn_model(self._obs_t,   scope="agent_net")
+    target_net    = self._nn_model(self._obs_tp1, scope="target_net")
 
     # Compute the estimated Q-function and its backup value
-    estimate    = self._compute_estimate(agent_net)
-    target      = self._compute_target(agent_net, target_net)
+    estimate      = self._compute_estimate(agent_net)
+    target        = self._compute_target(target_net)
 
     # Compute the loss
-    loss        = self._compute_loss(estimate, target)
+    loss          = self._compute_loss(estimate, target)
 
-    agent_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net')
-    target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
+    agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
+    target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
     # Build the optimizer
-    optimizer   = self.opt_conf.build()
+    optimizer     = self.opt_conf.build()
     # Create the training Op
-    train_op    = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
+    train_op      = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
     # Create the Op to update the target
-    target_op   = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
+    update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
     # Compute the train and eval actions
     self.a_train  = self._act_train(agent_net, name="a_train")
     self.a_eval   = self._act_eval(agent_net,  name="a_eval")
 
     self._train_op      = train_op
-    self._update_target = target_op
-
-    # Add summaries
-    tf.summary.scalar("train/loss", loss)
+    self._update_target = update_target
 
 
   def _preprocess_obs(self, obs):
@@ -81,7 +78,7 @@ class BaseDQN(Model):
 
 
   def _nn_model(self, x, scope):
-    with tf.variable_scope(scope, reuse=False):
+    with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
       if len(self.obs_shape) == 3:
         return self._conv_nn(x)
       else:
@@ -108,7 +105,7 @@ class BaseDQN(Model):
     raise NotImplementedError()
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     raise NotImplementedError()
 
 
@@ -218,7 +215,7 @@ class DQN(BaseDQN):
     return q
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     target_q  = tf.reduce_max(target_net, axis=-1)
     target_q  = self.rew_t_ph + self.gamma * done_mask * target_q
@@ -226,6 +223,9 @@ class DQN(BaseDQN):
 
 
   def _compute_loss(self, estimate, target):
-    loss_fn   = tf.losses.huber_loss if self.huber_loss else tf.losses.mean_squared_error
-    loss      = loss_fn(target, estimate)
+    if self.huber_loss:
+      loss = tf.losses.huber_loss(target, estimate)
+    else:
+      loss = tf.losses.mean_squared_error(target, estimate)
+    tf.summary.scalar("train/loss", loss)
     return loss

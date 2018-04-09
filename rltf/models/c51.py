@@ -76,7 +76,7 @@ class C51(BaseDQN):
     return z
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     target_z      = target_net
 
     # Get the target Q probabilities for the greedy action; output shape [None, N]
@@ -129,6 +129,8 @@ class C51(BaseDQN):
     target_z  = target
     entropy   = -tf.reduce_sum(target_z * tf.log(z), axis=-1)
     loss      = tf.reduce_mean(entropy)
+
+    tf.summary.scalar("train/loss", loss)
 
     return loss
 

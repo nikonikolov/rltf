@@ -60,7 +60,7 @@ class QRDQN(BaseDQN):
     return z
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     target_z      = target_net
 
     # Compute the Q-function as expectation of Z; output shape [None, n_actions]
@@ -107,6 +107,8 @@ class QRDQN(BaseDQN):
     quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)
     loss          = tf.reduce_sum(quantile_loss, axis=-1)
     loss          = tf.reduce_mean(loss)
+
+    tf.summary.scalar("train/loss", loss)
 
     return loss
 
