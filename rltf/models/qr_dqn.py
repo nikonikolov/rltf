@@ -23,7 +23,7 @@ class QRDQN(BaseDQN):
     self.k = k
 
 
-  def _nn_model(self, x, scope):
+  def _conv_nn(self, x):
     """ Build the QR DQN architecture - as desribed in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
@@ -36,22 +36,21 @@ class QRDQN(BaseDQN):
     N         = self.N
     init_glorot_normal = tf_utils.init_glorot_normal
 
-    with tf.variable_scope(scope, reuse=False):
-      with tf.variable_scope("convnet"):
-        # original architecture
-        x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu,
-                             kernel_initializer=init_glorot_normal())
-        x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu,
-                             kernel_initializer=init_glorot_normal())
-        x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu,
-                             kernel_initializer=init_glorot_normal())
-      x = tf.layers.flatten(x)
-      with tf.variable_scope("action_value"):
-        x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=init_glorot_normal())
-        x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=init_glorot_normal())
+    with tf.variable_scope("conv_net"):
+      # original architecture
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu,
+                           kernel_initializer=init_glorot_normal())
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu,
+                           kernel_initializer=init_glorot_normal())
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu,
+                           kernel_initializer=init_glorot_normal())
+    x = tf.layers.flatten(x)
+    with tf.variable_scope("action_value"):
+      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=init_glorot_normal())
+      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=init_glorot_normal())
 
-      x = tf.reshape(x, [-1, n_actions, N])
-      return x
+    x = tf.reshape(x, [-1, n_actions, N])
+    return x
 
 
   def _compute_estimate(self, agent_net):
@@ -61,7 +60,7 @@ class QRDQN(BaseDQN):
     return z
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     target_z      = target_net
 
     # Compute the Q-function as expectation of Z; output shape [None, n_actions]
@@ -108,6 +107,8 @@ class QRDQN(BaseDQN):
     quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)
     loss          = tf.reduce_sum(quantile_loss, axis=-1)
     loss          = tf.reduce_mean(loss)
+
+    tf.summary.scalar("train/loss", loss)
 
     return loss
 

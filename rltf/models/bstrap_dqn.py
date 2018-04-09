@@ -34,47 +34,45 @@ class BstrapDQN(BaseDQN):
     sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
     self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
 
-    # In this case, casting on GPU ensures lower data transfer times
-    obs_t       = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
-    obs_tp1     = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
+    # Preprocess the observation
+    self._obs_t   = self._preprocess_obs(self._obs_t_ph)
+    self._obs_tp1 = self._preprocess_obs(self._obs_tp1_ph)
 
     # Construct the Q-network and the target network
-    agent_net, x  = self._nn_model(obs_t,   scope="agent_net")
-    target_net, _ = self._nn_model(obs_tp1, scope="target_net")
+    agent_net, x  = self._nn_model(self._obs_t,   scope="agent_net")
+    target_net, _ = self._nn_model(self._obs_tp1, scope="target_net")
 
     # Compute the estimated Q-function and its backup value
-    estimate    = self._compute_estimate(agent_net)
-    target      = self._compute_target(agent_net, target_net)
+    estimate      = self._compute_estimate(agent_net)
+    target        = self._compute_target(target_net)
 
-    # Compute the list of loss functions
-    losses      = self._compute_loss(estimate, target)
+    # Compute the loss
+    losses        = self._compute_loss(estimate, target)
 
-    agent_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net')
-    target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
+    agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
+    target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
     # Build the optimizer
-    optimizer   = self.opt_conf.build()
+    optimizer     = self.opt_conf.build()
     # Compute gradients
-    grads       = self._compute_grads(losses, x, optimizer)
+    grads         = self._compute_grads(losses, x, optimizer)
     # Apply the gradients
-    train_op    = optimizer.apply_gradients(grads, name="train_op")
+    train_op      = optimizer.apply_gradients(grads, name="train_op")
 
     # Create the Op to update the target
-    target_op   = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
+    update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
     # Compute the train and eval actions
     self.a_train  = self._act_train(agent_net, name="a_train")
     self.a_eval   = self._act_eval(agent_net,  name="a_eval")
 
     self._train_op      = train_op
-    self._update_target = target_op
-
-    # Add summaries
-    tf.summary.scalar("train/loss", tf.add_n(losses)/self.n_heads)
+    self._update_target = update_target
 
 
-  def _nn_model(self, x, scope):
-    """ Build the DQN architecture - as described in the original paper
+
+  def _conv_nn(self, x):
+    """ Build the Bootstrapped DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
       scope: str. Scope in which all the model related variables should be created
@@ -95,17 +93,16 @@ class BstrapDQN(BaseDQN):
       return x
 
     n_actions = self.n_actions
-    with tf.variable_scope(scope, reuse=False):
-      with tf.variable_scope("convnet"):
-        x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
-      x = tf.layers.flatten(x)
-      conv_out = x
-      with tf.variable_scope("action_value"):
-        heads = [_build_head(x, n_actions) for _ in range(self.n_heads)]
-        x = tf.concat(heads, axis=-2)
-      return x, conv_out
+    with tf.variable_scope("conv_net"):
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
+    x = tf.layers.flatten(x)
+    conv_out = x
+    with tf.variable_scope("action_value"):
+      heads = [_build_head(x, n_actions) for _ in range(self.n_heads)]
+      x = tf.concat(heads, axis=-2)
+    return x, conv_out
 
 
   def _act_train(self, agent_net, name):
@@ -150,22 +147,28 @@ class BstrapDQN(BaseDQN):
     return q
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     """Compute the Double DQN backup value - use the greedy action from the q estimate
     Args:
-      agent_net: `tf.Tensor`. The tensor output from `self._nn_model()` for the agent
       target_net: `tf.Tensor`. The tensor output from `self._nn_model()` for the target
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
+    # Compute the Q-estimate with the agent network variables
+    agent_net,_ = self._nn_model(self._obs_tp1, scope="agent_net")
+
+    # Compute the target action
+    target_mask = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
+    target_mask = tf.one_hot(target_mask, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
+
+    # Compute the target
     done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     done_mask   = tf.expand_dims(done_mask, axis=-1)
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
-    target_mask = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
-    target_mask = tf.one_hot(target_mask, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
     target_q    = tf.boolean_mask(target_net, target_mask)
     target_q    = tf.reshape(target_q, shape=[-1, self.n_heads])
     target_q    = rew_t + self.gamma * done_mask * target_q
+    target_q    = tf.stop_gradient(target_q)
 
     return target_q
 
@@ -184,13 +187,15 @@ class BstrapDQN(BaseDQN):
     losses = tf.split(loss, self.n_heads, axis=-1)
     losses = [tf.reduce_mean(loss) for loss in losses]
 
+    tf.summary.scalar("train/loss", tf.add_n(losses)/self.n_heads)
+
     return losses
 
 
   def _compute_grads(self, losses, x_heads, optimizer):
     # Get the conv net and the heads variables
     head_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/action_value')
-    conv_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/convnet')
+    conv_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/conv_net')
 
     # Compute the gradients of the variables in all heads as well as
     # the sum of gradients backpropagated from each head into the conv net

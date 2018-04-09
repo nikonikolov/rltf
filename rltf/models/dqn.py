@@ -14,6 +14,7 @@ class BaseDQN(Model):
       opt_conf: rltf.optimizers.OptimizerConf. Configuration for the optimizer
       gamma: float. Discount factor
     """
+    assert len(obs_shape) == 3 or len(obs_shape) == 1
 
     super().__init__()
 
@@ -21,7 +22,7 @@ class BaseDQN(Model):
     self.opt_conf   = opt_conf
 
     self.obs_shape  = obs_shape
-    self.obs_dtype  = tf.uint8
+    self.obs_dtype  = tf.uint8 if len(obs_shape) == 3 else tf.float32
     self.n_actions  = n_actions
     self.act_shape  = []
     self.act_dtype  = tf.uint8
@@ -35,43 +36,60 @@ class BaseDQN(Model):
 
     super()._build()
 
-    # In this case, casting on GPU ensures lower data transfer times
-    obs_t       = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
-    obs_tp1     = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
+    # Preprocess the observation
+    self._obs_t   = self._preprocess_obs(self._obs_t_ph)
+    self._obs_tp1 = self._preprocess_obs(self._obs_tp1_ph)
 
     # Construct the Q-network and the target network
-    agent_net   = self._nn_model(obs_t,   scope="agent_net")
-    target_net  = self._nn_model(obs_tp1, scope="target_net")
+    agent_net     = self._nn_model(self._obs_t,   scope="agent_net")
+    target_net    = self._nn_model(self._obs_tp1, scope="target_net")
 
     # Compute the estimated Q-function and its backup value
-    estimate    = self._compute_estimate(agent_net)
-    target      = self._compute_target(agent_net, target_net)
+    estimate      = self._compute_estimate(agent_net)
+    target        = self._compute_target(target_net)
 
     # Compute the loss
-    loss        = self._compute_loss(estimate, target)
+    loss          = self._compute_loss(estimate, target)
 
-    agent_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net')
-    target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
+    agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
+    target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
     # Build the optimizer
-    optimizer   = self.opt_conf.build()
+    optimizer     = self.opt_conf.build()
     # Create the training Op
-    train_op    = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
+    train_op      = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
     # Create the Op to update the target
-    target_op   = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
+    update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
     # Compute the train and eval actions
     self.a_train  = self._act_train(agent_net, name="a_train")
     self.a_eval   = self._act_eval(agent_net,  name="a_eval")
 
     self._train_op      = train_op
-    self._update_target = target_op
+    self._update_target = update_target
 
-    # Add summaries
-    tf.summary.scalar("train/loss", loss)
+
+  def _preprocess_obs(self, obs):
+    if self.obs_dtype == tf.uint8:
+      # In this case, casting on GPU ensures lower data transfer times
+      return tf.cast(obs, tf.float32) / 255.0
+    else:
+      return obs
 
 
   def _nn_model(self, x, scope):
+    with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
+      if len(self.obs_shape) == 3:
+        return self._conv_nn(x)
+      else:
+        return self._dense_nn(x)
+
+
+  def _conv_nn(self, x):
+    raise NotImplementedError()
+
+
+  def _dense_nn(self, x):
     raise NotImplementedError()
 
 
@@ -87,7 +105,7 @@ class BaseDQN(Model):
     raise NotImplementedError()
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     raise NotImplementedError()
 
 
@@ -141,28 +159,43 @@ class DQN(BaseDQN):
     self.huber_loss = huber_loss
 
 
-  def _nn_model(self, x, scope):
+  def _conv_nn(self, x):
     """ Build the DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
       scope: str. Scope in which all the model related variables should be created
-
     Returns:
       `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
     """
     n_actions = self.n_actions
 
-    with tf.variable_scope(scope, reuse=False):
-      with tf.variable_scope("convnet"):
-        # original architecture
-        x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
-        x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
-      x = tf.layers.flatten(x)
-      with tf.variable_scope("action_value"):
-        x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
-        x = tf.layers.dense(x, units=n_actions, activation=None)
-      return x
+    with tf.variable_scope("conv_net"):
+      # original architecture
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
+    x = tf.layers.flatten(x)
+    with tf.variable_scope("action_value"):
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=n_actions, activation=None)
+    return x
+
+
+  def _dense_nn(self, x):
+    """ Build a Neural Network of dense layers only. Used for low-level observations
+    Args:
+      x: tf.Tensor. Tensor for the input
+      scope: str. Scope in which all the model related variables should be created
+    Returns:
+      `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
+    """
+    n_actions = self.n_actions
+
+    with tf.variable_scope("dense_net"):
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=n_actions, activation=None)
+    return x
 
 
   def _act_train(self, agent_net, name):
@@ -182,7 +215,7 @@ class DQN(BaseDQN):
     return q
 
 
-  def _compute_target(self, agent_net, target_net):
+  def _compute_target(self, target_net):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     target_q  = tf.reduce_max(target_net, axis=-1)
     target_q  = self.rew_t_ph + self.gamma * done_mask * target_q
@@ -190,6 +223,9 @@ class DQN(BaseDQN):
 
 
   def _compute_loss(self, estimate, target):
-    loss_fn   = tf.losses.huber_loss if self.huber_loss else tf.losses.mean_squared_error
-    loss      = loss_fn(target, estimate)
+    if self.huber_loss:
+      loss = tf.losses.huber_loss(target, estimate)
+    else:
+      loss = tf.losses.mean_squared_error(target, estimate)
+    tf.summary.scalar("train/loss", loss)
     return loss
