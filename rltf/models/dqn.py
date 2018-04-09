@@ -30,6 +30,8 @@ class BaseDQN(Model):
     # Custom TF Tensors and Ops
     self.a_train    = None
     self.a_eval     = None
+    self._obs_t     = None
+    self._obs_tp1   = None
 
 
   def build(self):

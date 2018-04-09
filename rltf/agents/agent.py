@@ -293,7 +293,7 @@ class Agent:
 
   def save(self):
     if self.learn_started:
-      logger.info("Saving the TF model and stats")
+      logger.info("Saving the TF model and stats to %s", os.path.dirname(self.model_dir))
 
       # Save the monitor statistics
       self.env_monitor.save()
@@ -326,8 +326,7 @@ class OffPolicyAgent(Agent):
     self._act_chosen = threading.Event()
     self._train_done = threading.Event()
 
-    self._stop_run_env  = False
-    self._stop_train    = False
+    self._terminate  = False
 
 
   def train(self):
@@ -347,8 +346,7 @@ class OffPolicyAgent(Agent):
       nn_thread.join()
     except KeyboardInterrupt:
       logger.info("EXITING")
-      self._stop_run_env  = True
-      self._stop_train    = True
+      self._terminate = True
       env_thread.join()
       nn_thread.join()
 
@@ -364,10 +362,10 @@ class OffPolicyAgent(Agent):
     stop_step   = start_step + self.eval_len
     stop_step   = stop_step - stop_step % self.eval_len + 1   # Restore point might be the middle of eval
 
-    obs = self.env.reset()
+    obs = self.reset()
 
     for t in range (start_step, stop_step):
-      if self._stop_run_env:
+      if self._terminate:
         break
 
       # Increment the current eval step
@@ -425,16 +423,15 @@ class OffPolicyAgent(Agent):
     obs = self.reset()
 
     for t in range (self.start_step, self.stop_step+1):
-      if self._stop_run_env:
+      if self._terminate:
         self._signal_act_chosen()
         break
-
-      # Wait until net_thread is done
-      self._wait_train_done()
 
       # Stop and run evaluation procedure
       if self.eval_len > 0 and t % self.eval_freq == 0:
         self.eval()
+        # Reset the environment on return
+        obs = self.reset()
 
       # Get an action to run
       if self.learn_started:
@@ -456,12 +453,15 @@ class OffPolicyAgent(Agent):
       # Store the effect of the action taken upon obs
       self.replay_buf.store(obs, action, reward, done)
 
+      self._log_stats(t)
+
+      # Wait until net_thread is done
+      self._wait_train_done()
+
       # Reset the environment if end of episode
       if done:
         next_obs = self.reset()
       obs = next_obs
-
-      self._log_stats(t)
 
 
   def _train_model(self):
@@ -473,7 +473,7 @@ class OffPolicyAgent(Agent):
     """
 
     for t in range (self.start_step, self.stop_step+1):
-      if self._stop_train:
+      if self._terminate:
         self._signal_train_done()
         break
 

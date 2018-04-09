@@ -41,7 +41,8 @@ def make_env(env_id, seed, model_dir, video_freq=None):
     video_callable = False
 
   env = gym.make(env_id)
-  env.seed(seed)
+  if seed >= 0:
+    env.seed(seed)
   # env = gym.wrappers.Monitor(env, monitor_dir, video_callable=video_callable)
   env = rltf.monitoring.Monitor(env, monitor_dir, video_callable=video_callable)
 
