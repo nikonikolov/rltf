@@ -43,44 +43,43 @@ class DQN_IDS_BLR(DQN):
     super()._build()
 
     # Preprocess the observation
-    obs_t       = self._preprocess_obs(self._obs_t_ph)
-    obs_tp1     = self._preprocess_obs(self._obs_tp1_ph)
+    self._obs_t   = self._preprocess_obs(self._obs_t_ph)
+    self._obs_tp1 = self._preprocess_obs(self._obs_tp1_ph)
 
     # Construct the Q-network and the target network
-    agent_net, phi  = self._nn_model(obs_t,   scope="agent_net")
-    target_net, _   = self._nn_model(obs_tp1, scope="target_net")
+    agent_net,phi = self._nn_model(self._obs_t,   scope="agent_net")
+    target_net, _ = self._nn_model(self._obs_tp1, scope="target_net")
 
     # Compute the estimated Q-function and its backup value
-    estimate    = self._compute_estimate(agent_net)
-    target      = self._compute_target(agent_net, target_net)
+    estimate      = self._compute_estimate(agent_net)
+    target        = self._compute_target(target_net)
 
     # Compute the loss
-    loss        = self._compute_loss(estimate, target)
+    loss          = self._compute_loss(estimate, target)
 
-    agent_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net')
-    target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
+    agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
+    target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
     # Create the Op to update the target
-    self._update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
+    update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
     # Build the optimizer
-    optimizer   = self.opt_conf.build()
-    net_train   = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
+    optimizer     = self.opt_conf.build()
+    net_train     = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
 
-    # Add summaries
-    tf.summary.scalar("loss", loss)
-
-    blr_out     = self._build_blr(phi, target)
-    blr_train   = blr_out[0]
-    blr_predict = blr_out[1:]
+    blr_out       = self._build_blr(phi, target)
+    blr_train     = blr_out[0]
+    blr_predict   = blr_out[1:]
 
     # Create weight update op and the train op
-    self._train_op  = tf.group(net_train, blr_train, name="train_op")
+    train_op      = tf.group(net_train, blr_train, name="train_op")
 
     # Compute the train and eval actions
     self.a_train  = self._act_train(blr_predict,  name="a_train")
     self.a_eval   = self._act_eval(agent_net,     name="a_eval")
 
+    self._train_op      = train_op
+    self._update_target = update_target
 
   # --------------------------- ARCH: ACTIONS ARE OUTPUT ---------------------------
 
