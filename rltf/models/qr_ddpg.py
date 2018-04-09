@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 class QRDDPG(DDPG):
 
-  def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf,
-               critic_reg, tau, gamma, N, huber_loss):
+  def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
+               tau, gamma, batch_norm, obs_norm, N, huber_loss):
 
-    super().__init__(obs_shape, n_actions, actor_opt_conf, critic_opt_conf,
-                     critic_reg, tau, gamma, huber_loss)
+    super().__init__(obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
+                     tau, gamma, batch_norm, obs_norm, huber_loss)
     self.N = N
     # self.hidden_init = tf_utils.init_default
     # self.output_init = tf_utils.init_default
