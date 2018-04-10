@@ -6,7 +6,7 @@ from rltf.models.tf_utils import woodburry_inverse
 class BayesianLinearRegression:
   """Bayesian Linear Regression implemented in TF"""
 
-  def __init__(self, sigma, tau, w_dim, auto_bias=True):
+  def __init__(self, sigma, tau, w_dim, auto_bias=True, woodburry=True):
     """
     Args:
       sigma: float. Standard deviation of observation noise
@@ -15,16 +15,18 @@ class BayesianLinearRegression:
         number will be automatically incremented by 1
       auto_bias: bool. If True, a bias feature will automatically be added to
         all input data.
+      woodburry: bool. If True, use Woodburry formula to compute the covariance matrix
+        as inverse of the precision. Else use `tf.inverse()`
     """
+
+    self.woodburry = woodburry
+    self.auto_bias = auto_bias
 
     self.sigma  = sigma
     self.beta   = 1.0 / self.sigma**2
     self.tau    = tau
-    self.w_dim  = w_dim
-
-    self.auto_bias = auto_bias
-    if self.auto_bias:
-      self.w_dim += 1
+    self.w_dim  = w_dim if not auto_bias else w_dim+1
+    self.dtype  = tf.float64 if woodburry else tf.float32
 
     # Custom TF Tensors and Ops
     self.w_mu     = None
@@ -33,12 +35,14 @@ class BayesianLinearRegression:
 
 
   def build(self):
+    I     = tf.eye(self.w_dim, dtype=self.dtype)
+    zeros = tf.zeros([self.w_dim, 1], dtype=self.dtype)
+    tau2  = self.tau**2
 
-    I = tf.eye(self.w_dim)
     # Variables for the parameters of the weight distribution in BLR
-    self.w_mu     = tf.Variable(tf.zeros([self.w_dim, 1]),  trainable=False)
-    self.w_Sigma  = tf.Variable(    (self.tau**2) * I,      trainable=False)
-    self.w_Lambda = tf.Variable(1.0/(self.tau**2) * I,      trainable=False)
+    self.w_mu     = tf.Variable(zeros,        dtype=self.dtype, trainable=False)
+    self.w_Sigma  = tf.Variable(    tau2 * I, dtype=self.dtype, trainable=False)
+    self.w_Lambda = tf.Variable(1.0/tau2 * I, dtype=self.dtype, trainable=False)
 
 
   def weight_posterior(self, X, y):
@@ -49,6 +53,8 @@ class BayesianLinearRegression:
     Returns:
       tf.Op which performs the update operation
     """
+    X = self._cast_input(X)
+    y = self._cast_input(y)
     X = self._add_bias(X)
 
     return self._weight_posterior(X, y)
@@ -60,8 +66,20 @@ class BayesianLinearRegression:
       x: tf.Tensor, `shape=[None, D]`. The feature matrix
     """
     if self.auto_bias:
-      bias  = tf.ones(shape=[tf.shape(x)[0], 1], dtype=tf.float32)
+      bias  = tf.ones(shape=[tf.shape(x)[0], 1], dtype=self.dtype)
       x     = tf.concat([x, bias], axis=-1)
+    return x
+
+
+  def _cast_input(self, x):
+    if self.dtype == tf.float64 and x.dtype.base_dtype != tf.float64:
+      x = tf.cast(x, self.dtype)
+    return x
+
+
+  def _cast_output(self, x):
+    if x.dtype.base_dtype != tf.float32:
+      x = tf.cast(x, tf.float32)
     return x
 
 
@@ -70,12 +88,17 @@ class BayesianLinearRegression:
     Returns:
       tf.Op which performs an update on all weight parameters
     """
+    # t     = tf.Variable(0, dtype=tf.int32)
+    # t     = tf.assign(t, t+1)
+    # I     = tf.cast(tf.matmul(w_Sigma, w_Lambda), tf.float32)
+    # error = tf.losses.mean_squared_error(I, tf.eye(self.w_dim, dtype=tf.float32)) * self.w_dim
+    # w_mu  = tf.Print(w_mu, [error, t], "error inverse (step): ")
+
     mu_op     = tf.assign(self.w_mu,      w_mu)
     Sigma_op  = tf.assign(self.w_Sigma,   w_Sigma)
     Lambda_op = tf.assign(self.w_Lambda,  w_Lambda)
 
     return tf.group(mu_op, Sigma_op, Lambda_op)
-
 
   def _weight_posterior(self, X, y):
     """Compute the weight posteriror of Bayesian Linear Regression
@@ -88,11 +111,12 @@ class BayesianLinearRegression:
     # Compute the posterior precision matrix
     w_Lambda = self.w_Lambda + self.beta * tf.matmul(X, X, transpose_a=True)
 
-    X_scaled = 1.0/self.sigma * X
-
     # Compute the posterior covariance matrix
-    w_Sigma = woodburry_inverse(self.w_Sigma, tf.transpose(X_scaled), X_scaled)
-    # w_Sigma = tf.matrix_inverse(w_Lambda)
+    if self.woodburry:
+      X_norm  = 1.0 / self.sigma * X
+      w_Sigma = woodburry_inverse(self.w_Sigma, tf.transpose(X_norm), X_norm)
+    else:
+      w_Sigma = tf.matrix_inverse(w_Lambda)
 
     # Compute the posterior mean
     w_mu = self._posterior_mean(X, y, self.w_mu, self.w_Lambda, w_Sigma)
@@ -123,10 +147,15 @@ class BayesianLinearRegression:
       mu: tf.Tensor, `shape=[None, 1]. The mean at each test point
       std: tf.Tensor, `shape=[None, 1]. The standard deviation at each test point
     """
+    X   = self._cast_input(X)
     X   = self._add_bias(X)
+
     mu  = tf.matmul(X, self.w_mu)
     # var ends up being diag(sigma**2 + matmul(matmul(X, w_Sigma), X.T))
     var = self.sigma**2 + tf.reduce_sum(tf.matmul(X, self.w_Sigma) * X, axis=-1, keep_dims=True)
     std = tf.sqrt(var)
+
+    mu  = self._cast_output(mu)
+    std = self._cast_output(std)
 
     return mu, std
