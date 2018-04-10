@@ -1,6 +1,7 @@
 import datetime
 import logging.config
 import os
+import subprocess
 
 import rltf.conf
 
@@ -86,6 +87,17 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
 
   logging.config.dictConfig(conf)
 
+  # Log the git diff
+  try:
+    diff = subprocess.check_output(["git", "diff"], cwd=rltf.conf.PROJECT_DIR)
+    diff = diff.decode("utf-8")
+    if diff != "":
+      with open(os.path.join(model_dir, "git.diff"), 'w') as f:
+        f.write(diff)
+  except subprocess.CalledProcessError:
+    # git repo not initialized
+    pass
+
 
 def log_params(params, args=None):
   """Log the runtime parameters for the model to a file on disk
@@ -94,10 +106,16 @@ def log_params(params, args=None):
     params: list. Each entry must be a tuple of (name, value). Value can also
       be any time of object, but it should have an implementation of __str__
   """
-  params = pad_log_data(params)
+  params  = pad_log_data(params)
+  date    = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  commit  = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
+  commit  = commit.decode("utf-8").strip("\n")
+  branch  = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
+  branch  = branch.decode("utf-8").strip("\n")
 
-  date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-  param_logger.info(date)
+  param_logger.info("TIME: %s", date)
+  param_logger.info("GIT COMMIT: %s", commit)
+  param_logger.info("GIT BRANCH: %s", branch)
   param_logger.info("")
   param_logger.info("AGENT CONFIG:")
   for k, v in params:
