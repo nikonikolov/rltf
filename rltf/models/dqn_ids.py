@@ -7,7 +7,8 @@ from rltf.models  import tf_utils
 
 class DQN_IDS_BLR(DQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, sigma, tau, phi_norm, huber_loss=True):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, sigma, tau, phi_norm, same_w,
+               huber_loss=True):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -17,6 +18,8 @@ class DQN_IDS_BLR(DQN):
       sigma: float. Standard deviation of the noise observation for BLR and for InfoGain
       tau: float. Standard deviation for the weight prior in BLR
       phi_norm: bool. Whether to normalize the features
+      same_w: bool. If True, use the same weights for estimating the Q-function for each action. Else,
+        use separate weights as in DQN
       huber_loss: bool. Whether to use huber loss or not
     """
 
@@ -27,12 +30,20 @@ class DQN_IDS_BLR(DQN):
     self.n_stds   = 1.0       # Number of standard deviations for computing the regret bound
     self.phi_norm = phi_norm
 
-    # --------------------------- ARCH: ACTIONS ARE OUTPUT ---------------------------
-    # blr_params      = dict(sigma=sigma, tau=tau, w_dim=self.dim_phi+1, auto_bias=False)
-    # self.blr_models = [BayesianLinearRegression(**blr_params) for _ in range(self.n_actions)]
+    blr_params    = dict(sigma=sigma, tau=tau, w_dim=self.dim_phi+1, auto_bias=False)
+    if same_w:
+      # --------------------------- ARCH: SAME ACTION WEIGHTS ---------------------------
+      self.blr        = BayesianLinearRegression(**blr_params)
+      self._conv_nn   = self._conv_nn_same_w
+      self._dense_nn  = self._conv_nn_same_w
+      self._build_blr = self._build_blr_same_w
 
-    # --------------------------- ARCH: ACTIONS ARE INPUT ---------------------------
-    self.blr      = BayesianLinearRegression(sigma=sigma, tau=tau, w_dim=self.dim_phi+1, auto_bias=False)
+    else:
+      # --------------------------- ARCH: DIFFERENT ACTION WEIGHTS ---------------------------
+      self.blr        = [BayesianLinearRegression(**blr_params) for _ in range(self.n_actions)]
+      self._conv_nn   = self._conv_nn_diff_w
+      self._dense_nn  = self._conv_nn_diff_w
+      self._build_blr = self._build_blr_diff_w
 
     # Custom TF Tensors and Ops
     # self.blr_train  = None
@@ -81,98 +92,98 @@ class DQN_IDS_BLR(DQN):
     self._train_op      = train_op
     self._update_target = update_target
 
-  # --------------------------- ARCH: ACTIONS ARE OUTPUT ---------------------------
+  # --------------------------- ARCH: DIFFERENT ACTION WEIGHTS ---------------------------
 
-  # def _conv_nn(self, x):
-  #   """ Build the DQN architecture - as described in the original paper
-  #   Args:
-  #     x: tf.Tensor. Tensor for the input
-  #     scope: str. Scope in which all the model related variables should be created
-  #   Returns:
-  #     `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
-  #   """
-  #   n_actions = self.n_actions
+  def _conv_nn_diff_w(self, x):
+    """ Build the DQN architecture - as described in the original paper
+    Args:
+      x: tf.Tensor. Tensor for the input
+      scope: str. Scope in which all the model related variables should be created
+    Returns:
+      `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
+    """
+    n_actions = self.n_actions
 
-  #   with tf.variable_scope("conv_net"):
-  #     # original architecture
-  #     x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
-  #     x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
-  #     x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
-  #   x = tf.layers.flatten(x)
-  #   with tf.variable_scope("action_value"):
-  #     phi = tf.layers.dense(x, units=self.dim_phi, activation=tf.nn.relu)
-  #     x = tf.layers.dense(phi, units=n_actions, activation=None)
-  #   return x, phi
-
-
-  # def _dense_nn(self, x):
-  #   """ Build a Neural Network of dense layers only. Used for low-level observations
-  #   Args:
-  #     x: tf.Tensor. Tensor for the input
-  #     scope: str. Scope in which all the model related variables should be created
-  #   Returns:
-  #     `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
-  #   """
-  #   n_actions = self.n_actions
-
-  #   with tf.variable_scope("dense_net"):
-  #     x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
-  #     x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
-  #     phi = x
-  #     x = tf.layers.dense(x, units=n_actions, activation=None)
-  #   return x, phi
+    with tf.variable_scope("conv_net"):
+      # original architecture
+      x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
+      x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
+    x = tf.layers.flatten(x)
+    with tf.variable_scope("action_value"):
+      phi = tf.layers.dense(x, units=self.dim_phi, activation=tf.nn.relu)
+      x = tf.layers.dense(phi, units=n_actions, activation=None)
+    return x, phi
 
 
-  # def _build_blr(self, phi, target):
-  #   """Build the Bayesian Linear Regression ops and estimates
-  #   Args:
-  #     phi: tf.Tensor, as returned by `self._nn_model()`
-  #     target: tf.Tensor, as returned by `self._compute_target()`
-  #   Returns:
-  #     tf.Op: The train Op for BLR
-  #     y_means: tf.Tensor, shape `[None, n_actions]`. The mean BLR estimate from `blr.predict()`
-  #     y_sts: tf.Tensor, shape `[None, n_actions]`. The std BLR estimate from `blr.predict()`
-  #   """
+  def _dense_nn_diff_w(self, x):
+    """ Build a Neural Network of dense layers only. Used for low-level observations
+    Args:
+      x: tf.Tensor. Tensor for the input
+      scope: str. Scope in which all the model related variables should be created
+    Returns:
+      `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
+    """
+    n_actions = self.n_actions
 
-  #   # Normalize features
-  #   if self.phi_norm:
-  #     training  = tf.not_equal(tf.shape(self._obs_t_ph)[0], 1)
-  #     phi       = tf.layers.batch_normalization(phi, axis=-1, training=training)
-
-  #   # Add bias to the feature transformations
-  #   bias    = tf.ones(shape=[tf.shape(phi)[0], 1], dtype=tf.float32)
-  #   phi     = tf.concat([phi, bias], axis=-1)
-
-  #   target  = tf.expand_dims(target, axis=-1)
-
-  #   # Build the Bayesian Regerssion ops and estimates for all actions
-  #   y_means, y_stds, w_updates = [], [], []
-  #   for i in range(self.n_actions):
-  #     self.blr_models[i].build()
-  #     mask = tf.equal(self._act_t_ph, i)
-  #     X = tf.boolean_mask(phi,    mask)
-  #     y = tf.boolean_mask(target, mask)
-  #     b = tf.shape(X)[0]
-  #     X = tf.cond(tf.not_equal(b, 0), lambda: X, lambda: tf.zeros([1, self.dim_phi+1]))
-  #     y = tf.cond(tf.not_equal(b, 0), lambda: y, lambda: tf.zeros([1, 1]))
-  #     w_update_op = self.blr_models[i].weight_posterior(X, y)
-  #     y_m, y_std  = self.blr_models[i].predict(phi)
-
-  #     w_updates.append(w_update_op)
-  #     y_stds.append(y_std)
-  #     y_means.append(y_m)
-
-  #   blr_train = tf.group(*w_updates)
-  #   y_means   = tf.concat(y_means, axis=-1)     # output shape [None, n_actions]
-  #   y_stds    = tf.concat(y_stds,  axis=-1)     # output shape [None, n_actions]
-
-  #   return blr_train, y_means, y_stds
+    with tf.variable_scope("dense_net"):
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
+      phi = x
+      x = tf.layers.dense(x, units=n_actions, activation=None)
+    return x, phi
 
 
-  # --------------------------- ARCH: ACTIONS ARE INPUT ---------------------------
+  def _build_blr_diff_w(self, phi, target):
+    """Build the Bayesian Linear Regression ops and estimates
+    Args:
+      phi: tf.Tensor, as returned by `self._nn_model()`
+      target: tf.Tensor, as returned by `self._compute_target()`
+    Returns:
+      tf.Op: The train Op for BLR
+      y_means: tf.Tensor, shape `[None, n_actions]`. The mean BLR estimate from `blr.predict()`
+      y_sts: tf.Tensor, shape `[None, n_actions]`. The std BLR estimate from `blr.predict()`
+    """
+
+    # Normalize features
+    if self.phi_norm:
+      training  = tf.not_equal(tf.shape(self._obs_t_ph)[0], 1)
+      phi       = tf.layers.batch_normalization(phi, axis=-1, training=training)
+
+    # Add bias to the feature transformations
+    bias    = tf.ones(shape=[tf.shape(phi)[0], 1], dtype=tf.float32)
+    phi     = tf.concat([phi, bias], axis=-1)
+
+    target  = tf.expand_dims(target, axis=-1)
+
+    # Build the Bayesian Regerssion ops and estimates for all actions
+    y_means, y_stds, w_updates = [], [], []
+    for i in range(self.n_actions):
+      self.blr[i].build()
+      mask = tf.equal(self._act_t_ph, i)
+      X = tf.boolean_mask(phi,    mask)
+      y = tf.boolean_mask(target, mask)
+      b = tf.shape(X)[0]
+      X = tf.cond(tf.not_equal(b, 0), lambda: X, lambda: tf.zeros([1, self.dim_phi+1]))
+      y = tf.cond(tf.not_equal(b, 0), lambda: y, lambda: tf.zeros([1, 1]))
+      w_update_op = self.blr[i].weight_posterior(X, y)
+      y_m, y_std  = self.blr[i].predict(phi)
+
+      w_updates.append(w_update_op)
+      y_stds.append(y_std)
+      y_means.append(y_m)
+
+    blr_train = tf.group(*w_updates)
+    y_means   = tf.concat(y_means, axis=-1)     # output shape [None, n_actions]
+    y_stds    = tf.concat(y_stds,  axis=-1)     # output shape [None, n_actions]
+
+    return blr_train, y_means, y_stds
 
 
-  def _conv_nn(self, x):
+  # --------------------------- ARCH: SAME ACTION WEIGHTS ---------------------------
+
+
+  def _conv_nn_same_w(self, x):
     """ Build the DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
@@ -189,14 +200,14 @@ class DQN_IDS_BLR(DQN):
     x = tf.layers.flatten(x)
     # Compute the features and the q function for each action
     batch_size = tf.shape(x)[0]
-    x_phi = [self.state_action_value(x, a, batch_size) for a in range(self.n_actions)]
+    x_phi = [self._state_action_value(x, a, batch_size) for a in range(self.n_actions)]
     # Concatenate the output Tensors
     x   = tf.concat([x    for x, _    in x_phi], axis=-1)
     phi = tf.concat([phi  for _, phi  in x_phi], axis=1)
     return x, phi
 
 
-  def _dense_nn(self, x):
+  def _dense_nn_same_w(self, x):
     """ Build a Neural Network of dense layers only. Used for low-level observations
     Args:
       x: tf.Tensor. Tensor for the input
@@ -210,14 +221,14 @@ class DQN_IDS_BLR(DQN):
       x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
     # Compute the features and the q function for each action
     batch_size = tf.shape(x)[0]
-    x_phi = [self.state_action_value(x, a, batch_size) for a in range(self.n_actions)]
+    x_phi = [self._state_action_value(x, a, batch_size) for a in range(self.n_actions)]
     # Concatenate the output Tensors
     x   = tf.concat([x    for x, _    in x_phi], axis=-1)
     phi = tf.concat([phi  for _, phi  in x_phi], axis=1)
     return x, phi
 
 
-  def state_action_value(self, x, a, batch_size):
+  def _state_action_value(self, x, a, batch_size):
     """
     Returns:
       x: `tf.Tensor`, shape `[batch_size, 1]`. Contains the Q-function for action a
@@ -232,7 +243,7 @@ class DQN_IDS_BLR(DQN):
     return x, phi
 
 
-  def _build_blr(self, phi, target):
+  def _build_blr_same_w(self, phi, target):
     """Build the Bayesian Linear Regression ops and estimates
     Args:
       phi: tf.Tensor, as returned by `self._nn_model()`
