@@ -293,7 +293,8 @@ class Agent:
 
   def save(self):
     if self.learn_started:
-      logger.info("Saving the TF model and stats to %s", os.path.dirname(self.model_dir))
+      dirname = os.path.dirname(os.path.dirname(self.model_dir))
+      logger.info("Saving the TF model and stats to %s", dirname)
 
       # Save the monitor statistics
       self.env_monitor.save()

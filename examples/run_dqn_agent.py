@@ -98,8 +98,7 @@ def main():
 
   # Create the exploration schedule
   if args.explore_decay > 0:
-    # exploration = PiecewiseSchedule([(0, 1.0), (1e7, 0.01)], outside_value=0.01)
-    exploration = PiecewiseSchedule([(0, 1.0), (1e6, 0.1)], outside_value=0.01)
+    exploration = PiecewiseSchedule([(0, 1.0), (1e6, 0.01)], outside_value=0.01)
   else:
     exploration = ConstSchedule(0.0)
 
