@@ -35,14 +35,14 @@ class DQN_IDS_BLR(DQN):
       # --------------------------- ARCH: SAME ACTION WEIGHTS ---------------------------
       self.blr        = BayesianLinearRegression(**blr_params)
       self._conv_nn   = self._conv_nn_same_w
-      self._dense_nn  = self._conv_nn_same_w
+      self._dense_nn  = self._dense_nn_same_w
       self._build_blr = self._build_blr_same_w
 
     else:
       # --------------------------- ARCH: DIFFERENT ACTION WEIGHTS ---------------------------
       self.blr        = [BayesianLinearRegression(**blr_params) for _ in range(self.n_actions)]
       self._conv_nn   = self._conv_nn_diff_w
-      self._dense_nn  = self._conv_nn_diff_w
+      self._dense_nn  = self._dense_nn_diff_w
       self._build_blr = self._build_blr_diff_w
 
     # Custom TF Tensors and Ops
@@ -88,6 +88,11 @@ class DQN_IDS_BLR(DQN):
     # Compute the train and eval actions
     self.a_train  = self._act_train(blr_predict,  name="a_train")
     self.a_eval   = self._act_eval(agent_net,     name="a_eval")
+
+    # DQN Verision
+    # self.a_train  = self._act_eval(agent_net, name="a_train")
+    # self.a_eval   = self._act_eval(agent_net, name="a_eval")
+    # train_op      = tf.group(net_train,       name="train_op")
 
     self._train_op      = train_op
     self._update_target = update_target
