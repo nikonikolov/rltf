@@ -32,6 +32,7 @@ def parse_args():
     ('--tau',          dict(default=0.001,  type=float, help='weight for soft target update')),
     ('--critic-reg',   dict(default=0.02,   type=float, help='network weight regularization param')),
     ('--batch-size',   dict(default=None,   type=int,   help='batch size')),
+    ('--memory-size',  dict(default=10**6,  type=int,   help='size of the replay buffer',)),
 
     ('--sigma',        dict(default=0.5,    type=float, help='action noise sigma')),
     ('--theta',        dict(default=0.15,   type=float, help='action noise theta (for OU noise)')),
@@ -76,7 +77,7 @@ def main():
   model_kwargs = dict(
     critic_reg=args.critic_reg,
     tau=args.tau,
-    gamma=0.99,
+    gamma=args.gamma,
     huber_loss=args.huber_loss,
     batch_norm=args.batch_norm,
     obs_norm=args.obs_norm,
@@ -137,7 +138,7 @@ def main():
     critic_opt_conf=critic_opt_conf,
     action_noise=action_noise,
     update_target_freq=args.update_freq,
-    memory_size=int(1e6),
+    memory_size=args.memory_size,
     obs_len=1,
   )
 

@@ -106,7 +106,7 @@ def log_params(params, args=None):
     params: list. Each entry must be a tuple of (name, value). Value can also
       be any time of object, but it should have an implementation of __str__
   """
-  params  = pad_log_data(params)
+  params  = pad_log_data(params, sort=True)
   date    = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
   commit  = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
   commit  = commit.decode("utf-8").strip("\n")
@@ -131,7 +131,7 @@ def log_params(params, args=None):
     param_logger.info("")
 
 
-def format_tabular(data, value_width=15):
+def format_tabular(data, value_width=15, sort=True):
   """
   Args:
     data: list of tuples. The first member of the tuple must be str, the last
@@ -142,7 +142,7 @@ def format_tabular(data, value_width=15):
     list of tuples. Calling `print(s.format(v)) for s,v in data`, will result in
       tabular print. If `v` is lambda, it must be evaluated before printing
   """
-  data = pad_log_data(data)
+  data = pad_log_data(data, sort)
   width = len(data[0][0]) + 6 + value_width
 
   # Check if the values are computed with a lambda or variable evaluation
@@ -164,7 +164,7 @@ def format_tabular(data, value_width=15):
   return data
 
 
-def pad_log_data(data):
+def pad_log_data(data, sort):
   """
   Args:
     data: list of tuples. The first member of the tuple must be str, the
@@ -172,7 +172,8 @@ def pad_log_data(data):
   Returns:
     The list, with the strs padded with space chars in order to align in tabular way
   """
-  data  = sorted(data, key=lambda tup: tup[0])
+  if sort:
+    data  = sorted(data, key=lambda tup: tup[0])
   sizes = [len(t[0]) for t in data]
   pad   = max(sizes) + 2
   data  = [(t[0].ljust(pad), *t[1:]) for t in data]
