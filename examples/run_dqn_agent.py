@@ -22,23 +22,23 @@ def parse_args():
   s2b         = cmdargs.str2bool
 
   args = [
-    ('--env-id',       dict(required=True,  type=str,   help='full environment name')),
-    ('--model',        dict(required=True,  type=str,   choices=model_types)),
+    ('--env-id',        dict(required=True,  type=str,   help='full environment name')),
+    ('--model',         dict(required=True,  type=str,   choices=model_types)),
 
-    ('--learn-rate',   dict(default=None,   type=float, help='learn rate',)),
-    ('--adam-epsilon', dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
-    ('--n-heads',      dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
-    ('--explore-decay',dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
+    ('--learn-rate',    dict(default=5e-5,   type=float, help='learn rate',)),
+    ('--adam-epsilon',  dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
+    ('--n-heads',       dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
+    ('--explore-decay', dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
 
-    ('--warm-up',      dict(default=50000,  type=int,   help='# steps before training starts')),
-    ('--train-freq',   dict(default=4,      type=int,   help='learn frequency')),
-    ('--update-freq',  dict(default=10000,  type=int,   help='how often to update target')),
-    ('--stop-step',    dict(default=10**8,  type=int,   help='steps to run the agent for')),
-    ('--huber-loss',   dict(default=True,   type=s2b,   help='use huber loss')),
-    ('--grad-clip',    dict(default=None,   type=float, help='value to clip gradient norms to')),
+    ('--warm-up',       dict(default=50000,  type=int,   help='# steps before training starts')),
+    ('--train-freq',    dict(default=4,      type=int,   help='learn frequency')),
+    ('--update-freq',   dict(default=10000,  type=int,   help='how often to update target')),
+    ('--stop-step',     dict(default=10**8,  type=int,   help='steps to run the agent for')),
+    ('--huber-loss',    dict(default=True,   type=s2b,   help='use huber loss')),
+    ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
 
-    ('--eval-freq',    dict(default=10**6,  type=int,   help='how often to evaluate model')),
-    ('--eval-len',     dict(default=50000,  type=int,   help='for how many steps to eval each time')),
+    ('--eval-freq',     dict(default=10**6,  type=int,   help='how often to evaluate model')),
+    ('--eval-len',      dict(default=50000,  type=int,   help='for how many steps to eval each time')),
   ]
 
   return cmdargs.parse_args(args)
@@ -84,10 +84,7 @@ def main():
   env = wrap_dqn(env)
 
   # Set the learning rate schedule
-  if args.learn_rate is None:
-    learn_rate = PiecewiseSchedule([(.0, 1e-4), (1e6, 1e-4), (5e6, 5e-5)], outside_value=5e-5)
-  else:
-    learn_rate = ConstSchedule(args.learn_rate)
+  learn_rate = ConstSchedule(args.learn_rate)
 
   # Cteate the optimizer configs
   if args.grad_clip is None:
