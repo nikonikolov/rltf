@@ -38,7 +38,7 @@ def parse_args():
     ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
 
     ('--eval-freq',     dict(default=10**6,  type=int,   help='how often to evaluate model')),
-    ('--eval-len',      dict(default=50000,  type=int,   help='for how many steps to eval each time')),
+    ('--eval-len',      dict(default=100000, type=int,   help='for how many steps to eval each time')),
   ]
 
   return cmdargs.parse_args(args)
