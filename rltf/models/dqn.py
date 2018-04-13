@@ -211,9 +211,9 @@ class DQN(BaseDQN):
 
   def _compute_estimate(self, agent_net):
     # Get the Q value for the selected action; output shape [None]
-    act_t     = tf.cast(self._act_t_ph, tf.int32)
-    act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    q         = tf.boolean_mask(agent_net, act_mask)
+    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)
+    q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
+
     return q
 
 
@@ -221,6 +221,8 @@ class DQN(BaseDQN):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     target_q  = tf.reduce_max(target_net, axis=-1)
     target_q  = self.rew_t_ph + self.gamma * done_mask * target_q
+    target_q  = tf.stop_gradient(target_q)
+
     return target_q
 
 

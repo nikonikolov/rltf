@@ -138,12 +138,9 @@ class BstrapDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
-    act_t     = tf.cast(self._act_t_ph, tf.int32)
-    act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    act_mask  = tf.expand_dims(act_mask, axis=-2)
-    act_mask  = tf.tile(act_mask, [1, self.n_heads, 1])
-    q         = tf.boolean_mask(agent_net, act_mask)
-    q         = tf.reshape(q, shape=[-1, self.n_heads])
+    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)
+    a_mask  = tf.tile(tf.expand_dims(a_mask, axis=-2), [1, self.n_heads, 1])
+    q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
     return q
 
 
@@ -158,15 +155,14 @@ class BstrapDQN(BaseDQN):
     agent_net,_ = self._nn_model(self._obs_tp1, scope="agent_net")
 
     # Compute the target action
-    target_mask = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
-    target_mask = tf.one_hot(target_mask, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
+    target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
+    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)
 
     # Compute the target
     done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     done_mask   = tf.expand_dims(done_mask, axis=-1)
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
-    target_q    = tf.boolean_mask(target_net, target_mask)
-    target_q    = tf.reshape(target_q, shape=[-1, self.n_heads])
+    target_q    = tf.reduce_sum(target_net * target_mask, axis=-1)
     target_q    = rew_t + self.gamma * done_mask * target_q
     target_q    = tf.stop_gradient(target_q)
 

@@ -163,7 +163,9 @@ class DDPG(Model):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     done_mask = tf.expand_dims(done_mask, axis=-1)
     reward    = tf.expand_dims(self._rew_t_ph, axis=-1)
-    return reward + done_mask * self.gamma * target_q
+    target_q  = reward + done_mask * self.gamma * target_q
+    target_q  = tf.stop_gradients(target_q)
+    return target_q
 
 
   def _get_actor_loss(self, actor_critic_q):
