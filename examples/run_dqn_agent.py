@@ -31,6 +31,7 @@ def parse_args():
     ('--adam-epsilon',  dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
     ('--n-heads',       dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
     ('--explore-decay', dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
+    ('--epsilon-eval',  dict(default=0.001,  type=float, help='epsilon value during evaluation')),
 
     ('--warm-up',       dict(default=50000,  type=int,   help='# steps before training starts')),
     ('--train-freq',    dict(default=4,      type=int,   help='learn frequency')),
@@ -126,6 +127,7 @@ def main():
     update_target_freq=args.update_freq,
     memory_size=args.memory_size,
     obs_len=4,
+    epsilon_eval=args.epsilon_eval,
   )
 
   kwargs = {**dqn_agent_kwargs, **agent_kwargs}

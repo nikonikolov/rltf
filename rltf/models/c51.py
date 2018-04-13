@@ -72,7 +72,6 @@ class C51(BaseDQN):
     # Get the Z-distribution for the selected action; output shape [None, N]
     a_mask  = tf.expand_dims(tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32), axis=-1)
     z       = tf.reduce_sum(agent_net * a_mask, axis=1)
-
     return z
 
 

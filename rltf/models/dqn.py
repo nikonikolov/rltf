@@ -56,10 +56,10 @@ class BaseDQN(Model):
     agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
     target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
-    # Build the optimizer
+    # Build the optimizer and the train op
     optimizer     = self.opt_conf.build()
-    # Create the training Op
-    train_op      = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
+    train_op      = self._build_train_op(optimizer, loss, agent_vars, name="train_op")
+
     # Create the Op to update the target
     update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
@@ -113,6 +113,11 @@ class BaseDQN(Model):
 
   def _compute_loss(self, estimate, target):
     raise NotImplementedError()
+
+
+  def _build_train_op(self, optimizer, loss, agent_vars, name):
+    train_op = optimizer.minimize(loss, var_list=agent_vars, name=name)
+    return train_op
 
 
   def _restore(self, graph):

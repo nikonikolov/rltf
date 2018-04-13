@@ -76,7 +76,7 @@ class DDPG(Model):
     obs_t, obs_tp1  = self._preprocess_obs()
 
     actor           = self._actor(obs_t,                  scope="agent_net/actor")
-    actor_critic_q  = self._critic(obs_t, actor,         scope="agent_net/critic")
+    actor_critic_q  = self._critic(obs_t, actor,          scope="agent_net/critic")
     act_t_q         = self._critic(obs_t, self._act_t_ph, scope="agent_net/critic")
 
     target_act      = self._actor(obs_tp1,                scope="target_net/actor")
