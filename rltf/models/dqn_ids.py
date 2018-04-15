@@ -46,56 +46,10 @@ class DQN_IDS_BLR(DQN):
       self._build_blr = self._build_blr_diff_w
 
     # Custom TF Tensors and Ops
-    # self.blr_train  = None
+    self._blr_predict = None
+    self._target      = None
+    self._phi         = None
 
-
-  def build(self):
-
-    super()._build()
-
-    # Preprocess the observation
-    self._obs_t   = self._preprocess_obs(self._obs_t_ph)
-    self._obs_tp1 = self._preprocess_obs(self._obs_tp1_ph)
-
-    # Construct the Q-network and the target network
-    agent_net,phi = self._nn_model(self._obs_t,   scope="agent_net")
-    target_net, _ = self._nn_model(self._obs_tp1, scope="target_net")
-
-    # Compute the estimated Q-function and its backup value
-    estimate      = self._compute_estimate(agent_net)
-    target        = self._compute_target(target_net)
-
-    # Compute the loss
-    loss          = self._compute_loss(estimate, target)
-
-    agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
-    target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
-
-    # Create the Op to update the target
-    update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
-
-    # Build the optimizer
-    optimizer     = self.opt_conf.build()
-    net_train     = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
-
-    blr_out       = self._build_blr(phi, target)
-    blr_train     = blr_out[0]
-    blr_predict   = blr_out[1:]
-
-    # Create weight update op and the train op
-    train_op      = tf.group(net_train, blr_train, name="train_op")
-
-    # Compute the train and eval actions
-    self.a_train  = self._act_train(blr_predict,  name="a_train")
-    self.a_eval   = self._act_eval(agent_net,     name="a_eval")
-
-    # DQN Verision
-    # self.a_train  = self._act_eval(agent_net, name="a_train")
-    # self.a_eval   = self._act_eval(agent_net, name="a_eval")
-    # train_op      = tf.group(net_train,       name="train_op")
-
-    self._train_op      = train_op
-    self._update_target = update_target
 
   # --------------------------- ARCH: DIFFERENT ACTION WEIGHTS ---------------------------
 
@@ -116,9 +70,10 @@ class DQN_IDS_BLR(DQN):
       x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
     x = tf.layers.flatten(x)
     with tf.variable_scope("action_value"):
-      phi = tf.layers.dense(x, units=self.dim_phi, activation=tf.nn.relu)
-      x = tf.layers.dense(phi, units=n_actions, activation=None)
-    return x, phi
+      x = tf.layers.dense(x, units=self.dim_phi, activation=tf.nn.relu)
+      if "agent_net" in tf.get_variable_scope().name and self._phi is None: self._phi = x
+      x = tf.layers.dense(x, units=n_actions, activation=None)
+    return x
 
 
   def _dense_nn_diff_w(self, x):
@@ -134,9 +89,9 @@ class DQN_IDS_BLR(DQN):
     with tf.variable_scope("dense_net"):
       x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
       x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
-      phi = x
+      if "agent_net" in tf.get_variable_scope().name and self._phi is None: self._phi = x
       x = tf.layers.dense(x, units=n_actions, activation=None)
-    return x, phi
+    return x
 
 
   def _build_blr_diff_w(self, phi, target):
@@ -209,7 +164,8 @@ class DQN_IDS_BLR(DQN):
     # Concatenate the output Tensors
     x   = tf.concat([x    for x, _    in x_phi], axis=-1)
     phi = tf.concat([phi  for _, phi  in x_phi], axis=1)
-    return x, phi
+    if "agent_net" in tf.get_variable_scope().name and self._phi is None: self._phi = phi
+    return x
 
 
   def _dense_nn_same_w(self, x):
@@ -230,7 +186,8 @@ class DQN_IDS_BLR(DQN):
     # Concatenate the output Tensors
     x   = tf.concat([x    for x, _    in x_phi], axis=-1)
     phi = tf.concat([phi  for _, phi  in x_phi], axis=1)
-    return x, phi
+    if "agent_net" in tf.get_variable_scope().name and self._phi is None: self._phi = phi
+    return x
 
 
   def _state_action_value(self, x, a, batch_size):
@@ -291,12 +248,6 @@ class DQN_IDS_BLR(DQN):
   # --------------------------- END ARCHS ---------------------------
 
 
-  # def _restore(self, graph):
-  #   super()._restore()
-  #   # (TODO): Restore BLR variables
-  #   # self.blr_train  = graph.get_operation_by_name("blr_train")
-
-
   def _act_train(self, agent_net, name):
     """
     Args:
@@ -304,7 +255,10 @@ class DQN_IDS_BLR(DQN):
         act_means: shape=`[None, n_actions]` - mean estimate for the q function of each action
         act_stds:  shape=`[None, n_actions]` - std  estimate for the q function of each action
     """
-    act_means, act_stds = agent_net
+    # DQN Verision
+    # return self._act_eval(agent_net, name=name)
+
+    act_means, act_stds = self._blr_predict
 
     act_regret    = tf.reduce_max(act_means + self.n_stds * act_stds, axis=-1)
     act_regret    = act_regret - (act_means - self.n_stds * act_stds)
@@ -318,3 +272,28 @@ class DQN_IDS_BLR(DQN):
   def _act_eval(self, agent_net, name):
     action = tf.argmax(agent_net, axis=-1, output_type=tf.int32, name=name)
     return action
+
+
+  def _compute_target(self, target_net):
+    target        = super()._compute_target(target_net)
+    self._target  = target
+    return target
+
+
+  def _build_train_op(self, optimizer, loss, agent_vars, name):
+    # DQN Verision
+    # train_op      = optimizer.minimize(loss, var_list=agent_vars, name=name)
+    # return train_op
+
+    net_train     = optimizer.minimize(loss, var_list=agent_vars)
+
+    blr_out       = self._build_blr(self._phi, self._target)
+    blr_train     = blr_out[0]
+    blr_predict   = blr_out[1:]
+
+    self._blr_predict = blr_predict
+
+    # Create weight update op and the train op
+    train_op      = tf.group(net_train, blr_train, name=name)
+
+    return train_op

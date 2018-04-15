@@ -6,7 +6,7 @@ from rltf.models.tf_utils import woodburry_inverse
 class BayesianLinearRegression:
   """Bayesian Linear Regression implemented in TF"""
 
-  def __init__(self, sigma, tau, w_dim, auto_bias=True, woodburry=True):
+  def __init__(self, sigma, tau, w_dim, auto_bias=True, woodburry=False):
     """
     Args:
       sigma: float. Standard deviation of observation noise
