@@ -2,13 +2,12 @@ import tensorflow as tf
 
 from rltf.models  import DQN
 from rltf.models  import BayesianLinearRegression
-from rltf.models  import tf_utils
 
 
 class DQN_IDS_BLR(DQN):
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, sigma, tau, phi_norm, same_w,
-               huber_loss=True):
+               policy="ids", huber_loss=True):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -20,8 +19,11 @@ class DQN_IDS_BLR(DQN):
       phi_norm: bool. Whether to normalize the features
       same_w: bool. If True, use the same weights for estimating the Q-function for each action. Else,
         use separate weights as in DQN
+      policy: str. One of "ucb", "greedy" or "ids".
       huber_loss: bool. Whether to use huber loss or not
     """
+
+    assert policy in ["ucb", "greedy", "ids"]
 
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss)
 
@@ -29,6 +31,7 @@ class DQN_IDS_BLR(DQN):
     self.rho      = sigma
     self.n_stds   = 1.0       # Number of standard deviations for computing the regret bound
     self.phi_norm = phi_norm
+    self.policy   = policy
 
     blr_params    = dict(sigma=sigma, tau=tau, w_dim=self.dim_phi+1, auto_bias=False)
     if same_w:
@@ -231,16 +234,22 @@ class DQN_IDS_BLR(DQN):
     X       = tf.boolean_mask(phi, a_mask)
     X       = tf.concat([X, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
 
-    # phi: Tensor with BLR test inputs; shape `[n_actions, phi_dim+1]`
-    phi     = tf.squeeze(phi, axis=0)         # Assumes batch_size = 1
+    # # phi: Tensor with BLR test inputs; shape `[n_actions, phi_dim+1]`
+    # phi     = tf.squeeze(phi, axis=0)         # Assumes batch_size = 1
+    # phi     = tf.concat([phi, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
+
+    # phi: Tensor with BLR test inputs; shape `[batch_size * n_actions, phi_dim+1]`
+    phi     = tf.reshape(phi, [-1, self.dim_phi])
     phi     = tf.concat([phi, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
 
     # Build the Bayesian Regression ops and estimates
     self.blr.build()
     blr_train   = self.blr.weight_posterior(X, y)
     y_m, y_std  = self.blr.predict(phi)
-    y_means     = tf.transpose(y_m)       # output shape `[1, n_actions]`
-    y_stds      = tf.transpose(y_std)     # output shape `[1, n_actions]`
+    # y_means     = tf.transpose(y_m)       # output shape `[1, n_actions]`
+    # y_stds      = tf.transpose(y_std)     # output shape `[1, n_actions]`
+    y_means     = tf.reshape(y_m,   [-1, self.n_actions])   # output shape `[batch_size, n_actions]`
+    y_stds      = tf.reshape(y_std, [-1, self.n_actions])   # output shape `[batch_size, n_actions]`
 
     return blr_train, y_means, y_stds
 
@@ -259,6 +268,23 @@ class DQN_IDS_BLR(DQN):
     # return self._act_eval(agent_net, name=name)
 
     act_means, act_stds = self._blr_predict
+
+    # Report summaries
+    a_nn_greedy   = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
+    a_blr_greedy  = tf.argmax(act_means, axis=-1, output_type=tf.int32)
+
+    tf.summary.scalar("train/mse_q_blr_nn", tf.losses.mean_squared_error(act_means, agent_net))
+    tf.summary.scalar("train/mse_a_blr_nn", tf.losses.mean_squared_error(a_blr_greedy, a_nn_greedy))
+
+    # UCB
+    if self.policy == "ucb":
+      act_ucb       = tf.argmax(act_means + act_stds, axis=-1, output_type=tf.int32, name=name)
+      return act_ucb
+
+    # Greedy Policy
+    if self.policy == "greedy":
+      act_greedy    = tf.identity(a_blr_greedy, name=name)
+      return act_greedy
 
     act_regret    = tf.reduce_max(act_means + self.n_stds * act_stds, axis=-1)
     act_regret    = act_regret - (act_means - self.n_stds * act_stds)

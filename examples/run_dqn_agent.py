@@ -46,6 +46,7 @@ def parse_args():
 
     ('--phi-norm',      dict(default=False,  type=s2b,   help='if True, normalize BLR features in IDS')),
     ('--same-w',        dict(default=False,  type=s2b,   help='if True, use the same W for all actions')),
+    ('--policy',        dict(default="ids",  type=str,   help='policy to use for ids')),
   ]
 
   return cmdargs.parse_args(args)
@@ -79,7 +80,7 @@ def main():
   elif args.model == "DQN_IDS_BLR":
     model_type    = DQN_IDS_BLR
     model_kwargs  = dict(huber_loss=args.huber_loss, sigma=1.0, tau=1.0/(1.0-0.99), same_w=args.same_w,
-                         phi_norm=args.phi_norm)
+                         policy=args.policy, phi_norm=args.phi_norm)
   elif args.model == "C51":
     model_type    = C51
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)
