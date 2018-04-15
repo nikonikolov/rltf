@@ -27,9 +27,12 @@ def parse_args():
     ('--model',         dict(required=True,  type=str,   choices=model_types)),
 
     ('--learn-rate',    dict(default=5e-5,   type=float, help='learn rate',)),
+    ('--batch-size',    dict(default=32,     type=int,   help='batch size for training the net',)),
+    ('--memory-size',   dict(default=10**6,  type=int,   help='size of the replay buffer',)),
     ('--adam-epsilon',  dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
     ('--n-heads',       dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
     ('--explore-decay', dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
+    ('--epsilon-eval',  dict(default=0.001,  type=float, help='epsilon value during evaluation')),
 
     ('--warm-up',       dict(default=50000,  type=int,   help='# steps before training starts')),
     ('--train-freq',    dict(default=4,      type=int,   help='learn frequency')),
@@ -84,7 +87,7 @@ def main():
     model_type    = QRDQN
     model_kwargs  = dict(N=200, k=int(args.huber_loss))
 
-  model_kwargs["gamma"] = 0.99
+  model_kwargs["gamma"] = args.gamma
 
 
   # Create the environment
@@ -95,11 +98,12 @@ def main():
   learn_rate = ConstSchedule(args.learn_rate)
 
   # Cteate the optimizer configs
-  if args.grad_clip is None:
-    opt_conf = OptimizerConf(tf.train.AdamOptimizer, learn_rate, epsilon=args.adam_epsilon)
-  else:
-    opt_args = dict(epsilon=args.adam_epsilon, grad_clip=args.grad_clip)
-    opt_conf = OptimizerConf(AdamGradClipOptimizer, learn_rate, **opt_args)
+  opt_conf = OptimizerConf(tf.train.AdamOptimizer, learn_rate, epsilon=args.adam_epsilon)
+  # if args.grad_clip is None:
+  #   opt_conf = OptimizerConf(tf.train.AdamOptimizer, learn_rate, epsilon=args.adam_epsilon)
+  # else:
+  #   opt_args = dict(epsilon=args.adam_epsilon, grad_clip=args.grad_clip)
+  #   opt_conf = OptimizerConf(AdamGradClipOptimizer, learn_rate, **opt_args)
 
   # Create the exploration schedule
   if args.explore_decay > 0:
@@ -116,7 +120,7 @@ def main():
     stop_step=args.stop_step,
     eval_freq=args.eval_freq,
     eval_len=args.eval_len,
-    batch_size=32,
+    batch_size=args.batch_size,
     model_dir=model_dir,
     log_freq=args.log_freq,
     save_freq=args.save_freq,
@@ -129,8 +133,9 @@ def main():
     opt_conf=opt_conf,
     exploration=exploration,
     update_target_freq=args.update_freq,
-    memory_size=int(1e6),
+    memory_size=args.memory_size,
     obs_len=4,
+    epsilon_eval=args.epsilon_eval,
   )
 
   kwargs = {**dqn_agent_kwargs, **agent_kwargs}
@@ -146,8 +151,11 @@ def main():
   # Build the agent and the TF graph
   dqn_agent.build()
 
-  # Train the agent
-  dqn_agent.train()
+  # Train or eval the agent
+  if args.mode == 'train':
+    dqn_agent.train()
+  else:
+    dqn_agent.eval()
 
   # Close on exit
   dqn_agent.close()

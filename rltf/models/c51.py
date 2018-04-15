@@ -70,9 +70,8 @@ class C51(BaseDQN):
 
   def _compute_estimate(self, agent_net):
     # Get the Z-distribution for the selected action; output shape [None, N]
-    act_t     = tf.cast(self._act_t_ph, tf.int32)
-    act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    z         = tf.boolean_mask(agent_net, act_mask)
+    a_mask  = tf.expand_dims(tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32), axis=-1)
+    z       = tf.reduce_sum(agent_net * a_mask, axis=1)
     return z
 
 
@@ -82,8 +81,8 @@ class C51(BaseDQN):
     # Get the target Q probabilities for the greedy action; output shape [None, N]
     target_q      = tf.reduce_sum(target_z * self.bins, axis=-1)
     target_act    = tf.argmax(target_q, axis=-1)
-    act_mask      = tf.one_hot(target_act, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    target_z      = tf.boolean_mask(target_z, act_mask)
+    a_mask        = tf.expand_dims(tf.one_hot(target_act, self.n_actions, dtype=tf.float32), axis=-1)
+    target_z      = tf.reduce_sum(target_z * a_mask, axis=1)
 
     # Compute projected bin support; output shape [None, N]
     done_mask     = tf.cast(tf.logical_not(self.done_ph), tf.float32)
@@ -120,6 +119,7 @@ class C51(BaseDQN):
     with tf.control_dependencies([target_z]):
       target_z    = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
       target_z    = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
+      target_z    = tf.stop_gradient(target_z)
 
     return target_z
 

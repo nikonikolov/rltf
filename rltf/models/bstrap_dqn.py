@@ -14,6 +14,7 @@ class BstrapDQN(BaseDQN):
       opt_conf: rltf.optimizers.OptimizerConf. Configuration for the optimizer
       gamma: float. Discount factor
       huber_loss: bool. Whether to use huber loss or not
+      n_heads: Number of bootstrap heads
     """
 
     super().__init__(obs_shape, n_actions, opt_conf, gamma)
@@ -24,51 +25,15 @@ class BstrapDQN(BaseDQN):
     # Custom TF Tensors and Ops
     self._active_head   = None
     self._set_act_head  = None
+    self._conv_out      = None
 
 
   def build(self):
-
-    super()._build()
-
     self._active_head   = tf.Variable([0], trainable=False, name="active_head")
     sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
     self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
 
-    # Preprocess the observation
-    self._obs_t   = self._preprocess_obs(self._obs_t_ph)
-    self._obs_tp1 = self._preprocess_obs(self._obs_tp1_ph)
-
-    # Construct the Q-network and the target network
-    agent_net, x  = self._nn_model(self._obs_t,   scope="agent_net")
-    target_net, _ = self._nn_model(self._obs_tp1, scope="target_net")
-
-    # Compute the estimated Q-function and its backup value
-    estimate      = self._compute_estimate(agent_net)
-    target        = self._compute_target(target_net)
-
-    # Compute the loss
-    losses        = self._compute_loss(estimate, target)
-
-    agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
-    target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
-
-    # Build the optimizer
-    optimizer     = self.opt_conf.build()
-    # Compute gradients
-    grads         = self._compute_grads(losses, x, optimizer)
-    # Apply the gradients
-    train_op      = optimizer.apply_gradients(grads, name="train_op")
-
-    # Create the Op to update the target
-    update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
-
-    # Compute the train and eval actions
-    self.a_train  = self._act_train(agent_net, name="a_train")
-    self.a_eval   = self._act_eval(agent_net,  name="a_eval")
-
-    self._train_op      = train_op
-    self._update_target = update_target
-
+    super().build()
 
 
   def _conv_nn(self, x):
@@ -98,11 +63,13 @@ class BstrapDQN(BaseDQN):
       x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
       x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
     x = tf.layers.flatten(x)
-    conv_out = x
+    # Careful: Make sure self._conv_out is set only during the right function call
+    if "agent_net" in tf.get_variable_scope().name and self._conv_out is None:
+      self._conv_out = x
     with tf.variable_scope("action_value"):
       heads = [_build_head(x, n_actions) for _ in range(self.n_heads)]
       x = tf.concat(heads, axis=-2)
-    return x, conv_out
+    return x
 
 
   def _act_train(self, agent_net, name):
@@ -138,12 +105,9 @@ class BstrapDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
-    act_t     = tf.cast(self._act_t_ph, tf.int32)
-    act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    act_mask  = tf.expand_dims(act_mask, axis=-2)
-    act_mask  = tf.tile(act_mask, [1, self.n_heads, 1])
-    q         = tf.boolean_mask(agent_net, act_mask)
-    q         = tf.reshape(q, shape=[-1, self.n_heads])
+    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)
+    a_mask  = tf.tile(tf.expand_dims(a_mask, axis=-2), [1, self.n_heads, 1])
+    q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
     return q
 
 
@@ -155,18 +119,17 @@ class BstrapDQN(BaseDQN):
       `tf.Tensor` of shape `[None, n_heads]`
     """
     # Compute the Q-estimate with the agent network variables
-    agent_net,_ = self._nn_model(self._obs_tp1, scope="agent_net")
+    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")
 
     # Compute the target action
-    target_mask = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
-    target_mask = tf.one_hot(target_mask, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
+    target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
+    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)
 
     # Compute the target
     done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     done_mask   = tf.expand_dims(done_mask, axis=-1)
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
-    target_q    = tf.boolean_mask(target_net, target_mask)
-    target_q    = tf.reshape(target_q, shape=[-1, self.n_heads])
+    target_q    = tf.reduce_sum(target_net * target_mask, axis=-1)
     target_q    = rew_t + self.gamma * done_mask * target_q
     target_q    = tf.stop_gradient(target_q)
 
@@ -192,14 +155,16 @@ class BstrapDQN(BaseDQN):
     return losses
 
 
-  def _compute_grads(self, losses, x_heads, optimizer):
+  def _build_train_op(self, optimizer, loss, agent_vars, name):
+    x_heads = self._conv_out
+
     # Get the conv net and the heads variables
     head_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/action_value')
     conv_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/conv_net')
 
     # Compute the gradients of the variables in all heads as well as
     # the sum of gradients backpropagated from each head into the conv net
-    head_grads  = tf.gradients(losses, head_vars + [x_heads])
+    head_grads  = tf.gradients(loss, head_vars + [x_heads])
 
     # Normalize the gradient which is backpropagated the heads to the conv net
     x_heads_g   = head_grads.pop(-1)
@@ -211,8 +176,9 @@ class BstrapDQN(BaseDQN):
     # Group grads and apply them
     head_grads  = list(zip(head_grads, head_vars))
     grads       = head_grads + conv_grads
+    train_op    = optimizer.apply_gradients(grads, name="train_op")
 
-    return grads
+    return train_op
 
 
   def _restore(self, graph):

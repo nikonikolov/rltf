@@ -56,10 +56,10 @@ class BaseDQN(Model):
     agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
     target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
-    # Build the optimizer
+    # Build the optimizer and the train op
     optimizer     = self.opt_conf.build()
-    # Create the training Op
-    train_op      = optimizer.minimize(loss, var_list=agent_vars, name="train_op")
+    train_op      = self._build_train_op(optimizer, loss, agent_vars, name="train_op")
+
     # Create the Op to update the target
     update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
@@ -113,6 +113,11 @@ class BaseDQN(Model):
 
   def _compute_loss(self, estimate, target):
     raise NotImplementedError()
+
+
+  def _build_train_op(self, optimizer, loss, agent_vars, name):
+    train_op = optimizer.minimize(loss, var_list=agent_vars, name=name)
+    return train_op
 
 
   def _restore(self, graph):
@@ -211,9 +216,9 @@ class DQN(BaseDQN):
 
   def _compute_estimate(self, agent_net):
     # Get the Q value for the selected action; output shape [None]
-    act_t     = tf.cast(self._act_t_ph, tf.int32)
-    act_mask  = tf.one_hot(act_t, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
-    q         = tf.boolean_mask(agent_net, act_mask)
+    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)
+    q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
+
     return q
 
 
@@ -221,6 +226,8 @@ class DQN(BaseDQN):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     target_q  = tf.reduce_max(target_net, axis=-1)
     target_q  = self.rew_t_ph + self.gamma * done_mask * target_q
+    target_q  = tf.stop_gradient(target_q)
+
     return target_q
 
 

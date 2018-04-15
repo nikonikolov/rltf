@@ -76,7 +76,7 @@ class DDPG(Model):
     obs_t, obs_tp1  = self._preprocess_obs()
 
     actor           = self._actor(obs_t,                  scope="agent_net/actor")
-    actor_critic_q  = self._critic(obs_t, actor,         scope="agent_net/critic")
+    actor_critic_q  = self._critic(obs_t, actor,          scope="agent_net/critic")
     act_t_q         = self._critic(obs_t, self._act_t_ph, scope="agent_net/critic")
 
     target_act      = self._actor(obs_tp1,                scope="target_net/actor")
@@ -163,7 +163,9 @@ class DDPG(Model):
     done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
     done_mask = tf.expand_dims(done_mask, axis=-1)
     reward    = tf.expand_dims(self._rew_t_ph, axis=-1)
-    return reward + done_mask * self.gamma * target_q
+    target_q  = reward + done_mask * self.gamma * target_q
+    target_q  = tf.stop_gradient(target_q)
+    return target_q
 
 
   def _get_actor_loss(self, actor_critic_q):

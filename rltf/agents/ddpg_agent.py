@@ -108,7 +108,8 @@ class AgentDDPG(OffPolicyAgent):
 
 
   def _append_summary(self, summary, t):
-    pass
+    summary.value.add(tag="train/act_noise_mean", simple_value=self._stats_act_noise_mean())
+    summary.value.add(tag="train/act_noise_std",  simple_value=self._stats_act_noise_std())
 
 
   def _reset(self):

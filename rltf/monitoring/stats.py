@@ -122,6 +122,7 @@ class StatsRecorder:
 
     self.train_stats = {
       "mean_ep_rew":    float("nan"),
+      "std_ep_rew":     float("nan"),
       "ep_len_mean":    float("nan"),
       "ep_len_std":     float("nan"),
       "best_mean_rew":  -float("inf"),
@@ -131,6 +132,7 @@ class StatsRecorder:
 
     self.eval_stats = {
       "mean_ep_rew":    float("nan"),
+      "std_ep_rew":     float("nan"),
       "ep_len_mean":    float("nan"),
       "ep_len_std":     float("nan"),
       "best_mean_rew":  -float("inf"),
@@ -141,28 +143,31 @@ class StatsRecorder:
     n = self.n_ep_stats
 
     default_info = [
-      ("train/agent_steps",                     "d",    lambda t: t),
       ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
+      ("train/agent_steps",                     "d",    lambda t: t),
 
       ("train/env_steps",                       "d",    lambda t: self.train_steps),
       ("train/episodes",                        "d",    lambda t: len(self.train_ep_rews)),
+      ("train/best_episode_rew",                ".3f",  lambda t: self.train_stats["best_ep_rew"]),
+      ("train/best_mean_ep_rew (%d eps)"%n,     ".3f",  lambda t: self.train_stats["best_mean_rew"]),
       ("train/ep_len_mean (%d eps)"%n,          ".3f",  lambda t: self.train_stats["ep_len_mean"]),
       ("train/ep_len_std  (%d eps)"%n,          ".3f",  lambda t: self.train_stats["ep_len_std"]),
       ("train/mean_ep_reward (%d eps)"%n,       ".3f",  lambda t: self.train_stats["mean_ep_rew"]),
-      ("train/best_mean_ep_rew (%d eps)"%n,     ".3f",  lambda t: self.train_stats["best_mean_rew"]),
-      ("train/best_episode_rew",                ".3f",  lambda t: self.train_stats["best_ep_rew"]),
+      ("train/std_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.train_stats["std_ep_rew"]),
+
 
       ("eval/env_steps",                        "d",    lambda t: self.eval_steps),
       ("eval/episodes",                         "d",    lambda t: len(self.eval_ep_rews)),
+      ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
+      ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
       ("eval/ep_len_mean (%d eps)"%n,           ".3f",  lambda t: self.eval_stats["ep_len_mean"]),
       ("eval/ep_len_std  (%d eps)"%n,           ".3f",  lambda t: self.eval_stats["ep_len_std"]),
       ("eval/mean_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.eval_stats["mean_ep_rew"]),
-      ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
-      ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
+      ("eval/std_ep_reward (%d eps)"%n,         ".3f",  lambda t: self.eval_stats["std_ep_rew"]),
     ]
 
     log_info = default_info + custom_log_info
-    self.log_info = rltf_log.format_tabular(log_info)
+    self.log_info = rltf_log.format_tabular(log_info, sort=False)
 
 
   def _stats_mean(self, data):
@@ -186,6 +191,7 @@ class StatsRecorder:
       return -float("inf")
 
     self.train_stats["mean_ep_rew"] = self._stats_mean(self.train_ep_rews)
+    self.train_stats["std_ep_rew"]  = self._stats_std(self.train_ep_rews)
     self.train_stats["ep_len_mean"] = self._stats_mean(self.train_ep_lens)
     self.train_stats["ep_len_std"]  = self._stats_std(self.train_ep_lens)
     self.train_stats["best_mean_rew"] = max(self.train_stats["best_mean_rew"],
@@ -196,6 +202,7 @@ class StatsRecorder:
 
 
     self.eval_stats["mean_ep_rew"] = self._stats_mean(self.eval_ep_rews)
+    self.eval_stats["std_ep_rew"]  = self._stats_std(self.eval_ep_rews)
     self.eval_stats["ep_len_mean"] = self._stats_mean(self.eval_ep_lens)
     self.eval_stats["ep_len_std"]  = self._stats_std(self.train_ep_lens)
     self.eval_stats["best_mean_rew"] = max(self.eval_stats["best_mean_rew"],

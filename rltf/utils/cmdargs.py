@@ -28,7 +28,9 @@ def parse_args(custom_args):
   """
 
   common_args = [
+    ('--gamma',        dict(default=0.99,   type=float,   help='discount factor')),
     ('--seed',         dict(default=42,     type=int,     help='seed for the run; not set if <=0')),
+    ('--mode',         dict(default='train',type=str,     choices=['train', 'eval'])),
     ('--log-lvl',      dict(default='INFO', type=str,     help='logger lvl')),
     ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # steps')),
     ('--save-freq',    dict(default=0,      type=int,     help='how often to save the model in # \
@@ -68,8 +70,14 @@ def parse_args(custom_args):
   # log_freq must be positive
   assert args.log_freq > 0
 
+  assert args.gamma > 0 and args.gamma <= 1
+
   # Only one of args.restore_model and args.reuse_model can be set
   assert not (args.restore_model is not None and args.reuse_model is not None)
+
+  # When in eval mode, model needs to be restored
+  if args.mode == 'eval':
+    assert (args.restore_model is not None or args.reuse_model is not None)
 
   if args.restore_model is not None:
     args.restore_model = os.path.abspath(args.restore_model)

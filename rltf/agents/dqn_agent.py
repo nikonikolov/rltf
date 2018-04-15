@@ -16,6 +16,7 @@ class AgentDQN(OffPolicyAgent):
                update_target_freq=10000,
                memory_size=int(1e6),
                obs_len=4,
+               epsilon_eval=0.001,
                **agent_kwargs
               ):
     """
@@ -38,6 +39,7 @@ class AgentDQN(OffPolicyAgent):
 
     self.opt_conf = opt_conf
     self.exploration = exploration
+    self.epsilon_eval = epsilon_eval
     self.update_target_freq = update_target_freq
 
     # Get environment specs
@@ -116,7 +118,12 @@ class AgentDQN(OffPolicyAgent):
 
 
   def _action_eval(self, state, t):
-    action = self.model.action_eval(self.sess, state)
+    # Run epsilon greedy policy
+    if np.random.uniform(0,1) < self.epsilon_eval:
+      action = self.env.action_space.sample()
+    else:
+      # Run the network to select an action
+      action = self.model.action_eval(self.sess, state)
     return action
 
 
