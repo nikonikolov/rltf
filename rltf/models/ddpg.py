@@ -164,7 +164,7 @@ class DDPG(Model):
     done_mask = tf.expand_dims(done_mask, axis=-1)
     reward    = tf.expand_dims(self._rew_t_ph, axis=-1)
     target_q  = reward + done_mask * self.gamma * target_q
-    target_q  = tf.stop_gradients(target_q)
+    target_q  = tf.stop_gradient(target_q)
     return target_q
 
 

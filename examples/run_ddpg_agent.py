@@ -155,8 +155,11 @@ def main():
   # Build the agent and the TF graph
   ddpg_agent.build()
 
-  # Train the agent
-  ddpg_agent.train()
+  # Train or eval the agent
+  if args.mode == 'train':
+    ddpg_agent.train()
+  else:
+    ddpg_agent.eval()
 
   # Close on exit
   ddpg_agent.close()

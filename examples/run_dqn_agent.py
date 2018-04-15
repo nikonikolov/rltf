@@ -143,8 +143,11 @@ def main():
   # Build the agent and the TF graph
   dqn_agent.build()
 
-  # Train the agent
-  dqn_agent.train()
+  # Train or eval the agent
+  if args.mode == 'train':
+    dqn_agent.train()
+  else:
+    dqn_agent.eval()
 
   # Close on exit
   dqn_agent.close()
