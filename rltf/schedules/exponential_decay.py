@@ -1,7 +1,6 @@
 import math
 
 from rltf.schedules.schedule  import Schedule
-from rltf.schedules.utils     import linear_interpolation
 
 
 class ExponentialDecay(Schedule):

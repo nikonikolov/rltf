@@ -64,8 +64,7 @@ class BstrapDQN(BaseDQN):
       x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu)
     x = tf.layers.flatten(x)
     # Careful: Make sure self._conv_out is set only during the right function call
-    if "agent_net" in tf.get_variable_scope().name and self._conv_out is None:
-      self._conv_out = x
+    if "agent_net" in tf.get_variable_scope().name and self._conv_out is None: self._conv_out = x
     with tf.variable_scope("action_value"):
       heads = [_build_head(x, n_actions) for _ in range(self.n_heads)]
       x = tf.concat(heads, axis=-2)
@@ -176,7 +175,7 @@ class BstrapDQN(BaseDQN):
     # Group grads and apply them
     head_grads  = list(zip(head_grads, head_vars))
     grads       = head_grads + conv_grads
-    train_op    = optimizer.apply_gradients(grads, name="train_op")
+    train_op    = optimizer.apply_gradients(grads, name=name)
 
     return train_op
 
