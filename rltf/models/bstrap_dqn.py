@@ -1,7 +1,6 @@
 import tensorflow as tf
 
 from rltf.models  import BaseDQN
-from rltf.models  import tf_utils
 
 
 class BstrapDQN(BaseDQN):
@@ -181,7 +180,7 @@ class BstrapDQN(BaseDQN):
 
 
   def _restore(self, graph):
-    super()._restore()
+    super()._restore(graph)
 
     self._active_head   = graph.get_tensor_by_name("active_head:0")
     self._set_act_head  = graph.get_operation_by_name("set_act_head")
