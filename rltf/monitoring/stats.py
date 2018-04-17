@@ -204,7 +204,7 @@ class StatsRecorder:
     self.eval_stats["mean_ep_rew"] = self._stats_mean(self.eval_ep_rews)
     self.eval_stats["std_ep_rew"]  = self._stats_std(self.eval_ep_rews)
     self.eval_stats["ep_len_mean"] = self._stats_mean(self.eval_ep_lens)
-    self.eval_stats["ep_len_std"]  = self._stats_std(self.train_ep_lens)
+    self.eval_stats["ep_len_std"]  = self._stats_std(self.eval_ep_lens)
     self.eval_stats["best_mean_rew"] = max(self.eval_stats["best_mean_rew"],
                                            self.eval_stats["mean_ep_rew"])
     best_ep_rew = _stats_max(self.eval_ep_rews, self.eval_stats["ep_last_stats"])
