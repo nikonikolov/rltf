@@ -19,19 +19,21 @@ class DQN_IDS_BLR(DQN):
       phi_norm: bool. Whether to normalize the features
       same_w: bool. If True, use the same weights for estimating the Q-function for each action. Else,
         use separate weights as in DQN
-      policy: str. One of "ucb", "greedy" or "ids".
+      policy: str. One of "ucb", "greedy", "ids" or "ts"
       huber_loss: bool. Whether to use huber loss or not
     """
 
-    assert policy in ["ucb", "greedy", "ids"]
+    assert policy in ["ucb", "greedy", "ids", "ts"]
 
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss)
 
     self.dim_phi  = 512
     self.rho      = sigma
-    self.n_stds   = 1.0       # Number of standard deviations for computing the regret bound
     self.phi_norm = phi_norm
+
     self.policy   = policy
+    self.n_stds   = 1.0       # Number of standard deviations for computing the regret bound
+    self.ucb_c    = 0.1       # UCB bonus constant
 
     blr_params    = dict(sigma=sigma, tau=tau, w_dim=self.dim_phi+1, auto_bias=False)
     if same_w:
@@ -53,6 +55,9 @@ class DQN_IDS_BLR(DQN):
     self._target      = None
     self._phi         = None
 
+    # Custom policy data
+    self.q_thompson   = None
+    self.reset_ts     = None
 
   # --------------------------- ARCH: DIFFERENT ACTION WEIGHTS ---------------------------
 
@@ -139,6 +144,12 @@ class DQN_IDS_BLR(DQN):
     blr_train = tf.group(*w_updates)
     y_means   = tf.concat(y_means, axis=-1)     # output shape [None, n_actions]
     y_stds    = tf.concat(y_stds,  axis=-1)     # output shape [None, n_actions]
+
+    if self.policy == "ts":
+      reset_thompson  = [self.blr[i].reset_thompson(cholesky=False) for i in range(self.n_actions)]
+      q_thompson      = [self.blr[i].predict_thompson(phi) for i in range(self.n_actions)]
+      self.reset_ts   = tf.group(reset_thompson)
+      self.q_thompson = tf.concat(q_thompson, axis=-1)
 
     return blr_train, y_means, y_stds
 
@@ -234,10 +245,6 @@ class DQN_IDS_BLR(DQN):
     X       = tf.boolean_mask(phi, a_mask)
     X       = tf.concat([X, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
 
-    # # phi: Tensor with BLR test inputs; shape `[n_actions, phi_dim+1]`
-    # phi     = tf.squeeze(phi, axis=0)         # Assumes batch_size = 1
-    # phi     = tf.concat([phi, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
-
     # phi: Tensor with BLR test inputs; shape `[batch_size * n_actions, phi_dim+1]`
     phi     = tf.reshape(phi, [-1, self.dim_phi])
     phi     = tf.concat([phi, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
@@ -246,10 +253,12 @@ class DQN_IDS_BLR(DQN):
     self.blr.build()
     blr_train   = self.blr.weight_posterior(X, y)
     y_m, y_std  = self.blr.predict(phi)
-    # y_means     = tf.transpose(y_m)       # output shape `[1, n_actions]`
-    # y_stds      = tf.transpose(y_std)     # output shape `[1, n_actions]`
     y_means     = tf.reshape(y_m,   [-1, self.n_actions])   # output shape `[batch_size, n_actions]`
     y_stds      = tf.reshape(y_std, [-1, self.n_actions])   # output shape `[batch_size, n_actions]`
+
+    if self.policy == "ts":
+      self.q_thompson = self.blr.predict_thompson(phi)
+      self.reset_ts   = self.blr.reset_thompson(cholesky=False)
 
     return blr_train, y_means, y_stds
 
@@ -269,29 +278,42 @@ class DQN_IDS_BLR(DQN):
 
     act_means, act_stds = self._blr_predict
 
+    # Perform check
+    act_means = tf.check_numerics(act_means, "BLR mean is NaN or Inf")
+    act_stds  = tf.check_numerics(act_stds, "BLR std is NaN or Inf")
+
     # Report summaries
     a_nn_greedy   = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
     a_blr_greedy  = tf.argmax(act_means, axis=-1, output_type=tf.int32)
+    a_diff        = tf.cast(tf.equal(a_blr_greedy, a_nn_greedy), tf.float32)
 
-    tf.summary.scalar("train/mse_q_blr_nn", tf.losses.mean_squared_error(act_means, agent_net))
-    tf.summary.scalar("train/mse_a_blr_nn", tf.losses.mean_squared_error(a_blr_greedy, a_nn_greedy))
+    tf.summary.scalar("debug/mse_q_blr_nn", tf.losses.mean_squared_error(act_means, agent_net))
+    tf.summary.scalar("debug/mse_a_blr_nn", tf.reduce_mean(a_diff))
 
     # UCB
     if self.policy == "ucb":
-      act_ucb       = tf.argmax(act_means + act_stds, axis=-1, output_type=tf.int32, name=name)
+      act_ucb = tf.argmax(act_means + self.ucb_c * act_stds, axis=-1, output_type=tf.int32, name=name)
       return act_ucb
 
     # Greedy Policy
     if self.policy == "greedy":
-      act_greedy    = tf.identity(a_blr_greedy, name=name)
+      act_greedy = tf.identity(a_blr_greedy, name=name)
       return act_greedy
+
+    # Thompson Sampling
+    if self.policy == "ts":
+      act_thompson = tf.argmax(self.q_thompson, axis=-1, output_type=tf.int32, name=name)
+      return act_thompson
 
     act_regret    = tf.reduce_max(act_means + self.n_stds * act_stds, axis=-1)
     act_regret    = act_regret - (act_means - self.n_stds * act_stds)
     act_regret_sq = tf.square(act_regret)
     act_info_gain = tf.log(1 + tf.square(act_stds) / self.rho**2)
-    act_ids       = tf.div(act_regret_sq, act_info_gain)
-    act_ids       = tf.argmin(act_ids, axis=-1, output_type=tf.int32, name=name)
+    act_info_gain = tf.check_numerics(act_info_gain, "InfoGain is NaN or Inf")
+    act_ids_score = tf.div(act_regret_sq, act_info_gain)
+    act_ids_score = tf.check_numerics(act_ids_score, "IDS score is NaN or Inf")
+    act_ids       = tf.argmin(act_ids_score, axis=-1, output_type=tf.int32, name=name)
+
     return act_ids
 
 
@@ -323,3 +345,8 @@ class DQN_IDS_BLR(DQN):
     train_op      = tf.group(net_train, blr_train, name=name)
 
     return train_op
+
+
+  def reset(self, sess):
+    if self.policy == "ts":
+      sess.run(self.reset_ts)

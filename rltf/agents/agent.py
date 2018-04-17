@@ -440,7 +440,13 @@ class OffPolicyAgent(Agent):
 
       # Get an action to run
       if self.learn_started:
-        action = self._action_train(obs, t)
+        try:
+          action = self._action_train(obs, t)
+        except tf.errors.InvalidArgumentError as e:
+          logger.exception("Numerical Exception: %s", e)
+          action = self.env.action_space.sample()
+          # Terminate program
+          self._terminate = True
 
       # Choose random action if learning has not started
       else:

@@ -32,6 +32,7 @@ class BayesianLinearRegression:
     self.w_mu     = None
     self.w_Sigma  = None
     self.w_Lambda = None
+    self.w_ts     = None  # Sampled value for w when using Thompson Sampling
 
 
   def build(self):
@@ -43,6 +44,13 @@ class BayesianLinearRegression:
     self.w_mu     = tf.Variable(zeros,        dtype=self.dtype, trainable=False)
     self.w_Sigma  = tf.Variable(    tau2 * I, dtype=self.dtype, trainable=False)
     self.w_Lambda = tf.Variable(1.0/tau2 * I, dtype=self.dtype, trainable=False)
+
+    self.w_ts     = tf.Variable(zeros,        dtype=self.dtype, trainable=False)
+
+    tf.summary.histogram("debug/BLR_w_mu",      self.w_mu)
+    tf.summary.histogram("debug/BLR_w_Sigma",   self.w_Sigma)
+    tf.summary.histogram("debug/BLR_w_Lambda",  self.w_Lambda)
+    tf.summary.histogram("debug/BLR_w_ts",      self.w_ts)
 
 
   def weight_posterior(self, X, y):
@@ -118,6 +126,9 @@ class BayesianLinearRegression:
     else:
       w_Sigma = tf.matrix_inverse(w_Lambda)
 
+    error = tf.losses.mean_squared_error(tf.matmul(w_Lambda, w_Sigma), tf.eye(self.w_dim)) * self.w_dim
+    tf.summary.scalar("debug/BLR_inv_error", error)
+
     # Compute the posterior mean
     w_mu = self._posterior_mean(X, y, self.w_mu, self.w_Lambda, w_Sigma)
 
@@ -159,3 +170,32 @@ class BayesianLinearRegression:
     std = self._cast_output(std)
 
     return mu, std
+
+
+  def predict_thompson(self, X):
+    """ Compute the predicted y using a sampled parameter w
+    Args:
+      X: tf.Tensor, `shape=[None, D]`. The feature matrix
+    Returns:
+      y: tf.Tensor, `shape=[None, 1]. The mean at each test point
+    """
+    X   = self._cast_input(X)
+    X   = self._add_bias(X)
+    y   = tf.matmul(X, self.w_ts)
+    y   = self._cast_output(y)
+    return y
+
+
+  def reset_thompson(self, cholesky=False):
+    sample = tf.random_normal(shape=self.w_mu.shape)
+
+    # Compute A s.t. A A^T = w_Sigma
+    if cholesky:
+      # Use cholesky
+      A = tf.cholesky(self.w_Sigma)
+    else:
+      # Use SVD
+      S, U, _ = tf.svd(self.w_Sigma)
+      A = tf.matmul(U, tf.diag(tf.sqrt(S)))
+
+    return tf.assign(self.w_ts, self.w_mu + tf.matmul(A, sample))

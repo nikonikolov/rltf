@@ -47,6 +47,8 @@ def parse_args():
     ('--phi-norm',      dict(default=False,  type=s2b,   help='if True, normalize BLR features in IDS')),
     ('--same-w',        dict(default=False,  type=s2b,   help='if True, use the same W for all actions')),
     ('--policy',        dict(default="ids",  type=str,   help='policy to use for ids')),
+    ('--tau',           dict(default=None,   type=float, help='BLR regularization')),
+    ('--sigma',         dict(default=1.0,    type=float, help='BLR sigma')),
   ]
 
   return cmdargs.parse_args(args)
@@ -55,6 +57,9 @@ def parse_args():
 def main():
 
   args = parse_args()
+
+  if args.tau is None:
+    args.tau = 1.0/(1.0-args.gamma)
 
   # Get the model directory path
   if args.restore_model is None:
@@ -79,7 +84,7 @@ def main():
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
   elif args.model == "DQN_IDS_BLR":
     model_type    = DQN_IDS_BLR
-    model_kwargs  = dict(huber_loss=args.huber_loss, sigma=1.0, tau=1.0/(1.0-0.99), same_w=args.same_w,
+    model_kwargs  = dict(huber_loss=args.huber_loss, sigma=args.sigma, tau=args.tau, same_w=args.same_w,
                          policy=args.policy, phi_norm=args.phi_norm)
   elif args.model == "C51":
     model_type    = C51
