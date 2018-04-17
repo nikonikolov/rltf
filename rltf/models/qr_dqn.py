@@ -1,8 +1,8 @@
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models  import BaseDQN
-from rltf.models  import tf_utils
+from rltf.models.dqn  import BaseDQN
+from rltf.models      import tf_utils
 
 
 class QRDQN(BaseDQN):

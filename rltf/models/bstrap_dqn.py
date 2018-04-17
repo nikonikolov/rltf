@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from rltf.models  import BaseDQN
+from rltf.models.dqn  import BaseDQN
 
 
 class BstrapDQN(BaseDQN):

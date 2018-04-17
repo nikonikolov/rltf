@@ -1,7 +1,7 @@
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models  import BaseDQN
+from rltf.models.dqn  import BaseDQN
 
 
 class C51(BaseDQN):

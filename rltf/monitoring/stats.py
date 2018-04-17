@@ -144,8 +144,8 @@ class StatsRecorder:
 
     default_info = [
       ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
-      ("train/agent_steps",                     "d",    lambda t: t),
 
+      ("train/agent_steps",                     "d",    lambda t: t),
       ("train/env_steps",                       "d",    lambda t: self.train_steps),
       ("train/episodes",                        "d",    lambda t: len(self.train_ep_rews)),
       ("train/best_episode_rew",                ".3f",  lambda t: self.train_stats["best_ep_rew"]),
@@ -156,6 +156,7 @@ class StatsRecorder:
       ("train/std_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.train_stats["std_ep_rew"]),
 
 
+      ("eval/agent_steps",                      "d",    lambda t: t),
       ("eval/env_steps",                        "d",    lambda t: self.eval_steps),
       ("eval/episodes",                         "d",    lambda t: len(self.eval_ep_rews)),
       ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
