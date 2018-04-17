@@ -2,8 +2,8 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from rltf.agents.agent  import OffPolicyAgent
-from rltf.memory        import ReplayBuffer
+from rltf.agents  import OffPolicyAgent
+from rltf.memory  import ReplayBuffer
 
 
 class AgentDQN(OffPolicyAgent):
