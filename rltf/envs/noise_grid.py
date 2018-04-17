@@ -22,7 +22,7 @@ class NoiseGrid(gym.Env):
   #   - If you want to allow moving only 1-cell per step, you can simply use the action to indicate
   #     whether you want to move up or down, relative to the current cell
 
-  def __init__(self, n=10, ep_len=None):
+  def __init__(self, n=4, ep_len=None):
     self.n = n            # Grid size
     # self.n = n            # Number of grid columns
     # self.k = k+1          # Number of grid rows + the 0 state
@@ -33,6 +33,7 @@ class NoiseGrid(gym.Env):
     self.steps = 0        # Start at the 0 state
     self.rewards = np.arange(0, self.n+1, 1) # Array of size n+1
     self.delta = 1
+    self.regret = 0
     self.seed()
 
   def seed(self, seed=None):
@@ -41,18 +42,26 @@ class NoiseGrid(gym.Env):
 
   def step(self, action):
     assert self.action_space.contains(action)
-    self.steps += 1
 
-    if self.state == 0:
+    if self.steps == 0:
       self.state = action
 
     if action == 0:
       reward = 0
+      regret = self.rewards[self.n]
+      regret += self.delta * self.n if self.steps > 0 else 0
+    elif self.steps == 0:
+      reward = self.rewards[self.state] + self.np_random.randn()
+      regret = self.rewards[self.state] - self.rewards[self.n]
     else:
       reward = self.rewards[self.state] + self.delta * action + self.np_random.randn() * action
+      regret = self.rewards[self.n] - self.rewards[self.state] + self.delta * (self.n - action)
     done = True if self.steps >= self.ep_len else False
 
-    return self._encode_state(), reward, done, {}
+    self.steps += 1
+    self.regret += regret
+
+    return self._encode_state(), reward, done, dict(regret_t=regret, total_regret=self.regret)
 
   def reset(self):
     self.state = 0

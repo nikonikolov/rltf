@@ -6,6 +6,6 @@ from gym.envs.registration import register
 
 register(
     id='NoiseGrid-v0',
-    entry_point='rltf.envs.noisy_grid:NoiseGrid',
+    entry_point='rltf.envs.noise_grid:NoiseGrid',
     # max_episode_steps=1000,
 )
