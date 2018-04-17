@@ -35,7 +35,8 @@ from gym          import error
 from gym          import __version__ as GYM_VERSION
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 
-from rltf.monitoring import StatsRecorder
+from rltf.monitoring.stats import StatsRecorder
+
 
 logger          = logging.getLogger(__name__)
 monitor_closer  = closer.Closer()

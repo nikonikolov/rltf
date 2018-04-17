@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from rltf.models  import DQN
+from rltf.models.dqn  import DQN
 
 
 class DDQN(DQN):

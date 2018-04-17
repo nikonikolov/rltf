@@ -4,8 +4,8 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from rltf.agents  import OffPolicyAgent
-from rltf.memory  import ReplayBuffer
+from rltf.agents.agent  import OffPolicyAgent
+from rltf.memory        import ReplayBuffer
 
 
 class AgentDDPG(OffPolicyAgent):
@@ -116,12 +116,12 @@ class AgentDDPG(OffPolicyAgent):
     self.action_noise.reset()
 
 
-  def _stats_act_noise_mean(self, *args):
+  def _stats_act_noise_mean(self, *_):
     if len(self.act_noise_stats) == 0:
       return float("nan")
     return np.mean(self.act_noise_stats)
 
-  def _stats_act_noise_std(self, *args):
+  def _stats_act_noise_std(self, *_):
     if len(self.act_noise_stats) == 0:
       return float("nan")
     return np.std(self.act_noise_stats)

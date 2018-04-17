@@ -95,8 +95,8 @@ class Agent:
     # NOTE: Create the tf.train.Saver  **after** building the whole graph
     self.saver     = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
     # Create TensorBoard summary writers
-    self.tb_train_writer  = tf.summary.FileWriter(self.model_dir, self.sess.graph)
-    self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir)
+    self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tb/", self.sess.graph)
+    self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tb/")
 
 
   def train(self):
@@ -301,6 +301,10 @@ class Agent:
 
       # Save the model
       self.saver.save(self.sess, self.model_dir, global_step=self.t_train)
+
+      # Flush the TB writers
+      self.tb_train_writer.flush()
+      self.tb_eval_writer.flush()
 
       logger.info("Save finished successfully")
 

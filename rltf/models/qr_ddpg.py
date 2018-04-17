@@ -2,10 +2,10 @@ import logging
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models  import DDPG
-from rltf.models  import tf_utils
-
+from rltf.models.ddpg import DDPG
 from rltf.models.ddpg import init_hidden_uniform
+from rltf.models      import tf_utils
+
 
 logger = logging.getLogger(__name__)
 
