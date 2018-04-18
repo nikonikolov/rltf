@@ -35,7 +35,10 @@ class DQN_IDS_BLR(DQN):
     self.n_stds   = 1.0       # Number of standard deviations for computing the regret bound
     self.ucb_c    = 0.1       # UCB bonus constant
 
-    blr_params    = dict(sigma=sigma, tau=tau, w_dim=self.dim_phi+1, auto_bias=False)
+    self.add_bias = False
+    self.blr_dim  = self.dim_phi+1 if self.add_bias else self.dim_phi
+
+    blr_params    = dict(sigma=sigma, tau=tau, w_dim=self.blr_dim, auto_bias=False)
     if same_w:
       # --------------------------- ARCH: SAME ACTION WEIGHTS ---------------------------
       self.blr        = BayesianLinearRegression(**blr_params)
@@ -119,8 +122,9 @@ class DQN_IDS_BLR(DQN):
       phi       = tf.layers.batch_normalization(phi, axis=-1, training=training)
 
     # Add bias to the feature transformations
-    bias    = tf.ones(shape=[tf.shape(phi)[0], 1], dtype=tf.float32)
-    phi     = tf.concat([phi, bias], axis=-1)
+    if self.add_bias:
+      bias    = tf.ones(shape=[tf.shape(phi)[0], 1], dtype=tf.float32)
+      phi     = tf.concat([phi, bias], axis=-1)
 
     target  = tf.expand_dims(target, axis=-1)
 
@@ -132,7 +136,7 @@ class DQN_IDS_BLR(DQN):
       X = tf.boolean_mask(phi,    mask)
       y = tf.boolean_mask(target, mask)
       b = tf.shape(X)[0]
-      X = tf.cond(tf.not_equal(b, 0), lambda: X, lambda: tf.zeros([1, self.dim_phi+1]))
+      X = tf.cond(tf.not_equal(b, 0), lambda: X, lambda: tf.zeros([1, self.blr_dim]))
       y = tf.cond(tf.not_equal(b, 0), lambda: y, lambda: tf.zeros([1, 1]))
       w_update_op = self.blr[i].weight_posterior(X, y)
       y_m, y_std  = self.blr[i].predict(phi)
@@ -166,6 +170,7 @@ class DQN_IDS_BLR(DQN):
       x: `tf.Tensor`, shape `[batch_size, n_actions]`. Contains the Q-function for each action
       phi: `tf.Tensor`, shape `[batch_size, n_actions, dim_phi]`. Contains the state-action features
     """
+
     with tf.variable_scope("conv_net"):
       # original architecture
       x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
@@ -230,24 +235,29 @@ class DQN_IDS_BLR(DQN):
       y_sts: tf.Tensor, shape `[None, n_actions]`. The std BLR estimate from `blr.predict()`
     """
 
+    # # Make sure phi is 2D
+    # phi = tf.reshape(phi, [-1, self.dim_phi])
+
     # Normalize features
     if self.phi_norm:
       raise NotImplementedError()
-      # CAREFUL WITH BATCH NORM - HOW SHOULD YOU DO THE NORMALIZATION?
-      training  = tf.not_equal(tf.shape(self._obs_t_ph)[0], 1)
-      phi       = tf.layers.batch_normalization(phi, axis=-1, training=training)
+      training    = tf.not_equal(tf.shape(self._obs_t_ph)[0], 1)
+      bnorm_args  = dict(axis=-1, center=False, scale=False, trainable=False, training=training)
+      phi         = tf.layers.batch_normalization(phi, **bnorm_args)
 
     # y: Tensor with BLR labels for the batch; shape `[None, 1]`
     y       = tf.expand_dims(target, axis=-1)
 
-    # X: Tensor with BLR train inputs for the batch; shape `[None, phi_dim+1]`
+    # X: Tensor with BLR train inputs for the batch; shape `[None, blr_dim]`
     a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, on_value=True, off_value=False, dtype=tf.bool)
     X       = tf.boolean_mask(phi, a_mask)
-    X       = tf.concat([X, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
+    if self.add_bias:
+      X     = tf.concat([X, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
 
-    # phi: Tensor with BLR test inputs; shape `[batch_size * n_actions, phi_dim+1]`
+    # phi: Tensor with BLR test inputs; shape `[batch_size * n_actions, blr_dim]`
     phi     = tf.reshape(phi, [-1, self.dim_phi])
-    phi     = tf.concat([phi, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
+    if self.add_bias:
+      phi   = tf.concat([phi, tf.ones([tf.shape(phi)[0], 1])], axis=-1)
 
     # Build the Bayesian Regression ops and estimates
     self.blr.build()

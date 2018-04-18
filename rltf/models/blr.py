@@ -126,7 +126,7 @@ class BayesianLinearRegression:
     else:
       w_Sigma = tf.matrix_inverse(w_Lambda)
 
-    error = tf.losses.mean_squared_error(tf.matmul(w_Lambda, w_Sigma), tf.eye(self.w_dim)) * self.w_dim
+    error = tf.losses.mean_squared_error(tf.matmul(w_Lambda, w_Sigma), tf.eye(self.w_dim))
     tf.summary.scalar("debug/BLR_inv_error", error)
 
     # Compute the posterior mean
