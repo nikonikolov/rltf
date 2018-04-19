@@ -94,7 +94,7 @@ class BstrapDQN(BaseDQN):
     # UCB policy
     elif self.policy == "ucb":
       mean      = tf.reduce_mean(agent_net, axis=1)
-      std       = agent_net - tf.expand_dims(mean)
+      std       = agent_net - tf.expand_dims(mean, axis=-2)
       std       = tf.reduce_mean(tf.square(std), axis=1)
       action    = tf.argmax(mean + self.ucb_c * std, axis=-1, output_type=tf.int32, name=name)
 
@@ -105,7 +105,7 @@ class BstrapDQN(BaseDQN):
     # IDS policy
     elif self.policy == "ids":
       mean      = tf.reduce_mean(agent_net, axis=1)
-      std       = agent_net - tf.expand_dims(mean)
+      std       = agent_net - tf.expand_dims(mean, axis=-2)
       std       = tf.reduce_mean(tf.square(std), axis=1)
       regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1)
       regret    = regret - (mean - self.n_stds * std)
