@@ -46,7 +46,7 @@ def parse_args():
 
     ('--phi-norm',      dict(default=False,  type=s2b,   help='if True, normalize BLR features in IDS')),
     ('--same-w',        dict(default=False,  type=s2b,   help='if True, use the same W for all actions')),
-    ('--policy',        dict(default="ids",  type=str,   help='policy to use for ids')),
+    ('--policy',        dict(default="ids",  type=str,   help='policy to use for IDS or BstrapDQN')),
     ('--tau',           dict(default=None,   type=float, help='BLR regularization')),
     ('--sigma',         dict(default=1.0,    type=float, help='BLR sigma')),
   ]
@@ -81,7 +81,7 @@ def main():
     model_kwargs  = dict(huber_loss=args.huber_loss)
   elif args.model == "BstrapDQN":
     model_type    = BstrapDQN
-    model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
+    model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads, policy=args.policy)
   elif args.model == "DQN_IDS_BLR":
     model_type    = DQN_IDS_BLR
     model_kwargs  = dict(huber_loss=args.huber_loss, sigma=args.sigma, tau=args.tau, same_w=args.same_w,

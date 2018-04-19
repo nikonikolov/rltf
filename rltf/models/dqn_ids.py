@@ -1,7 +1,7 @@
 import tensorflow as tf
 
-from rltf.models  import DQN
-from rltf.models  import BayesianLinearRegression
+from rltf.models.dqn  import DQN
+from rltf.models.blr  import BayesianLinearRegression
 
 
 class DQN_IDS_BLR(DQN):

@@ -5,7 +5,7 @@ from rltf.models.dqn  import BaseDQN
 
 class BstrapDQN(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, policy="ts"):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -14,12 +14,21 @@ class BstrapDQN(BaseDQN):
       gamma: float. Discount factor
       huber_loss: bool. Whether to use huber loss or not
       n_heads: Number of bootstrap heads
+      policy: str. One of "ucb", "ensemble", "ids" or "ts"
     """
+
+    assert policy in ["ucb", "ensemble", "ids", "ts"]
 
     super().__init__(obs_shape, n_actions, opt_conf, gamma)
 
     self.huber_loss   = huber_loss
     self.n_heads      = n_heads
+
+    # Policy parameters
+    self.policy = policy
+    self.n_stds = 1.0       # Number of standard deviations for IDS regret bound
+    self.ucb_c  = 0.1       # UCB bonus constant
+    self.rho    = 0.5       # Const for IDS Info Gain
 
     # Custom TF Tensors and Ops
     self._active_head   = None
@@ -28,9 +37,11 @@ class BstrapDQN(BaseDQN):
 
 
   def build(self):
-    self._active_head   = tf.Variable([0], trainable=False, name="active_head")
-    sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
-    self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
+
+    if self.policy == "ts":
+      self._active_head   = tf.Variable([0], trainable=False, name="active_head")
+      sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
+      self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
 
     super().build()
 
@@ -71,11 +82,40 @@ class BstrapDQN(BaseDQN):
 
 
   def _act_train(self, agent_net, name):
-    # Get the Q function from the active head
-    head_mask = tf.one_hot(self._active_head, self.n_heads, on_value=True, off_value=False, dtype=tf.bool)
-    q_head    = tf.boolean_mask(agent_net, head_mask)
-    # Compute the greedy action
-    action    = tf.argmax(q_head, axis=-1, output_type=tf.int32, name=name)
+
+    # Thompson Sampling policy
+    if self.policy == "ts":
+      # Get the Q function from the active head
+      head_mask = tf.one_hot(self._active_head, self.n_heads, on_value=True, off_value=False, dtype=tf.bool)
+      q_head    = tf.boolean_mask(agent_net, head_mask)
+      # Compute the greedy action
+      action    = tf.argmax(q_head, axis=-1, output_type=tf.int32, name=name)
+
+    # UCB policy
+    elif self.policy == "ucb":
+      mean      = tf.reduce_mean(agent_net, axis=1)
+      std       = agent_net - tf.expand_dims(mean)
+      std       = tf.reduce_mean(tf.square(std), axis=1)
+      action    = tf.argmax(mean + self.ucb_c * std, axis=-1, output_type=tf.int32, name=name)
+
+    # Ensemble policy
+    elif self.policy == "ensemble":
+      action    = self._act_eval(agent_net, name)
+
+    # IDS policy
+    elif self.policy == "ids":
+      mean      = tf.reduce_mean(agent_net, axis=1)
+      std       = agent_net - tf.expand_dims(mean)
+      std       = tf.reduce_mean(tf.square(std), axis=1)
+      regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1)
+      regret    = regret - (mean - self.n_stds * std)
+      regret_sq = tf.square(regret)
+      info_gain = tf.log(1 + tf.square(std) / self.rho**2)
+      # info_gain = tf.check_numerics(info_gain, "InfoGain is NaN or Inf")
+      ids_score = tf.div(regret_sq, info_gain)
+      ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
+      action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+
     return action
 
 
@@ -182,9 +222,11 @@ class BstrapDQN(BaseDQN):
   def _restore(self, graph):
     super()._restore(graph)
 
-    self._active_head   = graph.get_tensor_by_name("active_head:0")
-    self._set_act_head  = graph.get_operation_by_name("set_act_head")
+    if self.policy == "ts":
+      self._active_head   = graph.get_tensor_by_name("active_head:0")
+      self._set_act_head  = graph.get_operation_by_name("set_act_head")
 
 
   def reset(self, sess):
-    sess.run(self._set_act_head)
+    if self.policy == "ts":
+      sess.run(self._set_act_head)
