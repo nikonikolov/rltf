@@ -36,12 +36,12 @@ def parse_args():
     ('--warm-up',       dict(default=50000,  type=int,   help='# steps before training starts')),
     ('--train-freq',    dict(default=4,      type=int,   help='learn frequency')),
     ('--update-freq',   dict(default=10000,  type=int,   help='how often to update target')),
-    ('--stop-step',     dict(default=10**8,  type=int,   help='steps to run the agent for')),
+    ('--stop-step',     dict(default=5*10**7,type=int,   help='steps to run the agent for')),
     ('--huber-loss',    dict(default=True,   type=s2b,   help='use huber loss')),
     ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
 
     ('--eval-freq',     dict(default=10**6,  type=int,   help='how often to evaluate model')),
-    ('--eval-len',      dict(default=100000, type=int,   help='for how many steps to eval each time')),
+    ('--eval-len',      dict(default=500000, type=int,   help='for how many steps to eval each time')),
   ]
 
   return cmdargs.parse_args(args)
