@@ -237,7 +237,7 @@ class BstrapDQN_IDS(BstrapDQN):
     mean      = tf.reduce_mean(agent_net, axis=1)
     std       = agent_net - tf.expand_dims(mean, axis=-2)
     std       = tf.sqrt(tf.reduce_mean(tf.square(std), axis=1))
-    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1)
+    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keep_dims=True)
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
     info_gain = tf.log(1 + tf.square(std) / self.rho**2) + 1e-5
