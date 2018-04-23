@@ -9,7 +9,7 @@ from rltf.memory        import ReplayBuffer
 class AgentDQN(OffPolicyAgent):
 
   def __init__(self,
-               model_type,
+               model,
                model_kwargs,
                opt_conf,
                exploration,
@@ -21,7 +21,7 @@ class AgentDQN(OffPolicyAgent):
               ):
     """
     Args:
-      model_type: rltf.models.Model. TF implementation of a model network
+      model: rltf.models.Model. TF implementation of a model network
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
       opt_conf: rltf.optimizers.OptimizerConf. Config for the network optimizer
       exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
@@ -52,7 +52,7 @@ class AgentDQN(OffPolicyAgent):
     model_kwargs["n_actions"] = n_actions
     model_kwargs["opt_conf"]  = opt_conf
 
-    self.model      = model_type(**model_kwargs)
+    self.model      = model(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, np.uint8, [], np.uint8, obs_len)
 
     # Configure what information to log

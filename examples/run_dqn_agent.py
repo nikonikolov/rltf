@@ -12,7 +12,6 @@ from rltf.models        import DQN_IDS_BLR
 from rltf.models        import C51
 from rltf.models        import QRDQN
 from rltf.optimizers    import OptimizerConf
-from rltf.optimizers    import AdamGradClipOptimizer
 from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
 from rltf.utils         import rltf_log
@@ -74,25 +73,19 @@ def main():
   rltf_log.conf_logs(model_dir)
 
   # Get the model-specific settings
-  if   args.model == "DQN":
-    model_type    = DQN
-    model_kwargs  = dict(huber_loss=args.huber_loss)
-  elif args.model == "DDQN":
-    model_type    = DDQN
+  model = eval(args.model)
+
+  if   args.model in ["DQN", "DDQN"]:
     model_kwargs  = dict(huber_loss=args.huber_loss)
   elif args.model in ["BstrapDQN", "BstrapDQN_IDS", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]:
-    model_type    = eval(args.model)
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
   elif args.model == "DQN_IDS_BLR":
-    model_type    = DQN_IDS_BLR
     args.tau      = 1.0/(1.0-args.gamma) if args.tau is None else args.tau
     model_kwargs  = dict(huber_loss=args.huber_loss, sigma=args.sigma, tau=args.tau, same_w=args.same_w,
                          policy=args.policy, phi_norm=args.phi_norm)
   elif args.model == "C51":
-    model_type    = C51
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)
   elif args.model == "QRDQN":
-    model_type    = QRDQN
     model_kwargs  = dict(N=200, k=int(args.huber_loss))
 
   model_kwargs["gamma"] = args.gamma
@@ -107,11 +100,6 @@ def main():
 
   # Cteate the optimizer configs
   opt_conf = OptimizerConf(tf.train.AdamOptimizer, learn_rate, epsilon=args.adam_epsilon)
-  # if args.grad_clip is None:
-  #   opt_conf = OptimizerConf(tf.train.AdamOptimizer, learn_rate, epsilon=args.adam_epsilon)
-  # else:
-  #   opt_args = dict(epsilon=args.adam_epsilon, grad_clip=args.grad_clip)
-  #   opt_conf = OptimizerConf(AdamGradClipOptimizer, learn_rate, **opt_args)
 
   # Create the exploration schedule
   if args.explore_decay > 0:
@@ -136,7 +124,7 @@ def main():
   )
 
   dqn_agent_kwargs = dict(
-    model_type=model_type,
+    model=model,
     model_kwargs=model_kwargs,
     opt_conf=opt_conf,
     exploration=exploration,

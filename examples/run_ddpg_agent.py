@@ -85,9 +85,9 @@ def main():
 
   # Get the model-specific settings
   if    args.model == "DDPG":
-    model_type = DDPG
+    model = DDPG
   elif  args.model == "QRDDPG":
-    model_type = QRDDPG
+    model = QRDDPG
     model_kwargs["N"] = args.N
 
 
@@ -132,7 +132,7 @@ def main():
   )
 
   ddpg_agent_kwargs = dict(
-    model_type=model_type,
+    model=model,
     model_kwargs=model_kwargs,
     actor_opt_conf=actor_opt_conf,
     critic_opt_conf=critic_opt_conf,
