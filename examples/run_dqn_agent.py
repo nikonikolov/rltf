@@ -3,6 +3,9 @@ import tensorflow as tf
 from rltf.agents        import AgentDQN
 from rltf.envs          import wrap_dqn
 from rltf.models        import BstrapDQN
+from rltf.models        import BstrapDQN_IDS
+from rltf.models        import BstrapDQN_UCB
+from rltf.models        import BstrapDQN_Ensemble
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import DQN_IDS_BLR
@@ -19,7 +22,8 @@ from rltf.utils         import cmdargs
 
 def parse_args():
 
-  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "DQN_IDS_BLR"]
+  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble",
+                 "BstrapDQN_IDS", "DQN_IDS_BLR"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -58,9 +62,6 @@ def main():
 
   args = parse_args()
 
-  if args.tau is None:
-    args.tau = 1.0/(1.0-args.gamma)
-
   # Get the model directory path
   if args.restore_model is None:
     model_dir   = maker.make_model_dir(args.model, args.env_id)
@@ -79,11 +80,12 @@ def main():
   elif args.model == "DDQN":
     model_type    = DDQN
     model_kwargs  = dict(huber_loss=args.huber_loss)
-  elif args.model == "BstrapDQN":
-    model_type    = BstrapDQN
-    model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads, policy=args.policy)
+  elif args.model in ["BstrapDQN", "BstrapDQN_IDS", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]:
+    model_type    = eval(args.model)
+    model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
   elif args.model == "DQN_IDS_BLR":
     model_type    = DQN_IDS_BLR
+    args.tau      = 1.0/(1.0-args.gamma) if args.tau is None else args.tau
     model_kwargs  = dict(huber_loss=args.huber_loss, sigma=args.sigma, tau=args.tau, same_w=args.same_w,
                          policy=args.policy, phi_norm=args.phi_norm)
   elif args.model == "C51":
