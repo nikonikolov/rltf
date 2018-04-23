@@ -492,7 +492,10 @@ class OffPolicyAgent(Agent):
         self._wait_act_chosen()
 
         # Run a training step
-        self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
+        if t % self.log_freq + self.train_freq >= self.log_freq:
+          self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
+        else:
+          self.sess.run(self.model.train_op, feed_dict=feed_dict)
 
         # Update target network
         if t % self.update_target_freq == 0:

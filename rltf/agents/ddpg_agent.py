@@ -11,7 +11,7 @@ from rltf.memory        import ReplayBuffer
 class AgentDDPG(OffPolicyAgent):
 
   def __init__(self,
-               model_type,
+               model,
                model_kwargs,
                actor_opt_conf,
                critic_opt_conf,
@@ -25,7 +25,7 @@ class AgentDDPG(OffPolicyAgent):
     Args:
       agent_config: dict. Dictionary with parameters for the Agent class. Must
         contain all parameters that do not have default values
-      model_type: rltf.models.Model. TF implementation of a model network
+      model: rltf.models.Model. TF implementation of a model network
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
       actor_opt_conf: rltf.optimizers.OptimizerConf. Config for the actor network optimizer
       critic_opt_conf: rltf.optimizers.OptimizerConf. Config for the critic network optimizer
@@ -63,7 +63,7 @@ class AgentDDPG(OffPolicyAgent):
     model_kwargs["actor_opt_conf"]  = actor_opt_conf
     model_kwargs["critic_opt_conf"] = critic_opt_conf
 
-    self.model      = model_type(**model_kwargs)
+    self.model      = model(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_len)
 
     # Configure what information to log
