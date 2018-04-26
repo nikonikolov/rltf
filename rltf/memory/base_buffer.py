@@ -1,6 +1,7 @@
 import os
-
 import numpy as np
+
+from rltf.utils import seeding
 
 
 class BaseBuffer():
@@ -25,6 +26,8 @@ class BaseBuffer():
     self.action = np.empty([self.max_size] + act_shape, dtype=act_dtype)
     self.reward = np.empty([self.max_size],             dtype=np.float32)
     self.done   = np.empty([self.max_size],             dtype=np.bool)
+
+    self.prng   = seeding.get_prng()
 
 
   def store(self, obs_t, act_t, reward_tp1, done_tp1):
@@ -93,6 +96,8 @@ class BaseBuffer():
       low: int. Lower boundary of the sample range
       high: int. Upper boundary of the sample range
       exclude: list or np.array. Contains values that samples must not take
+    Returns:
+      np.array of the sampled indices
     """
 
     batch = np.empty(n, dtype=np.uint32)
@@ -101,7 +106,8 @@ class BaseBuffer():
     k = 0
 
     while k < n:
-      samples = np.random.randint(low, high, n-k)
+      # samples = np.random.randint(low, high, n-k)
+      samples = self.prng.randint(low, high, n-k)
       # Get only the unique entries
       samples = np.unique(samples)
       # Get only the entries which are not in exclude

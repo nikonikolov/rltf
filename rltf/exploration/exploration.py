@@ -1,9 +1,10 @@
+from rltf.utils import seeding
 
 
 class ExplorationNoise:
 
   def __init__(self):
-    pass
+    self.prng = seeding.get_prng()
 
   def sample(self, t):
     """Get a sample from the noise process for the given time step

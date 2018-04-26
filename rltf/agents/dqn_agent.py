@@ -2,11 +2,12 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from rltf.agents.agent  import OffPolicyAgent
+from rltf.agents.off_pi import ParallelOffPolicyAgent
+from rltf.agents.off_pi import SequentialOffPolicyAgent
 from rltf.memory        import ReplayBuffer
 
 
-class AgentDQN(OffPolicyAgent):
+class AgentDQN(ParallelOffPolicyAgent):
 
   def __init__(self,
                model,
@@ -109,7 +110,7 @@ class AgentDQN(OffPolicyAgent):
   def _action_train(self, state, t):
     # Run epsilon greedy policy
     epsilon = self.exploration.value(t)
-    if np.random.uniform(0,1) < epsilon:
+    if self.prng.uniform(0,1) < epsilon:
       action = self.env.action_space.sample()
     else:
       # Run the network to select an action
@@ -119,7 +120,7 @@ class AgentDQN(OffPolicyAgent):
 
   def _action_eval(self, state, t):
     # Run epsilon greedy policy
-    if np.random.uniform(0,1) < self.epsilon_eval:
+    if self.prng.uniform(0,1) < self.epsilon_eval:
       action = self.env.action_space.sample()
     else:
       # Run the network to select an action

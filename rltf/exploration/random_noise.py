@@ -55,7 +55,7 @@ class GaussianNoise(ExplorationNoise):
     self.sigma  = sigma
 
   def sample(self, t):
-    return np.random.normal(self.mu, self.sigma)
+    return self.prng.normal(self.mu, self.sigma)
 
   def reset(self):
     pass
@@ -98,7 +98,7 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
 
   def sample(self, t):
     x = self.x + self.theta * (self.mu - self.x) * self.dt + \
-        self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.sigma.shape)
+        self.sigma * np.sqrt(self.dt) * self.prng.normal(size=self.sigma.shape)
     self.x = x
     return x
 

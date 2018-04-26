@@ -4,3 +4,4 @@ from rltf import exploration
 from rltf import memory
 from rltf import models
 from rltf import schedules
+from rltf import utils
