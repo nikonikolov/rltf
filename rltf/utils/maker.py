@@ -30,7 +30,8 @@ def make_env(env_id, seed, model_dir, video_freq=None):
     import roboschool
 
   # Set all seeds
-  rltf.utils.seeding.set_global_seeds(seed)
+  rltf.utils.seeding.set_random_seed(seed)
+  rltf.utils.seeding.set_global_seeds()
 
   monitor_dir = os.path.join(model_dir, "env_monitor")
   if video_freq is None:

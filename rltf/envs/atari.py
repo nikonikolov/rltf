@@ -29,6 +29,7 @@ import cv2
 import gym
 import numpy as np
 
+from rltf.utils import seeding
 
 class NoopResetEnv(gym.Wrapper):
   def __init__(self, env, noop_max=30):
@@ -38,6 +39,7 @@ class NoopResetEnv(gym.Wrapper):
     super().__init__(env)
     self.noop_max = noop_max
     assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
+    self.prng = seeding.get_prng()
 
   def step(self, action):
     return self.env.step(action)
@@ -45,7 +47,8 @@ class NoopResetEnv(gym.Wrapper):
   def reset(self, **kwargs):
     """Do no-op action for a number of steps in [1, noop_max]."""
     self.env.reset(**kwargs)
-    noops = np.random.randint(1, self.noop_max + 1)
+    # noops = np.random.randint(1, self.noop_max + 1)
+    noops = self.prng.randint(1, self.noop_max + 1)
     for _ in range(noops):
       obs, _, done, _ = self.env.step(0)
       if done:

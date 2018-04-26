@@ -1,14 +1,12 @@
 import logging
 import os
-import threading
-
 import tensorflow as tf
 
-from rltf.conf        import STATS_LOGGER_NAME
 from rltf.envs.utils  import get_env_monitor
+from rltf.utils       import seeding
 
-stats_logger  = logging.getLogger(STATS_LOGGER_NAME)
-logger        = logging.getLogger(__name__)
+
+logger = logging.getLogger(__name__)
 
 
 class Agent:
@@ -53,6 +51,7 @@ class Agent:
     self.save_freq      = save_freq
     self.log_freq       = log_freq
     self.restore_dir    = os.path.join(restore_dir, "tf/") if restore_dir is not None else None
+    self.prng           = seeding.get_prng()
 
     self.start_step     = None          # Step from which the agent starts
     self.warm_up        = warm_up       # Step from which training starts
@@ -313,219 +312,3 @@ class Agent:
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     return tf.Session(config=config)
-
-
-
-class OffPolicyAgent(Agent):
-  """The base class for Off-policy agents
-
-  Allows to run env actions and train the model in separate threads, while
-  providing an easy way to synchronize between the threads. Can speed up
-  training by 20-50%
-  """
-
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-
-    # Create synchronization events
-    self._act_chosen = threading.Event()
-    self._train_done = threading.Event()
-
-    self._terminate  = False
-
-
-  def train(self):
-
-    self._act_chosen.clear()
-    self._train_done.set()
-
-    env_thread  = threading.Thread(name='env_thread', target=self._run_env)
-    nn_thread   = threading.Thread(name='net_thread', target=self._train_model)
-
-    nn_thread.start()
-    env_thread.start()
-
-    # Wait for threads
-    try:
-      env_thread.join()
-      nn_thread.join()
-    except KeyboardInterrupt:
-      logger.info("EXITING")
-      self._terminate = True
-      env_thread.join()
-      nn_thread.join()
-
-
-  def eval(self):
-
-    logger.info("Starting evaluation")
-
-    # Set the monitor in evaluation mode
-    self.env_monitor.mode = 'e'
-
-    start_step  = self.sess.run(self.t_eval) + 1
-    stop_step   = start_step + self.eval_len
-    stop_step   = stop_step - stop_step % self.eval_len + 1   # Restore point might be the middle of eval
-
-    obs = self.reset()
-
-    for t in range (start_step, stop_step):
-      if self._terminate:
-        break
-
-      # Increment the current eval step
-      self.sess.run(self.t_eval_inc)
-
-      action = self._action_eval(obs, t)
-      next_obs, _, done, _ = self.env.step(action)
-
-      # Reset the environment if end of episode
-      if done:
-        next_obs = self.reset()
-      obs = next_obs
-
-      if t % self.log_freq == 0:
-        # Log the statistics
-        self.env_monitor.log_stats(t)
-
-        # Add a TB summary
-        summary = tf.Summary()
-        summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.get_mean_ep_rew())
-        self.tb_eval_writer.add_summary(summary, t)
-
-    # Set the monitor back to train mode
-    self.env_monitor.mode = 't'
-
-    logger.info("Evaluation finished")
-
-
-  def _action_train(self, state, t):
-    """Return action selected by the agent for a training step
-    Args:
-      state: np.array. Current state
-      t: int. Current timestep
-    """
-    raise NotImplementedError()
-
-
-  def _action_eval(self, state, t):
-    """Return action selected by the agent for an evaluation step
-    Args:
-      state: np.array. Current state
-      t: int. Current timestep
-    """
-    raise NotImplementedError()
-
-
-  def _run_env(self):
-    """Thread for running the environment. Must call `self._wait_train_done()`
-    before selcting an action (by running the model). This ensures that the
-    `self._train_model()` thread has finished the training step. After action
-    is selected, it must call `self._signal_act_chosen()` to allow
-    `self._train_model()` thread to start a new training step
-    """
-
-    obs = self.reset()
-
-    for t in range (self.start_step, self.stop_step+1):
-      if self._terminate:
-        self._signal_act_chosen()
-        break
-
-      # Stop and run evaluation procedure
-      if self.eval_len > 0 and t % self.eval_freq == 0:
-        self.eval()
-        # Reset the environment on return
-        obs = self.reset()
-
-      # Get an action to run
-      if self.learn_started:
-        action = self._action_train(obs, t)
-
-      # Choose random action if learning has not started
-      else:
-        action = self.env.action_space.sample()
-
-      # Signal to net_thread that action is chosen
-      self._signal_act_chosen()
-
-      # Increment the TF timestep variable
-      self.sess.run(self.t_train_inc)
-
-      # Run action
-      next_obs, reward, done, _ = self.env.step(action)
-
-      # Store the effect of the action taken upon obs
-      self.replay_buf.store(obs, action, reward, done)
-
-      self._log_stats(t)
-
-      # Wait until net_thread is done
-      self._wait_train_done()
-
-      # Reset the environment if end of episode
-      if done:
-        next_obs = self.reset()
-      obs = next_obs
-
-
-  def _train_model(self):
-    """Thread for trianing the model. Must call `self._wait_act_chosen()`
-    before trying to run a training step on the model. This ensures that the
-    `self._run_env()` thread has finished selcting an action (by running the model).
-    After training step is done, it must call `self._signal_train_done()` to allow
-    `self._run_env()` thread to select a new action
-    """
-
-    for t in range (self.start_step, self.stop_step+1):
-      if self._terminate:
-        self._signal_train_done()
-        break
-
-      if (t >= self.warm_up and t % self.train_freq == 0):
-
-        self.learn_started = True
-
-        # Compose feed_dict
-        feed_dict = self._get_feed_dict(t)
-
-        self._wait_act_chosen()
-
-        # Run a training step
-        if t % self.log_freq + self.train_freq >= self.log_freq:
-          self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
-        else:
-          self.sess.run(self.model.train_op, feed_dict=feed_dict)
-
-        # Update target network
-        if t % self.update_target_freq == 0:
-          self.sess.run(self.model.update_target)
-
-      else:
-        self._wait_act_chosen()
-
-      if self.save_freq > 0 and t % self.save_freq == 0:
-        self.save()
-
-      self._signal_train_done()
-
-
-  def _wait_act_chosen(self):
-    # Wait until an action is chosen to be run
-    while not self._act_chosen.is_set():
-      self._act_chosen.wait()
-    self._act_chosen.clear()
-
-  def _wait_train_done(self):
-    # Wait until training step is done
-    while not self._train_done.is_set():
-      self._train_done.wait()
-    self._train_done.clear()
-
-  def _signal_act_chosen(self):
-    # Signal that the action is chosen and the TF graph is safe to be run
-    self._act_chosen.set()
-
-  def _signal_train_done(self):
-    # Signal to env thread that the training step is done running
-    self._train_done.set()

@@ -1,6 +1,8 @@
+import threading
 import numpy as np
 
-from rltf.memory.base_buffer import BaseBuffer
+from rltf.memory.base_buffer  import BaseBuffer
+from rltf.utils               import seeding
 
 
 class ReplayBuffer(BaseBuffer):
@@ -8,7 +10,7 @@ class ReplayBuffer(BaseBuffer):
   observations
   """
 
-  def __init__(self, size, state_shape, obs_dtype, act_shape, act_dtype, obs_len=1):
+  def __init__(self, size, state_shape, obs_dtype, act_shape, act_dtype, obs_len=1, sync=False):
     """
     Args:
       Check super().__init__()
@@ -45,6 +47,11 @@ class ReplayBuffer(BaseBuffer):
     self.obs_shape    = obs_shape
     self.state_shape  = state_shape
 
+    self._sync    = sync and seeding.SEEDED
+    self._sampled = threading.Event()
+    self._stored  = threading.Event()
+    self._sampled.clear()
+    self._stored.set()
 
 
   def store(self, obs_t, act_t, reward_tp1, done_tp1):
@@ -61,6 +68,7 @@ class ReplayBuffer(BaseBuffer):
       reward_tp1: `float`
       done_tp1: `bool`
     """
+    self.wait_sampled()
 
     # To avoid storing the same data several times, if obs_len > 1, then store only the last
     # observation from the stack of observations that comprise a state
@@ -76,6 +84,8 @@ class ReplayBuffer(BaseBuffer):
     idx = self.next_idx
     self.next_idx = (self.next_idx + 1) % self.max_size
     self.size_now = min(self.max_size, self.size_now + 1)
+
+    self.signal_stored()
 
     return idx
 
@@ -103,7 +113,9 @@ class ReplayBuffer(BaseBuffer):
         True if episode has ended, False otherwise
     """
 
+    self.wait_stored()
     exclude = self._exclude_indices()
+    self.signal_sampled()
 
     assert batch_size < self.size_now - len(exclude) - 1
 
@@ -187,3 +199,32 @@ class ReplayBuffer(BaseBuffer):
       # This optimization has potential to saves about 30% compute time \o/
       img_h, img_w = self.obs.shape[1], self.obs.shape[2]
       return self.obs[lo:hi].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
+
+
+  def wait_sampled(self):
+    if not self._sync:
+      return
+    # Wait until an action is chosen to be run
+    while not self._sampled.is_set():
+      self._sampled.wait()
+    self._sampled.clear()
+
+  def wait_stored(self):
+    if not self._sync:
+      return
+    # Wait until training step is done
+    while not self._stored.is_set():
+      self._stored.wait()
+    self._stored.clear()
+
+  def signal_sampled(self):
+    if not self._sync:
+      return
+    # Signal that the action is chosen and the TF graph is safe to be run
+    self._sampled.set()
+
+  def signal_stored(self):
+    if not self._sync:
+      return
+    # Signal to env thread that the training step is done running
+    self._stored.set()

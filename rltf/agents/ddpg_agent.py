@@ -4,11 +4,12 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from rltf.agents.agent  import OffPolicyAgent
+from rltf.agents.off_pi import ParallelOffPolicyAgent
+from rltf.agents.off_pi import SequentialOffPolicyAgent
 from rltf.memory        import ReplayBuffer
 
 
-class AgentDDPG(OffPolicyAgent):
+class AgentDDPG(ParallelOffPolicyAgent):
 
   def __init__(self,
                model,
