@@ -235,12 +235,13 @@ class BstrapDQN_IDS(BstrapDQN):
 
   def _act_train(self, agent_net, name):
     mean      = tf.reduce_mean(agent_net, axis=1)
-    std       = agent_net - tf.expand_dims(mean, axis=-2)
-    std       = tf.sqrt(tf.reduce_mean(tf.square(std), axis=1))
+    zero_mean = agent_net - tf.expand_dims(mean, axis=-2)
+    var       = tf.reduce_mean(tf.square(zero_mean), axis=1)
+    std       = tf.sqrt(var)
     regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keep_dims=True)
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
-    info_gain = tf.log(1 + tf.square(std) / self.rho**2) + 1e-5
+    info_gain = tf.log(1 + var / self.rho**2) + 1e-5
     # info_gain = tf.log(1 + tf.square(std) / self.rho**2)
     # info_gain = tf.check_numerics(info_gain, "InfoGain is NaN or Inf")
     ids_score = tf.div(regret_sq, info_gain)
