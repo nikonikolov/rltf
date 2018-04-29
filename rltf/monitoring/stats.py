@@ -225,9 +225,9 @@ class StatsRecorder:
     else:
       return self._stats_mean(self.eval_ep_rews)
 
-
-  def get_episode_id(self):
-    return len(self.train_ep_rews) if self._mode == 't' else len(self.eval_ep_rews) + 1
+  @property
+  def episode_id(self):
+    return (len(self.train_ep_rews) if self._mode == 't' else len(self.eval_ep_rews)) + 1
 
 
   def log_stats(self, t):

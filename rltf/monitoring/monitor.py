@@ -36,6 +36,7 @@ from gym          import __version__ as GYM_VERSION
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 
 from rltf.monitoring.stats import StatsRecorder
+from rltf.monitoring.plot  import VideoPlotter
 
 
 logger          = logging.getLogger(__name__)
@@ -63,6 +64,9 @@ class Monitor(Wrapper):
       mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor. Can be
         changed with self.set_mode()
     """
+
+    # Wrap the enviroment for plotting in the video. Disabled by default
+    env = VideoPlotter(env)
 
     super().__init__(env)
 
@@ -133,7 +137,8 @@ class Monitor(Wrapper):
 
   def reset(self, **kwargs):
     self._before_reset()
-    obs = self.env.reset(**kwargs)
+    # obs = self.env.reset(**kwargs)
+    obs = self.env.reset(enabled=self.video_callable(self.episode_id), mode=self.mode, **kwargs)
     self._after_reset(obs)
     return obs
 
@@ -245,7 +250,7 @@ class Monitor(Wrapper):
     if self.video_recorder:
       self._close_video_recorder()
 
-    ep_id = self.get_episode_id()
+    ep_id = self.episode_id
     video_file = "openaigym_video_{}_episode_{:06}".format("train" if self._mode == 't' else "eval", ep_id)
     video_file = os.path.join(self.log_dir, video_file)
 
@@ -289,9 +294,9 @@ class Monitor(Wrapper):
     else:
       raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
 
-
-  def get_episode_id(self):
-    return self.stats_recorder.get_episode_id()
+  @property
+  def episode_id(self):
+    return self.stats_recorder.episode_id
 
 
   def get_episode_rewards(self, mode='t'):
@@ -322,3 +327,8 @@ class Monitor(Wrapper):
 
   def get_mean_ep_rew(self):
     return self.stats_recorder.get_mean_ep_rew()
+
+
+  def conf_video_plots(self, layout, train_tensors, eval_tensors, plot_data, test_frame):
+    self.env.conf_plots(layout=layout, plot_data=plot_data, test_frame=test_frame,
+                        train_tensors=train_tensors, eval_tensors=eval_tensors)
