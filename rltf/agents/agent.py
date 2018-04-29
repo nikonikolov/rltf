@@ -24,6 +24,7 @@ class Agent:
                log_freq=10000,
                save_freq=100000,
                restore_dir=None,
+               plots_layout=None,
               ):
     """
     Args:
@@ -41,6 +42,7 @@ class Agent:
         `restore_dir==model_dir`, then training is continued from the saved model time step and
         the existing model is overwritten. Otherwise, the saved weights are used but training
         starts from step 0 and the model is saved in `model_dir`. If `None`, no restoring
+      layout: dict or None. Used to configure the layout for video plots.
     """
 
     self.env            = env
@@ -61,6 +63,9 @@ class Agent:
 
     self.eval_freq      = eval_freq     # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
+
+    self.layout         = plots_layout
+    self.built          = False
 
     # TensorFlow attributes
     self.model            = None
@@ -96,6 +101,16 @@ class Agent:
     # Create TensorBoard summary writers
     self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tb/", self.sess.graph)
     self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tb/")
+
+    self.built = True
+    if self.layout:
+      self.plots_layout(self.layout)
+
+
+  def plots_layout(self, layout, test_frame=False):
+    assert self.built
+    self.env_monitor.conf_video_plots(layout=layout, train_tensors=self.model.plot_train,
+      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data, test_frame=test_frame)
 
 
   def train(self):

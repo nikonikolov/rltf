@@ -1,3 +1,5 @@
+from collections import UserDict
+
 import tensorflow as tf
 
 
@@ -19,6 +21,16 @@ class Model:
     self.obs_shape      = None
     self.act_dtype      = None
     self.act_shape      = None
+
+    # plot_train: UserDict of `tf.Tensor`(or `np.array`) objects that have to be run in the session
+    # plot_data: UserDict of `np.array`s that contain the actual data to be plotted
+    # For performance `plot_train.data` should be modified from the outside to determine when to run
+    # the tensors and transfer data between CPU and GPU. `plot_data.data` should be set to the result
+    # of `sess.run(plot_train)` after every step, no matter the value of `plot_train.data`.
+    # `plot_data` will be accessed from the outside to fetch the data when needed
+    self.plot_train = UserDict()
+    self.plot_eval  = UserDict()
+    self.plot_data  = UserDict()
 
     # TF Ops that should be set
     self._train_op      = None

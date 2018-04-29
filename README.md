@@ -27,7 +27,8 @@ very slight differences for the purpose of improving results.
 - Python >= 3.5
 - Tensorflow >= 1.4.0
 - OpenAI gym >= 0.9.6
-- opencv-python
+- opencv-python (pip package or OpenCV library)
+- matplotlib (with TkAgg backend)
 
 ### Install
 ```
