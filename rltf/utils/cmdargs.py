@@ -32,6 +32,7 @@ def parse_args(custom_args):
     ('--seed',         dict(default=42,     type=int,     help='seed for the run; not set if <=0')),
     ('--mode',         dict(default='train',type=str,     choices=['train', 'eval'])),
     ('--log-lvl',      dict(default='INFO', type=str,     help='logger lvl')),
+    ('--plot-video',   dict(default=False,  type=str2bool,help='if True, add model plots to video')),
     ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # steps')),
     ('--save-freq',    dict(default=0,      type=int,     help='how often to save the model in # \
       steps; if <=0, model is saved only at the end')),
