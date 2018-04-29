@@ -252,12 +252,19 @@ class BstrapDQN_IDS(BstrapDQN):
     a_ucb     = tf.argmax(mean + 0.1 * std, axis=-1, output_type=tf.int32)
     a_diff    = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
 
-    tf.summary.histogram("debug/a_std",     std)
     tf.summary.histogram("debug/a_mean",    mean)
+    tf.summary.histogram("debug/a_std",     std)
     tf.summary.histogram("debug/a_regret",  regret)
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
     tf.summary.scalar("debug/a_ucb_vs_ids", a_diff)
+
+    # Set the plottable tensors for video. Use only the first action in the batch
+    self.plot_train["actions"] = {
+      "a_mean": dict(height=mean[0]),
+      "a_std":  dict(height=std[0]),
+      "a_ids":  dict(height=ids_score[0]),
+    }
 
     return action
 

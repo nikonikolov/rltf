@@ -17,6 +17,7 @@ from rltf.schedules     import PiecewiseSchedule
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
 from rltf.utils         import cmdargs
+from rltf.utils         import layouts
 
 
 def parse_args():
@@ -146,6 +147,9 @@ def main():
 
   # Build the agent and the TF graph
   dqn_agent.build()
+
+  if args.plot_video and model == BstrapDQN_IDS:
+    dqn_agent.plots_layout(layouts.ids_layout)
 
   # Train or eval the agent
   if args.mode == 'train':
