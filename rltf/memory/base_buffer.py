@@ -21,6 +21,7 @@ class BaseBuffer():
     self.max_size  = int(size)
     self.size_now  = 0
     self.next_idx  = 0
+    self.new_idx   = 0
 
     self.obs    = np.empty([self.max_size] + obs_shape, dtype=obs_dtype)
     self.action = np.empty([self.max_size] + act_shape, dtype=act_dtype)
@@ -35,6 +36,37 @@ class BaseBuffer():
 
 
   def sample(self, batch_size):
+    raise NotImplementedError()
+
+
+  def new_data(self, batch_size=32):
+    """Yields the new data which was stored since the last call to this function.
+    Args:
+      batch_size: int. Size of a single yielded batch. Can be smaller than specified if not enough data
+    Returns:
+      python generator; has the same signature as `sample()`
+    """
+    raise NotImplementedError()
+
+
+  def all_data(self, batch_size=32):
+    """Yields all data in the buffer
+    Args:
+      batch_size: int. Size of a single yielded batch. Can be smaller than specified if not enough data
+    Returns:
+      python generator which should be iterated; has the same signature as `sample()`
+    """
+    raise NotImplementedError()
+
+
+  def recent_data(self, size, batch_size=32):
+    """Yields the most recent `size` number of examples in the buffer
+    Args:
+      size: int. Total number of data points to generate
+      batch_size: int. Size of a single yielded batch. Can be smaller than specified if not enough data
+    Returns:
+      python generator which should be iterated; has the same signature as `sample()`
+    """
     raise NotImplementedError()
 
 

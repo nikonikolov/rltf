@@ -119,29 +119,30 @@ class ReplayBuffer(BaseBuffer):
 
     assert batch_size < self.size_now - len(exclude) - 1
 
-    idxes   = self._sample_n_unique(batch_size, 0, self.size_now-2, exclude)
-    samples = self._batch_samples(idxes)
+    inds    = self._sample_n_unique(batch_size, 0, self.size_now-2, exclude)
+    samples = self._batch_samples(inds)
 
     return samples
 
 
-  def _batch_samples(self, idxes):
+  def _batch_samples(self, inds):
     """Takes the samples from the buffer stacks them into a batch
     Args:
-      idxes: np.array or list. Indices for transitions to be sampled from the buffer
+      inds: np.array or list. Indices for transitions to be sampled from the buffer
     Returns:
       See self.sample()
     """
+    next_inds = (inds+1) % self.max_size
     if self.obs_len == 1:
-      obs_batch     = self.obs[idxes]
-      obs_tp1_batch = self.obs[idxes+1]
+      obs_batch     = self.obs[inds]
+      obs_tp1_batch = self.obs[next_inds]
     else:
-      obs_batch     = np.concatenate([self._encode_observation(idx)[None] for idx in idxes], 0)
-      obs_tp1_batch = np.concatenate([self._encode_observation(idx)[None] for idx in idxes+1], 0)
+      obs_batch     = np.concatenate([self._encode_observation(idx)[None] for idx in inds], 0)
+      obs_tp1_batch = np.concatenate([self._encode_observation(idx)[None] for idx in next_inds], 0)
 
-    act_batch     = self.action[idxes]
-    rew_batch     = self.reward[idxes]
-    done_mask     = self.done[idxes]
+    act_batch = self.action[inds]
+    rew_batch = self.reward[inds]
+    done_mask = self.done[inds]
 
     return dict(obs=obs_batch, act=act_batch, rew=rew_batch, obs_tp1=obs_tp1_batch, done=done_mask)
 
@@ -157,15 +158,17 @@ class ReplayBuffer(BaseBuffer):
     # to the observation that will be overwritten next time. Then:
     # - the idx-1 observation is invalid because the next obs is not the true one
     # - the [idx : idx+obs_len-1) observations have inconsistent history
-    # If another thread might be currently incrementing the original value of
-    # self.next_idx, then the actual values that idx can have at this
-    # point are self.next_idx or self.next_idx+1. Then we need to widen the
-    # exlude range by 1 at each end. However, the previous observation is no longer
-    # guaranteed to be correctly written, so we need to widen the min exclude
-    # range by 1 more
+    # If another thread might be currently modifying the data in idx and it is not known whether it
+    # already incremented it, then the points with inconsistent history must also be incremented by 1.
+    # Also the index with invalid next state is either idx-1 (thread has not incremened idx yet) or
+    # idx (we have read the incremented idx). In either case, the safe lower bound remains idx-1.
+    # If self.sync == True, then `store()` has not begun and the upper bound is idx+obs_len-1
+    # NOTE: OffPolicyAgent can call `store()` only once before `sample()` finishes. If it calls
+    # `sample()` twice, before `store()` finishes, nothing changes.
 
     idx     = self.next_idx
-    exclude = np.arange(idx-3, idx+self.obs_len) % self.max_size
+    # exclude = np.arange(idx-3, idx+self.obs_len) % self.max_size
+    exclude = np.arange(idx-1, idx+self.obs_len) % self.max_size
     return exclude
 
 
@@ -199,6 +202,71 @@ class ReplayBuffer(BaseBuffer):
       # This optimization has potential to saves about 30% compute time \o/
       img_h, img_w = self.obs.shape[1], self.obs.shape[2]
       return self.obs[lo:hi].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
+
+
+  def new_data(self, batch_size=32):
+    # Get the end index (excluding)
+    hi = self.next_idx - 1
+
+    # If at the buffer boundary - happens only if the buffer is already full
+    if self.new_idx > hi:
+      hi += self.max_size
+    start = self.new_idx
+
+    while start < hi:
+      # Generate indices in absolute range
+      stop  = min(start + batch_size, hi)
+      inds  = np.arange(start, stop, 1, dtype=np.int32)
+      start = stop
+
+      # Convert indices to buffer range
+      inds  = inds % self.max_size
+
+      # Convert self.new_idx to a buffer index
+      self.new_idx = start % self.max_size
+
+      yield self._batch_samples(inds)
+
+
+  def all_data(self, batch_size=32):
+    # Get exclude indices
+    exclude = self._exclude_indices()
+    start   = 0
+    hi      = self.size_now
+
+    # Yield the range of indices
+    return self._yield_range(start, hi, exclude, batch_size)
+
+
+  def recent_data(self, size, batch_size=32):
+    # Get exclude indices
+    exclude = self._exclude_indices()
+    hi      = self.next_idx - 1
+    start   = hi - size
+
+    # If not enough samples, start from 0
+    if start < 0 and self.size_now < self.max_size:
+      start = 0
+
+    # Yield the range of indices
+    return self._yield_range(start, hi, exclude, batch_size)
+
+
+  def _yield_range(self, start, hi, exclude, batch_size):
+    while start < hi:
+      inds = []
+      # Use while loop to make sure that inds is not completely wiped because of exclude
+      while len(inds) == 0 and start < hi:
+        stop  = min(start + batch_size, hi)
+        inds  = np.arange(start, stop, 1, dtype=np.int32) % self.max_size
+        start = stop
+
+        # Remove indices which have to be excluded
+        valid = np.all(inds[:, None] != exclude, axis=-1)
+        inds  = inds[valid]
+
+      if len(inds) > 0:
+        yield self._batch_samples(inds)
 
 
   def wait_sampled(self):
