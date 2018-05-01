@@ -329,6 +329,5 @@ class Monitor(Wrapper):
     return self.stats_recorder.get_mean_ep_rew()
 
 
-  def conf_video_plots(self, layout, train_tensors, eval_tensors, plot_data, test_frame):
-    self.env.conf_plots(layout=layout, plot_data=plot_data, test_frame=test_frame,
-                        train_tensors=train_tensors, eval_tensors=eval_tensors)
+  def conf_video_plots(self, **kwargs):
+    self.env.conf_plots(**kwargs)
