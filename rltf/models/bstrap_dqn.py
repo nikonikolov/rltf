@@ -91,10 +91,15 @@ class BstrapDQN(BaseDQN):
     # Get the greedy action from each head; output shape `[batch_size, n_heads]`
     votes   = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
     # Get the action votes; output shape `[batch_size, n_actions]`
-    counts  = [count_value(votes, i) for i in range(self.n_actions)]
-    counts  = tf.concat(counts, axis=-1)
+    votes  = [count_value(votes, i) for i in range(self.n_actions)]
+    votes  = tf.concat(votes, axis=-1)
     # Get the max vote action; output shape `[batch_size]`
-    action  = tf.argmax(counts, axis=-1, output_type=tf.int32, name=name)
+    action  = tf.argmax(votes, axis=-1, output_type=tf.int32, name=name)
+
+    # Set the plottable tensors for video. Use only the first action in the batch
+    self.plot_eval["eval_actions"] = {
+      "a_votes": dict(height=tf.identity(votes[0], name="plot_votes")),
+    }
 
     return action
 
@@ -184,6 +189,10 @@ class BstrapDQN(BaseDQN):
     super()._restore(graph)
     self._active_head   = graph.get_tensor_by_name("active_head:0")
     self._set_act_head  = graph.get_operation_by_name("set_act_head")
+    votes               = graph.get_tensor_by_name("plot_votes:0")
+    self.plot_eval["eval_actions"] = {
+      "a_votes": dict(height=votes),
+    }
 
 
   def reset(self, sess):
@@ -260,13 +269,27 @@ class BstrapDQN_IDS(BstrapDQN):
     tf.summary.scalar("debug/a_ucb_vs_ids", a_diff)
 
     # Set the plottable tensors for video. Use only the first action in the batch
-    self.plot_train["actions"] = {
-      "a_mean": dict(height=mean[0]),
-      "a_std":  dict(height=std[0]),
-      "a_ids":  dict(height=ids_score[0]),
+    self.plot_train["train_actions"] = {
+      "a_mean": dict(height=tf.identity(mean[0], name="plot_mean")),
+      "a_std":  dict(height=tf.identity(std[0], name="plot_std")),
+      "a_ids":  dict(height=tf.identity(ids_score[0], name="plot_ids_score")),
     }
 
     return action
 
   def reset(self, sess):
     pass
+
+  def _restore(self, graph):
+    super()._restore()
+
+    # Restore plot_train
+    means       = graph.get_tensor_by_name("plot_mean:0")
+    stds        = graph.get_tensor_by_name("plot_std:0")
+    ids_scores  = graph.get_tensor_by_name("plot_ids_score:0")
+
+    self.plot_train["train_actions"] = {
+      "a_mean": dict(height=means),
+      "a_std":  dict(height=stds),
+      "a_ids":  dict(height=ids_scores),
+    }

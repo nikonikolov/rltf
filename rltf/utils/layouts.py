@@ -1,44 +1,96 @@
 from collections import OrderedDict
 
+def plot_bars(ax, kwargs, env, color):
+  x = atari_labels(env.unwrapped.get_action_meanings())
+  return ax.bar(x=x, **kwargs, color=color)
+
+def atari_labels(x):
+  for i, label in enumerate(x):
+
+    if label[-4:] == "FIRE":
+      if len(label) > 4:
+        end = "\nFIRE"
+
+        length = len(label[:-4])
+        if length >= 6:
+          if label[:2] == "UP":
+            start = "UP\n" + label[2:-4]
+          elif label[:4] == "DOWN":
+            start = "DOWN\n" + label[4:-4]
+          else:
+            raise ValueError
+        else:
+          start = label[:-4]
+        x[i] = start + end
+
+    elif len(label) >= 6:
+      length = len(label)
+      if label[:2] == "UP":
+        x[i] = "UP\n" + label[2:]
+      elif label[:4] == "DOWN":
+        x[i] = "DOWN\n" + label[4:]
+      else:
+        raise ValueError
+
+  return x
+
+
 ids_layout = {
-  "width": 500,
-  "height": 260,
-  "video_top": 25,
+  "width": 540,
+  "height": 280,
+  "video_top": 35,
   "video_left": 0,
   "figures": {
-    "actions": {
-      "top":20,
-      "left":180,
+    "train_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 360,
+      "height": 270,
       "fig": {
-        "width": 320,
-        "height": 240,
         "subplots": dict(nrows=3, ncols=1, sharex=True),
         "subplots_conf": OrderedDict(
           a_mean={
+            "tick_params": dict(axis='y', labelsize=5.5),
             "set_title": dict(label="MEAN", size=6),
           },
           a_std={
+            "tick_params": dict(axis='y', labelsize=5.5),
             "set_title": dict(label="STD", size=6),
           },
           a_ids={
+            "tick_params": dict(axis='y', labelsize=5.5),
             "set_title": dict(label="IDS", size=6),
-            "set_xticklabels": dict(labels=['NOOP', 'FIRE', 'RIGHT', 'LEFT', 'RIGHTFIRE', 'LEFTFIRE'], 
-                                    size=5.5),
           },
         ),
         "subplots_common": {
-          # "grid": dict(),   # Args for Axes.grid()
-          "tick_params": dict(axis='y', labelsize=6),
+          "grid": dict(linewidth=0.2),
+          "tick_params": dict(axis='x', labelsize=6.5),
         },
         "fig_conf": {
           "tight_layout": dict(pad=1.0, h_pad=0.0),
         },
       },
-      "plot": {
-        "method": "bar",
-        "kwargs": dict(x=['NOOP', 'FIRE', 'RIGHT', 'LEFT', 'RIGHTFIRE', 'LEFTFIRE'], color='#1f77b4'),
-        "keep": False,
+      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#1f77b4'),
+    },
+    "eval_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 360,
+      "height": 270,
+      "fig": {
+        "subplots": dict(nrows=1, ncols=1),
+        "subplots_conf": OrderedDict(
+          a_votes={
+            "set_title": dict(label="VOTES", size=8),
+            "tick_params": dict(axis='y', labelsize=8),
+          },
+        ),
+        "subplots_common": {
+          "tick_params": dict(axis='x', labelsize=6.5),
+        },
+        "fig_conf": {
+          "tight_layout": dict(pad=1.0, h_pad=0.0),
+        },
       },
+      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#d62728'),
     },
   }
 }
