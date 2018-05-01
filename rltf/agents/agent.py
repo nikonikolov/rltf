@@ -107,10 +107,10 @@ class Agent:
       self.plots_layout(self.layout)
 
 
-  def plots_layout(self, layout, test_frame=False):
+  def plots_layout(self, layout):
     assert self.built
     self.env_monitor.conf_video_plots(layout=layout, train_tensors=self.model.plot_train,
-      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data, test_frame=test_frame)
+      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
 
 
   def train(self):
