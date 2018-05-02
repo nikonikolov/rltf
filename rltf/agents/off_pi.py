@@ -194,7 +194,8 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
         self.learn_started = True
 
         # Compose feed_dict
-        feed_dict = self._get_feed_dict(t)
+        batch     = self.replay_buf.sample(self.batch_size)
+        feed_dict = self._get_feed_dict(batch, t)
 
         self._wait_act_chosen()
 
@@ -300,7 +301,8 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
         self.learn_started = True
 
         # Compose feed_dict
-        feed_dict = self._get_feed_dict(t)
+        batch     = self.replay_buf.sample(self.batch_size)
+        feed_dict = self._get_feed_dict(batch, t)
 
         # Run a training step
         # if t % self.log_freq + self.train_freq >= self.log_freq:
