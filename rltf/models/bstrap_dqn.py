@@ -50,7 +50,7 @@ class BstrapDQN(BaseDQN):
       Args:
         x: tf.Tensor. Tensor for the input
       Returns:
-        `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
+        `tf.Tensor` of shape `[batch_size, 1, n_actions]`. Contains the Q-function for each action
       """
       x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
       x = tf.layers.dense(x, units=n_actions, activation=None)
@@ -281,7 +281,7 @@ class BstrapDQN_IDS(BstrapDQN):
     pass
 
   def _restore(self, graph):
-    super()._restore()
+    super()._restore(graph)
 
     # Restore plot_train
     means       = graph.get_tensor_by_name("plot_mean:0")
