@@ -90,11 +90,7 @@ class AgentDQN(ParallelOffPolicyAgent):
     summary.value.add(tag="train/epsilon", simple_value=self.exploration.value(t))
 
 
-  def _get_feed_dict(self, t):
-    # Sample the Replay Buffer
-    batch = self.replay_buf.sample(self.batch_size)
-
-    # Compose feed_dict
+  def _get_feed_dict(self, batch, t):
     feed_dict = {
       self.model.obs_t_ph:       batch["obs"],
       self.model.act_t_ph:       batch["act"],

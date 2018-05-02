@@ -236,10 +236,11 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _get_feed_dict(self, t):
+  def _get_feed_dict(self, batch, t):
     """Get the placeholder parameters to feed to the model while training
     Args:
       t: int. Current timestep
+      batch: dict. Data to pack in feed_dict
     """
 
     raise NotImplementedError()
