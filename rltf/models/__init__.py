@@ -1,4 +1,4 @@
-from rltf.models.blr        import BayesianLinearRegression
+from rltf.models.blr        import BLR
 from rltf.models.bstrap_dqn import BstrapDQN
 from rltf.models.bstrap_dqn import BstrapDQN_IDS
 from rltf.models.bstrap_dqn import BstrapDQN_UCB

@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 from rltf.models.dqn  import DQN
-from rltf.models.blr  import BayesianLinearRegression
+from rltf.models.blr  import BLR
 
 
 class DQN_IDS_BLR(DQN):
@@ -41,14 +41,14 @@ class DQN_IDS_BLR(DQN):
     blr_params    = dict(sigma=sigma, tau=tau, w_dim=self.blr_dim, auto_bias=False)
     if same_w:
       # --------------------------- ARCH: SAME ACTION WEIGHTS ---------------------------
-      self.blr        = BayesianLinearRegression(**blr_params)
+      self.blr        = BLR(**blr_params)
       self._conv_nn   = self._conv_nn_same_w
       self._dense_nn  = self._dense_nn_same_w
       self._build_blr = self._build_blr_same_w
 
     else:
       # --------------------------- ARCH: DIFFERENT ACTION WEIGHTS ---------------------------
-      self.blr        = [BayesianLinearRegression(**blr_params) for _ in range(self.n_actions)]
+      self.blr        = [BLR(**blr_params) for _ in range(self.n_actions)]
       self._conv_nn   = self._conv_nn_diff_w
       self._dense_nn  = self._dense_nn_diff_w
       self._build_blr = self._build_blr_diff_w

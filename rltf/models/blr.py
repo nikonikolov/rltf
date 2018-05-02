@@ -3,7 +3,7 @@ import tensorflow as tf
 from rltf.models.tf_utils import woodburry_inverse
 
 
-class BayesianLinearRegression:
+class BLR:
   """Bayesian Linear Regression implemented in TF"""
 
   def __init__(self, sigma, tau, w_dim, auto_bias=True, woodburry=False):
@@ -37,20 +37,30 @@ class BayesianLinearRegression:
 
   def build(self):
     I     = tf.eye(self.w_dim, dtype=self.dtype)
-    zeros = tf.zeros([self.w_dim, 1], dtype=self.dtype)
     tau2  = self.tau**2
 
-    # Variables for the parameters of the weight distribution in BLR
-    self.w_mu     = tf.Variable(zeros,        dtype=self.dtype, trainable=False)
-    self.w_Sigma  = tf.Variable(    tau2 * I, dtype=self.dtype, trainable=False)
-    self.w_Lambda = tf.Variable(1.0/tau2 * I, dtype=self.dtype, trainable=False)
+    mu_init     = tf.zeros([self.w_dim, 1], dtype=self.dtype)
+    Sigma_init  = tau2 * I
+    Lambda_init = 1.0/tau2 * I
 
-    self.w_ts     = tf.Variable(zeros,        dtype=self.dtype, trainable=False)
+    # Variables for the parameters of the weight distribution in BLR
+    self.w_mu     = tf.Variable(mu_init,      dtype=self.dtype, trainable=False)
+    self.w_Sigma  = tf.Variable(Sigma_init,   dtype=self.dtype, trainable=False)
+    self.w_Lambda = tf.Variable(Lambda_init,  dtype=self.dtype, trainable=False)
+    self.w_ts     = tf.Variable(mu_init,      dtype=self.dtype, trainable=False)
+
+    # self.w_mu     = tf.get_variable("w_mu",     initializer=mu_init,      dtype=self.dtype, trainable=False)
+    # self.w_Sigma  = tf.get_variable("w_Sigma",  initializer=Sigma_init,   dtype=self.dtype, trainable=False)
+    # self.w_Lambda = tf.get_variable("w_Lambda", initializer=Lambda_init,  dtype=self.dtype, trainable=False)
+    # self.w_ts     = tf.get_variable("w_ts",     initializer=mu_init,      dtype=self.dtype, trainable=False)
 
     tf.summary.histogram("debug/BLR_w_mu",      self.w_mu)
     tf.summary.histogram("debug/BLR_w_Sigma",   self.w_Sigma)
     tf.summary.histogram("debug/BLR_w_Lambda",  self.w_Lambda)
     tf.summary.histogram("debug/BLR_w_ts",      self.w_ts)
+
+    # Build the reset op
+    self.reset    = self._tf_update_params(mu_init, Sigma_init, Lambda_init)
 
 
   def weight_posterior(self, X, y):
@@ -107,6 +117,7 @@ class BayesianLinearRegression:
     Lambda_op = tf.assign(self.w_Lambda,  w_Lambda)
 
     return tf.group(mu_op, Sigma_op, Lambda_op)
+
 
   def _weight_posterior(self, X, y):
     """Compute the weight posteriror of Bayesian Linear Regression
