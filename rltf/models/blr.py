@@ -6,7 +6,7 @@ from rltf.models.tf_utils import woodburry_inverse
 class BLR:
   """Bayesian Linear Regression implemented in TF"""
 
-  def __init__(self, sigma, tau, w_dim, auto_bias=True, woodburry=False):
+  def __init__(self, sigma, tau, w_dim, auto_bias=True, dtype=tf.float64):
     """
     Args:
       sigma: float. Standard deviation of observation noise
@@ -19,14 +19,13 @@ class BLR:
         as inverse of the precision. Else use `tf.inverse()`
     """
 
-    self.woodburry = woodburry
     self.auto_bias = auto_bias
 
     self.sigma  = sigma
     self.beta   = 1.0 / self.sigma**2
     self.tau    = tau
     self.w_dim  = w_dim if not auto_bias else w_dim+1
-    self.dtype  = tf.float64 if woodburry else tf.float32
+    self.dtype  = dtype
 
     # Custom TF Tensors and Ops
     self.w_mu     = None
@@ -131,11 +130,8 @@ class BLR:
     w_Lambda = self.w_Lambda + self.beta * tf.matmul(X, X, transpose_a=True)
 
     # Compute the posterior covariance matrix
-    if self.woodburry:
-      X_norm  = 1.0 / self.sigma * X
-      w_Sigma = woodburry_inverse(self.w_Sigma, tf.transpose(X_norm), X_norm)
-    else:
-      w_Sigma = tf.matrix_inverse(w_Lambda)
+    X_norm  = 1.0 / self.sigma * X
+    w_Sigma = woodburry_inverse(self.w_Sigma, tf.transpose(X_norm), X_norm)
 
     error = tf.losses.mean_squared_error(tf.matmul(w_Lambda, w_Sigma), tf.eye(self.w_dim))
     tf.summary.scalar("debug/BLR_inv_error", error)
