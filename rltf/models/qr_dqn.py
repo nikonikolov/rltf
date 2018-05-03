@@ -176,3 +176,25 @@ class QRDQNTS(QRDQN):
     action = tf.argmax(q, axis=0, name=name)
     
     return action
+
+
+  def _compute_target(self, target_net):
+    target_z    = target_net
+
+    # Compute the Z and Q estimate swith the agent network variables
+    agent_z     = self._nn_model(self._obs_tp1, scope="agent_net")
+    agent_q     = tf.reduce_mean(agent_z, axis=-1)
+
+    # Get the target Q probabilities for the greedy action; output shape [None, N]
+    target_act  = tf.argmax(agent_q, axis=-1)
+    a_mask      = tf.expand_dims(tf.one_hot(target_act, self.n_actions, dtype=tf.float32), axis=-1)
+    target_z    = tf.reduce_sum(target_z * a_mask, axis=1)
+
+    # Compute the projected quantiles; output shape [None, N]
+    done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)
+    done_mask   = tf.expand_dims(done_mask, axis=-1)
+    rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
+    target_z    = rew_t + self.gamma * done_mask * target_z
+    target_z    = tf.stop_gradient(target_z)
+
+    return target_z
