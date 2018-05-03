@@ -273,20 +273,36 @@ class StatsRecorder:
       with atomic_write.atomic_write(train_rew_file, True) as f:
         np.save(f, np.asarray(self.train_ep_rews, dtype=np.float32))
 
+      train_ep_len_file = os.path.join(self.log_dir, "train_ep_lens.npy")
+      with atomic_write.atomic_write(train_ep_len_file, True) as f:
+        np.save(f, np.asarray(self.train_ep_lens, dtype=np.int32))
+
     if self.eval_ep_rews:
       eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
       with atomic_write.atomic_write(eval_rew_file, True) as f:
         np.save(f, np.asarray(self.eval_ep_rews, dtype=np.float32))
 
+      eval_ep_len_file = os.path.join(self.log_dir, "eval_ep_lens.npy")
+      with atomic_write.atomic_write(eval_ep_len_file, True) as f:
+        np.save(f, np.asarray(self.eval_ep_lens, dtype=np.int32))
+
 
   def _resume(self):
     train_rew_file = os.path.join(self.log_dir, "train_ep_rews.npy")
     if os.path.exists(train_rew_file):
-      self.train_ep_rews  = list(np.load(train_rew_file))
+      self.train_ep_rews = list(np.load(train_rew_file))
 
     eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
     if os.path.exists(eval_rew_file):
-      self.eval_ep_rews  = list(np.load(eval_rew_file))
+      self.eval_ep_rews = list(np.load(eval_rew_file))
+
+    train_ep_len_file = os.path.join(self.log_dir, "train_ep_lens.npy")
+    if os.path.exists(train_ep_len_file):
+      self.train_ep_lens = list(np.load(train_ep_len_file))
+
+    eval_ep_len_file = os.path.join(self.log_dir, "eval_ep_lens.npy")
+    if os.path.exists(eval_ep_len_file):
+      self.eval_ep_lens = list(np.load(eval_ep_len_file))
 
     with open(os.path.join(self.log_dir, "stats_summary.json"), 'r') as f:
       data = json.load(f)
