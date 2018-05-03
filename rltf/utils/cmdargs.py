@@ -36,7 +36,7 @@ def parse_args(custom_args):
     ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # steps')),
     ('--save-freq',    dict(default=0,      type=int,     help='how often to save the model in # \
       steps; if <=0, model is saved only at the end')),
-    ('--video-freq',   dict(default=1000,   type=int,     help='how often to record videos in # \
+    ('--video-freq',   dict(default=500,    type=int,     help='how often to record videos in # \
       episodes; if <=0, do not record any video')),
     ('--restore-model',dict(default=None,   type=str,     help='path to existing dir; if set, will \
       continue training with the network and the env from the the dir')),

@@ -1,5 +1,8 @@
+import json
 import os
 import numpy as np
+
+from gym.utils  import atomic_write
 
 from rltf.utils import seeding
 
@@ -84,12 +87,22 @@ class BaseBuffer():
     Args:
       model_dir: Full path of the directory to save the buffer
     """
-    name = self.__class__.__name__
+    save_dir    = os.path.join(model_dir, "buffer")
+    state_file  = os.path.join(save_dir, "state.json")
+    
+    np.save(os.path.join(save_dir, "obs.npy"),   self.obs[:self.size_now])
+    np.save(os.path.join(save_dir, "act.npy"),   self.action[:self.size_now])
+    np.save(os.path.join(save_dir, "rew.npy"),   self.reward[:self.size_now])
+    np.save(os.path.join(save_dir, "done.npy"),  self.done[:self.size_now])
 
-    np.save(os.path.join(model_dir, name + "_obs.npy"),   self.obs[:self.size_now])
-    np.save(os.path.join(model_dir, name + "_act.npy"),   self.action[:self.size_now])
-    np.save(os.path.join(model_dir, name + "_rew.npy"),   self.reward[:self.size_now])
-    np.save(os.path.join(model_dir, name + "_done.npy"),  self.done[:self.size_now])
+    data = {
+      "size_now": self.size_now,
+      "next_idx": self.next_idx,
+      "new_idx":  self.new_idx,
+    }
+
+    with atomic_write.atomic_write(state_file) as f:
+      json.dump(data, f, indent=4, sort_keys=True)
 
 
   def resume(self, model_dir):
@@ -97,21 +110,26 @@ class BaseBuffer():
     Args:
       model_dir: Full path of the directory of the data
     """
-    name = self.__class__.__name__
+    save_dir    = os.path.join(model_dir, "buffer")
+    state_file  = os.path.join(save_dir, "state.json")
 
-    obs    = np.load(os.path.join(model_dir, name + "_obs.npy"))
-    action = np.load(os.path.join(model_dir, name + "_act.npy"))
-    done   = np.load(os.path.join(model_dir, name + "_done.npy"))
-    reward = np.load(os.path.join(model_dir, name + "_rew.npy"))
+    with open(state_file, 'r') as f:
+      data = json.load(f)
+
+    self.size_now = data["size_now"]
+    self.next_idx = data["next_idx"]
+    self.new_idx  = data["new_idx"]
+
+    obs    = np.load(os.path.join(save_dir, "obs.npy"))
+    action = np.load(os.path.join(save_dir, "act.npy"))
+    done   = np.load(os.path.join(save_dir, "done.npy"))
+    reward = np.load(os.path.join(save_dir, "rew.npy"))
 
     assert len(obs) == len(action) == len(reward) == len(done)
     assert self.obs.shape[1:]     == obs.shape[1:]
     assert self.action.shape[1:]  == action.shape[1:]
     assert self.reward.shape[1:]  == reward.shape[1:]
     assert self.done.shape[1:]    == done.shape[1:]
-
-    self.size_now = len(obs)
-    self.next_idx = self.size_now % self.max_size
 
     self.obs[:self.size_now]    = obs
     self.action[:self.size_now] = action
