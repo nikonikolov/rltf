@@ -11,4 +11,5 @@ from rltf.models.dqn        import DQN
 from rltf.models.dqn_ids    import DQN_IDS_BLR
 from rltf.models.model      import Model
 from rltf.models.qr_dqn     import QRDQN
+from rltf.models.qr_dqn     import QRDQNTS
 from rltf.models.qr_ddpg    import QRDDPG

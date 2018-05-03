@@ -11,6 +11,7 @@ from rltf.models        import DQN
 from rltf.models        import DQN_IDS_BLR
 from rltf.models        import C51
 from rltf.models        import QRDQN
+from rltf.models        import QRDQNTS
 from rltf.optimizers    import OptimizerConf
 from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
@@ -22,8 +23,8 @@ from rltf.utils         import layouts
 
 def parse_args():
 
-  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble",
-                 "BstrapDQN_IDS", "DQN_IDS_BLR"]
+  model_types = ["DQN", "DDQN", "C51", "QRDQN", "QRDQNTS", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_IDS",
+                 "BstrapDQN_Ensemble", "DQN_IDS_BLR"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -86,7 +87,7 @@ def main():
                          policy=args.policy, phi_norm=args.phi_norm)
   elif args.model == "C51":
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)
-  elif args.model == "QRDQN":
+  elif args.model in ["QRDQN", "QRDQNTS"]:
     model_kwargs  = dict(N=200, k=int(args.huber_loss))
 
   model_kwargs["gamma"] = args.gamma
