@@ -122,7 +122,7 @@ class QRDQN(BaseDQN):
 
 
   def _act_eval(self, agent_net, name):
-    return None
+    return tf.identity(self.a_train, name=name)
 
 
 class QRDQNTS(QRDQN):
@@ -198,3 +198,10 @@ class QRDQNTS(QRDQN):
     target_z    = tf.stop_gradient(target_z)
 
     return target_z
+
+
+  def _act_eval(self, agent_net, name):
+    # Compute the Q-function as expectation of Z; output shape [None, n_actions]
+    q       = tf.reduce_mean(agent_net, axis=-1)
+    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
+    return action
