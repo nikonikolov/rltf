@@ -1,4 +1,5 @@
 import logging
+import signal
 import threading
 import tensorflow as tf
 
@@ -19,6 +20,46 @@ class OffPolicyAgent(Agent):
     self.replay_buf = None
     self.update_target_freq = None
     self._terminate = False
+    self._save_buf  = False
+    self.threads = None
+
+
+  def train(self):
+    # Attach function to handle kills differently
+    signal.signal(signal.SIGTERM, self.terminate)
+
+    # Start threads
+    for t in self.threads:
+      t.start()
+
+    # Wait for threads
+    try:
+      for t in self.threads:
+        t.join()
+    except KeyboardInterrupt:
+      logger.info("EXITING")
+      self._terminate = True
+      for t in self.threads:
+        t.join()
+
+
+  def terminate(self, signal, frame):
+    logger.info("PROCESS KILLED. EXITING")
+    self._terminate = True
+    self._save_buf  = True
+    for t in self.threads:
+      t.join()
+    # self.close()
+
+
+  def _restore(self, graph, resume):
+    if resume:
+      self.replay_buf.resume(self.model_dir)
+
+
+  def _save(self):
+    if self._save_buf:
+      self.replay_buf.save(self.model_dir)
 
 
   def _action_train(self, state, t):
@@ -95,27 +136,12 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     self._act_chosen = threading.Event()
     self._train_done = threading.Event()
 
-
-  def train(self):
-
     self._act_chosen.clear()
     self._train_done.set()
 
-    env_thread  = threading.Thread(name='env_thread', target=self._run_env)
-    nn_thread   = threading.Thread(name='net_thread', target=self._train_model)
-
-    nn_thread.start()
-    env_thread.start()
-
-    # Wait for threads
-    try:
-      env_thread.join()
-      nn_thread.join()
-    except KeyboardInterrupt:
-      logger.info("EXITING")
-      self._terminate = True
-      env_thread.join()
-      nn_thread.join()
+    env_thread    = threading.Thread(name='env_thread', target=self._run_env)
+    nn_thread     = threading.Thread(name='net_thread', target=self._train_model)
+    self.threads  = [nn_thread, env_thread]
 
 
   def _run_env(self):
@@ -239,18 +265,12 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 class SequentialOffPolicyAgent(OffPolicyAgent):
   """Runs the environment and trains the model sequentially"""
 
-  def train(self):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
 
     # Use a thread in order to exit cleanly on KeyboardInterrupt
     train_thread  = threading.Thread(name='train_thread', target=self._train)
-    train_thread.start()
-
-    try:
-      train_thread.join()
-    except KeyboardInterrupt:
-      logger.info("EXITING")
-      self._terminate = True
-      train_thread.join()
+    self.threads  = [train_thread]
 
 
   def _train(self):

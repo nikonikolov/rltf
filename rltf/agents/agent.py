@@ -49,10 +49,10 @@ class Agent:
     self.env_monitor    = get_env_monitor(env)
 
     self.batch_size     = batch_size
-    self.model_dir      = os.path.join(model_dir, "tf/")
+    self.model_dir      = model_dir
     self.save_freq      = save_freq
     self.log_freq       = log_freq
-    self.restore_dir    = os.path.join(restore_dir, "tf/") if restore_dir is not None else None
+    self.restore_dir    = restore_dir
     self.prng           = seeding.get_prng()
 
     self.start_step     = None          # Step from which the agent starts
@@ -99,8 +99,8 @@ class Agent:
     # NOTE: Create the tf.train.Saver  **after** building the whole graph
     self.saver     = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
     # Create TensorBoard summary writers
-    self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tb/", self.sess.graph)
-    self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tb/")
+    self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tf/tb/", self.sess.graph)
+    self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tf/tb/")
 
     self.built = True
     if self.layout:
@@ -183,9 +183,10 @@ class Agent:
     logger.info("%s model", "Resuming" if resume else "Reusing")
 
     # Get the checkpoint
-    ckpt = tf.train.get_checkpoint_state(self.restore_dir)
+    restore_dir = os.path.join(self.restore_dir, "tf/")
+    ckpt = tf.train.get_checkpoint_state(restore_dir)
     if ckpt is None:
-      raise ValueError("No checkpoint found in {}".format(self.restore_dir))
+      raise ValueError("No checkpoint found in {}".format(restore_dir))
     ckpt_path = ckpt.model_checkpoint_path
 
     # Restore the graph structure
@@ -203,7 +204,7 @@ class Agent:
     self.model.restore(graph)
 
     # Recover the agent subclass variables
-    self._restore(graph)
+    self._restore(graph, resume)
 
     # Restore the values of all tf.Variables
     self.sess = self._get_sess()
@@ -246,12 +247,12 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _restore(self, graph):
+  def _restore(self, graph, resume):
     """Restore the Variables, placeholders and Ops needed by the class so that
     it can operate in exactly the same way as if `self._build()` was called
-
     Args:
       graph: tf.Graph. Graph, restored from a checkpoint
+      resume: bool. True - training should continue as started. False - use only NN weights
     """
     raise NotImplementedError()
 
@@ -308,20 +309,27 @@ class Agent:
 
   def save(self):
     if self.learn_started:
-      dirname = os.path.dirname(os.path.dirname(self.model_dir))
-      logger.info("Saving the TF model and stats to %s", dirname)
+      logger.info("Saving the TF model and stats to %s", self.model_dir)
 
       # Save the monitor statistics
       self.env_monitor.save()
 
       # Save the model
-      self.saver.save(self.sess, self.model_dir, global_step=self.t_train)
+      model_dir = os.path.join(self.model_dir, "tf/")
+      self.saver.save(self.sess, model_dir, global_step=self.t_train)
+
+      self._save()
 
       # Flush the TB writers
       self.tb_train_writer.flush()
       self.tb_eval_writer.flush()
 
       logger.info("Save finished successfully")
+
+
+  def _save(self):
+    """Use by implementing class for custom save procedures"""
+    return
 
 
   def _get_sess(self):

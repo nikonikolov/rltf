@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 import numpy as np
 
 from gym.utils  import atomic_write
-
 from rltf.utils import seeding
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseBuffer():
@@ -89,7 +92,10 @@ class BaseBuffer():
     """
     save_dir    = os.path.join(model_dir, "buffer")
     state_file  = os.path.join(save_dir, "state.json")
-    
+
+    if not os.path.exists(save_dir):
+      os.makedirs(save_dir)
+
     np.save(os.path.join(save_dir, "obs.npy"),   self.obs[:self.size_now])
     np.save(os.path.join(save_dir, "act.npy"),   self.action[:self.size_now])
     np.save(os.path.join(save_dir, "rew.npy"),   self.reward[:self.size_now])
@@ -113,6 +119,9 @@ class BaseBuffer():
     save_dir    = os.path.join(model_dir, "buffer")
     state_file  = os.path.join(save_dir, "state.json")
 
+    if not os.path.exists(save_dir):
+      return logger.warning("BaseBuffer not saved and cannot resume. Continuing with empty buffer.")
+
     with open(state_file, 'r') as f:
       data = json.load(f)
 
@@ -125,7 +134,7 @@ class BaseBuffer():
     done   = np.load(os.path.join(save_dir, "done.npy"))
     reward = np.load(os.path.join(save_dir, "rew.npy"))
 
-    assert len(obs) == len(action) == len(reward) == len(done)
+    assert len(obs) == len(action) == len(reward) == len(done) == self.size_now
     assert self.obs.shape[1:]     == obs.shape[1:]
     assert self.action.shape[1:]  == action.shape[1:]
     assert self.reward.shape[1:]  == reward.shape[1:]
