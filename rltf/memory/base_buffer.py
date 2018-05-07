@@ -146,27 +146,22 @@ class BaseBuffer():
     self.done[:self.size_now]   = done
 
 
-  def _sample_n_unique(self, n, low, high, exclude=None):
-    """Sample n unique indices in the range [low, high) and
-    while making sure that no sample appreas in exclude
-
+  def _sample_n_unique(self, n, lo, hi, exclude=None):
+    """Sample n unique indices in the range [lo, hi), making sure no sample appreas in `exclude`
     Args:
       n: int. Number of samples to take
-      low: int. Lower boundary of the sample range
-      high: int. Upper boundary of the sample range
+      lo: int. Lower boundary of the sample range; inclusive
+      hi: int. Upper boundary of the sample range; exclusive
       exclude: list or np.array. Contains values that samples must not take
     Returns:
       np.array of the sampled indices
     """
 
     batch = np.empty(n, dtype=np.uint32)
-    if exclude is not None:
-      exclude = np.asarray(exclude)
     k = 0
 
     while k < n:
-      # samples = np.random.randint(low, high, n-k)
-      samples = self.prng.randint(low, high, n-k)
+      samples = self.prng.randint(lo, hi, n-k)
       # Get only the unique entries
       samples = np.unique(samples)
       # Get only the entries which are not in exclude

@@ -128,9 +128,8 @@ class Agent:
     Returns:
       obs: np.array. The result of self.env.reset()
     """
-    if self.learn_started:
-      self.model.reset(self.sess)
-      self._reset()
+    self.model.reset(self.sess)
+    self._reset()
     return self.env.reset()
 
 
@@ -243,7 +242,15 @@ class Agent:
       t: int. Current timestep
       batch: dict. Data to pack in feed_dict
     """
+    raise NotImplementedError()
 
+
+  def _run_train_step(self, t, run_summary):
+    """Get the placeholder parameters to feed to the model while training
+    Args:
+      t: int. Current timestep
+      run_summary: bool. Whether summary should be run and set during the train step
+    """
     raise NotImplementedError()
 
 
