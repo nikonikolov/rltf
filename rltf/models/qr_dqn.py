@@ -129,52 +129,29 @@ class QRDQNTS(QRDQN):
 
   def _act_train(self, agent_net, name):
 
-    # samples; out shape: [n_actions, 1]
-    sample = tf.random_uniform([self.n_actions, 1], 0.0, 1.0)
+    # samples; out shape: [None, 1]
+    sample = tf.random_uniform([tf.shape(agent_net)[0], 1], 0.0, 1.0)
 
-    # quantiles; out shape [n_actions, N]
+    # quantiles; out shape [1, N]
     quantiles = np.arange(0, self.N, 1, dtype=np.float32) / float(self.N-1)
     quantiles = tf.constant(quantiles[None, :], dtype=tf.float32)
-    quantiles = tf.tile(quantiles, [self.n_actions, 1])
 
-    zeros     = tf.zeros_like(quantiles)
-    offset    = tf.ones_like(quantiles) * self.N
-    
-    # Find the lower quantile; out shape [n_actions, 1]
-    lo_offset = tf.where(tf.greater(quantiles - sample, 0), -offset, zeros)
-    lo_inds   = tf.argmax(quantiles + lo_offset, axis=-1, output_type=tf.int32)
-    lo_inds   = tf.expand_dims(lo_inds, axis=-1)
+    zeros   = tf.zeros_like(quantiles)
+    offset  = tf.ones_like(quantiles) * self.N
 
-    # Find the higher quantile; out shape [n_actions, 1]
-    hi_offset = tf.where(tf.less(quantiles - sample, 0), offset, zeros)
-    hi_inds   = tf.argmin(quantiles + hi_offset, axis=-1, output_type=tf.int32)
-    hi_inds   = tf.expand_dims(hi_inds, axis=-1)
-    
-    # Batch indices; out shape: [n_actions, 1]
-    b_inds = tf.zeros([self.n_actions, 1], dtype=tf.int32)
+    # Find the quantile index; out shape [None]
+    offset  = tf.where(tf.greater_equal(quantiles - sample, 0), -offset, zeros)
+    inds    = tf.argmax(quantiles + offset, axis=-1, output_type=tf.int32)
 
-    # Action indices; out shape: [n_actions, 1]
-    a_inds = tf.range(0, limit=self.n_actions, delta=1, dtype=tf.int32)
-    a_inds = tf.expand_dims(a_inds, axis=-1)
+    # Sample indices; out shape: [None, n_actions, N]
+    inds    = tf.expand_dims(inds, axis=-1)
+    inds    = tf.tile(inds, [1, self.n_actions])
+    inds    = tf.one_hot(inds, self.N, 1.0, 0.0, axis=-1, dtype=tf.float32)
 
-    # lo and hi Q indices; out shape: [n_actions, 3]
-    g_lo_inds = tf.concat([b_inds, a_inds, lo_inds], axis=-1)
-    g_hi_inds = tf.concat([b_inds, a_inds, hi_inds], axis=-1)
+    # Sampled qunatile value; out shape: [None, n_actions]
+    q       = tf.reduce_sum(agent_net * inds, axis=-1)
+    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
 
-    # Q lo and hi; out shape: [n_actions, 1]
-    lo = tf.gather_nd(agent_net, g_lo_inds)
-    hi = tf.gather_nd(agent_net, g_hi_inds)
-    hi = tf.expand_dims(hi, axis=-1)
-    lo = tf.expand_dims(lo, axis=-1)
-
-    # Interpolated Q; out shape [n_actions, 1]
-    alpha     = (hi - lo) / float(self.N-1)
-    lo_quant  = tf.cast(lo_inds, tf.float32) * float(self.N-1)
-    q = lo + alpha * (sample - lo_quant)
-
-    # Get the greedy action; out shape [1]
-    action = tf.argmax(q, axis=0, name=name)
-    
     return action
 
 
