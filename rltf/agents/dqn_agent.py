@@ -127,3 +127,36 @@ class AgentDQN(ParallelOffPolicyAgent):
 
   def _reset(self):
     pass
+
+
+class AgentBDQN(AgentDQN):
+
+  def __init__(self, blr_train_freq=None, blr_batch_size=None, **kwargs):
+    """
+    Args:
+      blr_train_freq: int. Period in number of steps at which to train the BLR
+      blr_batch_size: int. Number of samples to train BLR in an update step
+    """
+    super().__init__(**kwargs)
+
+    self.blr_train_freq = blr_train_freq or self.update_target_freq * 10
+    self.blr_batch_size = blr_batch_size or self.update_target_freq * 10
+
+
+  def _run_train_step(self, t, run_summary):
+    super()._run_train_step(t, run_summary)
+
+    if t % self.blr_train_freq == 0:
+      # for batch in self.replay_buf.random_data(self.blr_batch_size, self.batch_size):
+      #   feed_dict = self._get_feed_dict(batch, t)
+      #   self.sess.run(self.model.train_blr, feed_dict=feed_dict)
+
+      # Reset BLR
+      self.sess.run(self.model.reset_blr)
+
+      # Train BLR
+      n = int(self.blr_batch_size / self.batch_size)
+      for _ in range(n):
+        batch = self.replay_buf.sample(self.batch_size)
+        feed_dict = self._get_feed_dict(batch, t)
+        self.sess.run(self.model.train_blr, feed_dict=feed_dict)

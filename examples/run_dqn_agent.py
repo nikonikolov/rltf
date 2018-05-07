@@ -1,14 +1,17 @@
 import tensorflow as tf
 
 from rltf.agents        import AgentDQN
+from rltf.agents        import AgentBDQN
 from rltf.envs          import wrap_dqn
+from rltf.models        import BDQN
+from rltf.models        import BDQN_IDS
+from rltf.models        import BDQN_UCB
 from rltf.models        import BstrapDQN
 from rltf.models        import BstrapDQN_IDS
 from rltf.models        import BstrapDQN_UCB
 from rltf.models        import BstrapDQN_Ensemble
 from rltf.models        import DDQN
 from rltf.models        import DQN
-from rltf.models        import DQN_IDS_BLR
 from rltf.models        import C51
 from rltf.models        import QRDQN
 from rltf.models        import QRDQNTS
@@ -24,7 +27,7 @@ from rltf.utils         import layouts
 def parse_args():
 
   model_types = ["DQN", "DDQN", "C51", "QRDQN", "QRDQNTS", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_IDS",
-                 "BstrapDQN_Ensemble", "DQN_IDS_BLR"]
+                 "BstrapDQN_Ensemble", "BDQN", "BDQN_UCB", "BDQN_IDS"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -49,11 +52,10 @@ def parse_args():
     ('--eval-freq',     dict(default=10**6,  type=int,   help='how often to evaluate model')),
     ('--eval-len',      dict(default=500000, type=int,   help='for how many steps to eval each time')),
 
-    ('--phi-norm',      dict(default=False,  type=s2b,   help='if True, normalize BLR features in IDS')),
-    ('--same-w',        dict(default=False,  type=s2b,   help='if True, use the same W for all actions')),
-    ('--policy',        dict(default="ids",  type=str,   help='policy to use for IDS or BstrapDQN')),
-    ('--tau',           dict(default=None,   type=float, help='BLR regularization')),
-    ('--sigma',         dict(default=1.0,    type=float, help='BLR sigma')),
+    ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB and IDS')),
+    ('--tau',           dict(default=0.001,  type=float, help='BLR prior covariance')),
+    ('--sigma-e',       dict(default=1.0,    type=float, help='BLR observation noise')),
+    ('--policy',        dict(default="deterministic", type=str, choices=["stochastic", "deterministic"])),
   ]
 
   return cmdargs.parse_args(args)
@@ -76,15 +78,18 @@ def main():
 
   # Get the model-specific settings
   model = eval(args.model)
+  agent = AgentDQN
 
   if   args.model in ["DQN", "DDQN"]:
     model_kwargs  = dict(huber_loss=args.huber_loss)
   elif args.model in ["BstrapDQN", "BstrapDQN_IDS", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]:
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
-  elif args.model == "DQN_IDS_BLR":
-    args.tau      = 1.0/(1.0-args.gamma) if args.tau is None else args.tau
-    model_kwargs  = dict(huber_loss=args.huber_loss, sigma=args.sigma, tau=args.tau, same_w=args.same_w,
-                         policy=args.policy, phi_norm=args.phi_norm)
+    if args.model in ["BstrapDQN_IDS", "BstrapDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
+    if args.model == "BstrapDQN_IDS": model_kwargs["policy"] = args.policy
+  elif args.model in ["BDQN", "BDQN_IDS", "BDQN_UCB"]:
+    model_kwargs  = dict(huber_loss=args.huber_loss, sigma_e=args.sigma_e, tau=args.tau)
+    if args.model in ["BDQN_IDS", "BDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
+    agent = AgentBDQN
   elif args.model == "C51":
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)
   elif args.model in ["QRDQN", "QRDQNTS"]:
@@ -144,7 +149,7 @@ def main():
   rltf_log.log_params(log_info, args)
 
   # Create the agent
-  dqn_agent = AgentDQN(**kwargs)
+  dqn_agent = agent(**kwargs)
 
   # Build the agent and the TF graph
   dqn_agent.build()

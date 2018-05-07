@@ -202,16 +202,16 @@ class BstrapDQN(BaseDQN):
 class BstrapDQN_UCB(BstrapDQN):
   """UCB policy from Boostrapped DQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, n_stds=0.1):
     """See `BstrapDQN.__init__()`"""
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
-    self.ucb_c  = 0.1       # UCB bonus constant
+    self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
 
   def _act_train(self, agent_net, name):
     mean    = tf.reduce_mean(agent_net, axis=1)
     std     = agent_net - tf.expand_dims(mean, axis=-2)
     std     = tf.sqrt(tf.reduce_mean(tf.square(std), axis=1))
-    action  = tf.argmax(mean + self.ucb_c * std, axis=-1, output_type=tf.int32, name=name)
+    action  = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32, name=name)
 
     # Add debug histograms
     tf.summary.histogram("debug/a_std",   std)
@@ -236,11 +236,13 @@ class BstrapDQN_Ensemble(BstrapDQN):
 class BstrapDQN_IDS(BstrapDQN):
   """IDS policy from Boostrapped DQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, policy, n_stds=0.1):
     """See `BstrapDQN.__init__()`"""
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
-    self.n_stds = 1.0       # Number of standard deviations for IDS regret bound
+    assert policy in ["stochastic", "deterministic"]
+    self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
     self.rho    = 0.5       # Const for IDS Info Gain
+    self.policy = policy
 
   def _act_train(self, agent_net, name):
     mean      = tf.reduce_mean(agent_net, axis=1)
@@ -251,21 +253,27 @@ class BstrapDQN_IDS(BstrapDQN):
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
     info_gain = tf.log(1 + var / self.rho**2) + 1e-5
-    # info_gain = tf.log(1 + tf.square(std) / self.rho**2)
-    # info_gain = tf.check_numerics(info_gain, "InfoGain is NaN or Inf")
     ids_score = tf.div(regret_sq, info_gain)
     ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
-    action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+
+    if self.policy == "deterministic":
+      action  = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+      a_ucb   = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
+    else:
+      uniform = tf.random_uniform(tf.shape(ids_score), 0, 1)
+      gumbell = -tf.log(-tf.log(uniform))
+      sample  = -ids_score + gumbell    # NOTE: Take -ids_score to make the min have highest probability
+      action  = tf.argmax(sample, axis=-1, output_type=tf.int32, name=name)
+      a_ucb   = tf.argmax(mean + self.n_stds * std + gumbell, axis=-1, output_type=tf.int32)
 
     # Add debug histograms
-    a_ucb     = tf.argmax(mean + 0.1 * std, axis=-1, output_type=tf.int32)
-    a_diff    = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
-
     tf.summary.histogram("debug/a_mean",    mean)
     tf.summary.histogram("debug/a_std",     std)
     tf.summary.histogram("debug/a_regret",  regret)
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
+
+    a_diff = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
     tf.summary.scalar("debug/a_ucb_vs_ids", a_diff)
 
     # Set the plottable tensors for video. Use only the first action in the batch
