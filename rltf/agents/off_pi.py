@@ -62,6 +62,29 @@ class OffPolicyAgent(Agent):
       self.replay_buf.save(self.model_dir)
 
 
+  def _run_train_step(self, t, run_summary):
+    # Compose feed_dict
+    batch     = self.replay_buf.sample(self.batch_size)
+    feed_dict = self._get_feed_dict(batch, t)
+
+    # Wait for synchronization if necessary
+    self._wait_act_chosen()
+
+    # Run a training step
+    if run_summary:
+      self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
+    else:
+      self.sess.run(self.model.train_op, feed_dict=feed_dict)
+
+    # Update target network
+    if t % self.update_target_freq == 0:
+      self.sess.run(self.model.update_target)
+
+
+  def _wait_act_chosen(self):
+    raise NotImplementedError()
+
+
   def _action_train(self, state, t):
     """Return action selected by the agent for a training step
     Args:
@@ -213,23 +236,12 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 
         self.learn_started = True
 
-        # Compose feed_dict
-        batch     = self.replay_buf.sample(self.batch_size)
-        feed_dict = self._get_feed_dict(batch, t)
-
-        self._wait_act_chosen()
-
         # Run a training step
-        if t % self.log_freq + self.train_freq >= self.log_freq:
-          self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
-        else:
-          self.sess.run(self.model.train_op, feed_dict=feed_dict)
-
-        # Update target network
-        if t % self.update_target_freq == 0:
-          self.sess.run(self.model.update_target)
+        run_summary = t % self.log_freq + self.train_freq >= self.log_freq
+        self._run_train_step(t, run_summary=run_summary)
 
       else:
+        # Synchronize
         self.replay_buf.wait_stored()
         self.replay_buf.signal_sampled()
         self._wait_act_chosen()
@@ -314,20 +326,9 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
         self.learn_started = True
 
-        # Compose feed_dict
-        batch     = self.replay_buf.sample(self.batch_size)
-        feed_dict = self._get_feed_dict(batch, t)
-
         # Run a training step
-        # if t % self.log_freq + self.train_freq >= self.log_freq:
-        if t % self.log_freq:
-          self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
-        else:
-          self.sess.run(self.model.train_op, feed_dict=feed_dict)
-
-        # Update target network
-        if t % self.update_target_freq == 0:
-          self.sess.run(self.model.update_target)
+        run_summary = t % self.log_freq == 0
+        self._run_train_step(t, run_summary=run_summary)
 
       # Save data
       if self.save_freq > 0 and t % self.save_freq == 0:
@@ -335,3 +336,7 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
       # Log data
       self._log_stats(t)
+
+
+  def _wait_act_chosen(self):
+    return

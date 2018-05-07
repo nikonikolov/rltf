@@ -119,7 +119,7 @@ class ReplayBuffer(BaseBuffer):
 
     assert batch_size < self.size_now - len(exclude) - 1
 
-    inds    = self._sample_n_unique(batch_size, 0, self.size_now-2, exclude)
+    inds    = self._sample_n_unique(batch_size, 0, self.size_now, exclude)
     samples = self._batch_samples(inds)
 
     return samples
@@ -204,69 +204,89 @@ class ReplayBuffer(BaseBuffer):
       return self.obs[lo:hi].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
 
 
-  def new_data(self, batch_size=32):
-    # Get the end index (excluding)
-    hi = self.next_idx - 1
+  # def new_data(self, batch_size=32):
+  #   # Get the end index (excluding)
+  #   hi = self.next_idx - 1
 
-    # If at the buffer boundary - happens only if the buffer is already full
-    if self.new_idx > hi:
-      hi += self.max_size
-    start = self.new_idx
+  #   # If at the buffer boundary - happens only if the buffer is already full
+  #   if self.new_idx > hi:
+  #     hi += self.max_size
+  #   start = self.new_idx
 
-    while start < hi:
-      # Generate indices in absolute range
-      stop  = min(start + batch_size, hi)
-      inds  = np.arange(start, stop, 1, dtype=np.int32)
-      start = stop
+  #   while start < hi:
+  #     # Generate indices in absolute range
+  #     stop  = min(start + batch_size, hi)
+  #     inds  = np.arange(start, stop, 1, dtype=np.int32)
+  #     start = stop
 
-      # Convert indices to buffer range
-      inds  = inds % self.max_size
+  #     # Convert indices to buffer range
+  #     inds  = inds % self.max_size
 
-      # Convert self.new_idx to a buffer index
-      self.new_idx = start % self.max_size
+  #     # Convert self.new_idx to a buffer index
+  #     self.new_idx = start % self.max_size
 
-      yield self._batch_samples(inds)
-
-
-  def all_data(self, batch_size=32):
-    # Get exclude indices
-    exclude = self._exclude_indices()
-    start   = 0
-    hi      = self.size_now
-
-    # Yield the range of indices
-    return self._yield_range(start, hi, exclude, batch_size)
+  #     yield self._batch_samples(inds)
 
 
-  def recent_data(self, size, batch_size=32):
-    # Get exclude indices
-    exclude = self._exclude_indices()
-    hi      = self.next_idx - 1
-    start   = hi - size
+  # def all_data(self, batch_size=32):
+  #   # Get exclude indices
+  #   exclude = self._exclude_indices()
+  #   start   = 0
+  #   hi      = self.size_now
 
-    # If not enough samples, start from 0
-    if start < 0 and self.size_now < self.max_size:
-      start = 0
-
-    # Yield the range of indices
-    return self._yield_range(start, hi, exclude, batch_size)
+  #   # Yield the range of indices
+  #   return self._yield_range(start, hi, exclude, batch_size)
 
 
-  def _yield_range(self, start, hi, exclude, batch_size):
-    while start < hi:
-      inds = []
-      # Use while loop to make sure that inds is not completely wiped because of exclude
-      while len(inds) == 0 and start < hi:
-        stop  = min(start + batch_size, hi)
-        inds  = np.arange(start, stop, 1, dtype=np.int32) % self.max_size
-        start = stop
+  # def recent_data(self, size, batch_size=32):
+  #   # Get exclude indices
+  #   exclude = self._exclude_indices()
+  #   hi      = self.next_idx - 1
+  #   start   = hi - size
 
-        # Remove indices which have to be excluded
-        valid = np.all(inds[:, None] != exclude, axis=-1)
-        inds  = inds[valid]
+  #   # If not enough samples, start from 0
+  #   if start < 0 and self.size_now < self.max_size:
+  #     start = 0
 
-      if len(inds) > 0:
-        yield self._batch_samples(inds)
+  #   # Yield the range of indices
+  #   return self._yield_range(start, hi, exclude, batch_size)
+
+
+  # def random_data(self, size, batch_size):
+  #   exclude = self._exclude_indices()
+
+  #   if size >= self.size_now:
+  #     inds = np.array([i for i in range(0, self.size_now) if i not in exclude])
+  #     # Shuffle to remove correlation
+  #     self.prng.shuffle(inds)
+  #   else:
+  #     inds = self._sample_n_unique(size, 0, self.size_now, exclude)
+
+  #   # Make sure you can reshape the array
+  #   extra = inds.size % batch_size
+  #   if extra > 0:
+  #     inds = inds[:-extra]
+  #   inds = np.reshape(inds, [-1, batch_size])
+
+  #   for i in inds:
+  #     yield self._batch_samples(i)
+
+
+  # def _yield_range(self, start, hi, exclude, batch_size):
+  #   while start < hi:
+  #     inds = []
+  #     # Use while loop to make sure that inds is not completely wiped because of exclude
+  #     while len(inds) == 0 and start < hi:
+  #       stop  = min(start + batch_size, hi)
+  #       inds  = np.arange(start, stop, 1, dtype=np.int32) % self.max_size
+  #       start = stop
+
+  #       # Remove indices which have to be excluded
+  #       valid = np.all(inds[:, None] != exclude, axis=-1)
+  #       inds  = inds[valid]
+
+  #     if len(inds) > 0:
+  #       yield self._batch_samples(inds)
 
 
   def wait_sampled(self):

@@ -53,12 +53,13 @@ class BaseDQN(Model):
     # Compute the loss
     loss          = self._compute_loss(estimate, target)
 
+    train_vars    = tf.trainable_variables(scope="agent_net")
     agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
     target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
     # Build the optimizer and the train op
     optimizer     = self.opt_conf.build()
-    train_op      = self._build_train_op(optimizer, loss, agent_vars, name="train_op")
+    train_op      = self._build_train_op(optimizer, loss, train_vars, name="train_op")
 
     # Create the Op to update the target
     update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
