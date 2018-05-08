@@ -65,6 +65,8 @@ class Monitor(Wrapper):
         changed with self.set_mode()
     """
 
+    self._detect_wrapped_env(env)
+
     # Wrap the enviroment for plotting in the video. Disabled by default
     env = VideoPlotter(env)
 
@@ -79,8 +81,6 @@ class Monitor(Wrapper):
     self.env_started    = False
     self.env_id         = self._get_env_id()
     self.video_callable = self._get_video_callable(video_callable)
-
-    self._detect_wrapped_env()
 
     self.stats_recorder = StatsRecorder(os.path.join(self.log_dir, "data"))
     self.video_recorder = None
@@ -101,16 +101,16 @@ class Monitor(Wrapper):
     elif video_callable is False:
       video_callable = lambda e_id: False
     elif not callable(video_callable):
-      raise error.Error('You must provide a function, None, or False for video_callable, \
-                        not {}: {}'.format(type(video_callable), video_callable))
+      raise error.Error('You must provide a function, None, or False for video_callable,'
+                        'not {}: {}'.format(type(video_callable), video_callable))
     return video_callable
 
 
   def _get_env_id(self):
     if self.env.spec is None:
-      logger.warning("Trying to monitor an environment which has no 'spec' set. \
-                     This usually means you did not create it via 'gym.make', \
-                     and is recommended only for advanced users.")
+      logger.warning("Trying to monitor an environment which has no 'spec' set."
+                     "This usually means you did not create it via 'gym.make',"
+                     "and is recommended only for advanced users.")
       return '(unknown)'
     return self.env.spec.id
 
@@ -121,11 +121,11 @@ class Monitor(Wrapper):
       os.makedirs(self.log_dir)
 
 
-  def _detect_wrapped_env(self):
-    if isinstance(self.env, Wrapper):
-      if not isinstance(self.env, TimeLimit):
-        logger.warning("Trying to monitor the environment %s wrapped with %s. Reported statistics might \
-                       be incorrect", self.env_id, type(self.env))
+  def _detect_wrapped_env(self, env):
+    if isinstance(env, Wrapper):
+      if not isinstance(env, TimeLimit):
+        logger.warning("Trying to monitor the environment %s wrapped with %s. Reported statistics might"
+                       "be incorrect", env.spec.id, type(env))
 
 
   def step(self, action):
@@ -198,14 +198,14 @@ class Monitor(Wrapper):
       return
 
     if self.done:
-      raise error.ResetNeeded("Trying to step environment which is currently done. \
-        While the monitor is active for {}, you cannot step beyond the end of an episode. \
-        Call 'env.reset()' to start the next episode.".format(self.env_id))
+      raise error.ResetNeeded("Trying to step environment which is currently done."
+        "While the monitor is active for {}, you cannot step beyond the end of an episode."
+        "Call 'env.reset()' to start the next episode.".format(self.env_id))
 
     if not self.env_started:
-      raise error.ResetNeeded("Trying to step an environment before reset. \
-        While the monitor is active for {}, you must call 'env.reset()' \
-        before taking an initial step.".format(self.env_id))
+      raise error.ResetNeeded("Trying to step an environment before reset."
+        "While the monitor is active for {}, you must call 'env.reset()'"
+        "before taking an initial step.".format(self.env_id))
 
     self.stats_recorder.before_step(action)
 
