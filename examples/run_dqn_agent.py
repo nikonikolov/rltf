@@ -10,6 +10,8 @@ from rltf.models        import BstrapDQN
 from rltf.models        import BstrapDQN_IDS
 from rltf.models        import BstrapDQN_UCB
 from rltf.models        import BstrapDQN_Ensemble
+from rltf.models        import BstrapQRDQN
+from rltf.models        import BstrapQRDQN_IDS
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
@@ -27,7 +29,7 @@ from rltf.utils         import layouts
 def parse_args():
 
   model_types = ["DQN", "DDQN", "C51", "QRDQN", "QRDQNTS", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_IDS",
-                 "BstrapDQN_Ensemble", "BDQN", "BDQN_UCB", "BDQN_IDS"]
+                 "BstrapDQN_Ensemble", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -90,6 +92,11 @@ def make_agent():
     model_kwargs  = dict(huber_loss=args.huber_loss, sigma_e=args.sigma_e, tau=args.tau)
     if args.model in ["BDQN_IDS", "BDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
     agent = AgentBDQN
+  elif args.model in ["BstrapQRDQN", "BstrapQRDQN_IDS"]:
+    model_kwargs  = dict(n_heads=args.n_heads, N=200, k=int(args.huber_loss))
+    if args.model == "BstrapDQN_IDS":
+      model_kwargs["n_stds"] = args.n_stds
+      # model_kwargs["policy"] = args.policy
   elif args.model == "C51":
     model_kwargs  = dict(V_min=-10, V_max=10, N=50)
   elif args.model in ["QRDQN", "QRDQNTS"]:
@@ -161,8 +168,8 @@ def main():
   # Build the agent and the TF graph
   dqn_agent.build()
 
-  if args.plot_video and model == BstrapDQN_IDS:
-    dqn_agent.plots_layout(layouts.ids_layout)
+  if args.plot_video and args.model in layouts.layouts:
+    dqn_agent.plots_layout(layouts.layouts[args.model])
 
   # Train or eval the agent
   if args.mode == 'train':

@@ -36,15 +36,15 @@ def atari_labels(x):
 
 
 ids_layout = {
-  "width": 540,
-  "height": 280,
-  "video_top": 35,
-  "video_left": 0,
+  "width": 800,
+  "height": 300,
+  "obs_align": dict(vertical='center', horizontal='left'),
+  # "obs_scale": 1.0,
   "figures": {
     "train_actions": {
       "align": dict(vertical='center', horizontal='right'),
-      "width": 360,
-      "height": 270,
+      "width": 620,
+      "height": -1,
       "fig": {
         "subplots": dict(nrows=3, ncols=1, sharex=True),
         "subplots_conf": OrderedDict(
@@ -73,8 +73,8 @@ ids_layout = {
     },
     "eval_actions": {
       "align": dict(vertical='center', horizontal='right'),
-      "width": 360,
-      "height": 270,
+      "width": 620,
+      "height": -1,
       "fig": {
         "subplots": dict(nrows=1, ncols=1),
         "subplots_conf": OrderedDict(
@@ -93,4 +93,75 @@ ids_layout = {
       "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#d62728'),
     },
   }
+}
+
+
+qrids_layout = {
+  "width": 800,
+  "height": 380,
+  "obs_align": dict(vertical='center', horizontal='left'),
+  # "obs_scale": 1.0,
+  "figures": {
+    "train_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 620,
+      "height": -1,
+      "fig": {
+        "subplots": dict(nrows=4, ncols=1, sharex=True),
+        "subplots_conf": OrderedDict(
+          a_mean={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="MEAN", size=6),
+          },
+          a_std={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="STD", size=6),
+          },
+          a_rho={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="RHO2", size=6),
+          },
+          a_ids={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="IDS", size=6),
+          },
+        ),
+        "subplots_common": {
+          "grid": dict(linewidth=0.2),
+          "tick_params": dict(axis='x', labelsize=6.5),
+        },
+        "fig_conf": {
+          "tight_layout": dict(pad=1.0, h_pad=0.0),
+        },
+      },
+      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#1f77b4'),
+    },
+    "eval_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 620,
+      "height": -1,
+      "fig": {
+        "subplots": dict(nrows=1, ncols=1),
+        "subplots_conf": OrderedDict(
+          a_votes={
+            "set_title": dict(label="VOTES", size=8),
+            "tick_params": dict(axis='y', labelsize=8),
+          },
+        ),
+        "subplots_common": {
+          "tick_params": dict(axis='x', labelsize=6.5),
+        },
+        "fig_conf": {
+          "tight_layout": dict(pad=1.0, h_pad=0.0),
+        },
+      },
+      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#d62728'),
+    },
+  }
+}
+
+
+layouts = {
+  "BstrapDQN_IDS": ids_layout,
+  "BstrapQRDQN_IDS": qrids_layout,
 }

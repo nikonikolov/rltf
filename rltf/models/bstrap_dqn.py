@@ -210,6 +210,7 @@ class BstrapDQN(BaseDQN):
     sess.run(self._set_act_head)
 
 
+
 class BstrapDQN_UCB(BstrapDQN):
   """UCB policy from Boostrapped DQN"""
 
@@ -217,6 +218,7 @@ class BstrapDQN_UCB(BstrapDQN):
     """See `BstrapDQN.__init__()`"""
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
     self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
+
 
   def _act_train(self, agent_net, name):
     mean    = tf.reduce_mean(agent_net, axis=1)
@@ -230,8 +232,10 @@ class BstrapDQN_UCB(BstrapDQN):
 
     return action
 
+
   def reset(self, sess):
     pass
+
 
 
 class BstrapDQN_Ensemble(BstrapDQN):
@@ -244,16 +248,19 @@ class BstrapDQN_Ensemble(BstrapDQN):
     pass
 
 
+
 class BstrapDQN_IDS(BstrapDQN):
   """IDS policy from Boostrapped DQN"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, policy, n_stds=0.1):
     """See `BstrapDQN.__init__()`"""
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+
     assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
     self.rho    = 0.5       # Const for IDS Info Gain
     self.policy = policy
+
 
   def _act_train(self, agent_net, name):
     mean      = tf.reduce_mean(agent_net, axis=1)
@@ -291,6 +298,9 @@ class BstrapDQN_IDS(BstrapDQN):
 
       a_det   = tf.argmin(ids_score, axis=-1, output_type=tf.int32)
 
+      a_diff_ds = tf.reduce_mean(tf.cast(tf.equal(a_det, action), tf.float32))
+      tf.summary.scalar("debug/a_det_vs_stoch", a_diff_ds)
+
     # Add debug histograms
     tf.summary.histogram("debug/a_mean",    mean)
     tf.summary.histogram("debug/a_std",     std)
@@ -298,10 +308,7 @@ class BstrapDQN_IDS(BstrapDQN):
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
 
-    a_diff_ds = tf.reduce_mean(tf.cast(tf.equal(a_det, action), tf.float32))
-    tf.summary.scalar("debug/a_det_vs_stoch", a_diff_ds)
-
-    if a_ucb:
+    if a_ucb is not None:
       a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
       tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
 
@@ -314,8 +321,10 @@ class BstrapDQN_IDS(BstrapDQN):
 
     return action
 
+
   def reset(self, sess):
     pass
+
 
   def _restore(self, graph):
     super()._restore(graph)
