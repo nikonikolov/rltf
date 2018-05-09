@@ -23,8 +23,9 @@ class VideoPlotter(gym.Wrapper):
 
     self.width    = None
     self.height   = None
-    self.vid_top  = None
-    self.vid_left = None
+    self.obs_top  = None
+    self.obs_left = None
+    self.obs_align = False      # True if obs_top and obs_left have proper values
 
     self.conf     = None
     self.figs     = None
@@ -70,8 +71,7 @@ class VideoPlotter(gym.Wrapper):
 
     self.width    = layout["width"]
     self.height   = layout["height"]
-    self.vid_top  = layout.get("video_top", 0)
-    self.vid_left = layout.get("video_left", 0)
+    self._configure_obs_align(layout["obs_align"])
 
     self.conf     = self._check_conf(layout["figures"].copy())
     self.figs     = self._build_figures()
@@ -122,6 +122,9 @@ class VideoPlotter(gym.Wrapper):
     if obs is None:
       return None
 
+    # Fix the observation alignment if necessary
+    self._fix_obs_align(obs)
+
     # Render the plots data
     self._render_plots()
 
@@ -129,8 +132,12 @@ class VideoPlotter(gym.Wrapper):
     # if not self.rendered:
     #   return obs
 
+    # if self.obs_scale != 1.0:
+    #   height = int(self.obs_scale * obs.shape[0])
+    #   width  = int(self.obs_scale * obs.shape[1])
+    #   obs = cv2.resize(obs, (width, height), interpolation=cv2.INTER_AREA)
     # Add the environment frame
-    self._overlay_image(obs, self.vid_top, self.vid_left)
+    self._overlay_image(obs, self.obs_top, self.obs_left)
 
     # Overlay the figures if there is new data
     if self.changed:
@@ -288,6 +295,83 @@ class VideoPlotter(gym.Wrapper):
     return figs
 
 
+  def _fix_obs_align(self, obs):
+    if self.obs_align:
+      return
+
+    height, width = obs.shape[0], obs.shape[1]
+    assert height <= self.height and width <= self.width
+
+    # Center vertically
+    if self.obs_top == -1:
+      self.obs_top = int((self.height - height) / 2.0)
+    # Align bottom
+    elif self.obs_top == -2:
+      self.obs_top = self.height - height
+
+    # Center horizontally
+    if self.obs_left == -1:
+      self.obs_left = int((self.width - width) / 2.0)
+    # Align right
+    elif self.obs_left == -2:
+      self.obs_left = self.width - width
+
+    self.obs_align = True
+
+
+  def _configure_obs_align(self, spec):
+    # Check if observation size is already known
+    if isinstance(self.observation_space, gym.spaces.Box):
+      obs_shape = self.observation_space.shape
+      if len(obs_shape) == 3:
+        height, width = obs_shape[0], obs_shape[1]
+        assert height <= self.height and width <= self.width
+      else:
+        height, width = self.height-2, self.width-2
+    else:
+      height, width = self.height-2, self.width-2
+
+    # Find the top position of the observation
+    if "vertical" in spec:
+      assert "top" not in spec
+      vertical = spec["vertical"]
+      if vertical == "center":
+        top = int((self.height - height) / 2.0)   # -2 if unknown obs height
+      elif vertical == "top":
+        top = 0
+      elif vertical == "bottom":
+        top = self.height - height                # -2 if unknown obs height
+      else:
+        raise ValueError("Unknown align value vertical={} for observation".format(vertical))
+    elif "top" in spec:
+      top = spec["top"]
+      assert top >= 0
+      if height is not None:
+        assert top + height <= self.height
+
+    # Find the left position of the observation
+    if "horizontal" in spec:
+      assert "left" not in spec
+      horizontal = spec["horizontal"]
+      if horizontal == "center":
+        left = int((self.width - width) / 2.0)    # -1 if unknown obs width
+      elif horizontal == "left":
+        left = 0
+      elif horizontal == "right":
+        left = self.width - width                 # -2 if unknown obs width
+      else:
+        raise ValueError("Unknown align value horizontal={} for pbservation".format(horizontal))
+    elif "left" in spec:
+      left = spec["left"]
+      assert left >= 0
+      if width is not None:
+        assert left + width <= self.width
+
+    self.obs_top    = top
+    self.obs_left   = left
+    self.obs_align  = top >= 0 and left >= 0
+
+
   def _check_conf(self, conf):
     """Verify correctness of the provided configuration layout"""
 
@@ -301,6 +385,11 @@ class VideoPlotter(gym.Wrapper):
       assert "height" in fconf
       assert "subplots" in fconf["fig"]
       assert "subplots_conf" in fconf["fig"]
+
+      # Make sure number of subplots is the same in subplots and subplots_conf
+      ncols = fconf["fig"]["subplots"].get("ncols", 1)
+      nrows = fconf["fig"]["subplots"].get("nrows", 1)
+      assert ncols * nrows == len(fconf["fig"]["subplots_conf"])
 
       if "fig_conf" not in fconf["fig"]:
         fconf["fig"]["fig_conf"] = {}
@@ -326,17 +415,18 @@ class VideoPlotter(gym.Wrapper):
         raise ValueError
 
       # Check figure positioning
-      top, left = self._compute_align(name, fconf)
+      top, left = self._configure_fig_align(name, fconf)
       fconf["top"], fconf["left"] = top, left
 
     return conf
 
 
-  def _compute_align(self, name, fconf):
+  def _configure_fig_align(self, name, fconf):
+    self._configure_fig_size(fconf)
+
     assert "align" in fconf and isinstance(fconf["align"], dict)
     spec  = fconf["align"]
     width, height = fconf["width"], fconf["height"]
-    assert height <= self.height and width <= self.width
 
     assert not ('vertical'   in spec and 'top'  in spec)
     assert not ('horizontal' in spec and 'left' in spec)
@@ -353,7 +443,7 @@ class VideoPlotter(gym.Wrapper):
       elif vertical == "bottom":
         top = self.height - height
       else:
-        raise ValueError("Unknown align option vertical={} for figure '{}'".format(vertical, name))
+        raise ValueError("Unknown align value vertical={} for figure '{}'".format(vertical, name))
     elif "top" in spec:
       top = spec["top"]
       assert top >= 0
@@ -368,7 +458,7 @@ class VideoPlotter(gym.Wrapper):
       elif horizontal == "right":
         left = self.width - width
       else:
-        raise ValueError("Unknown align option vertical={} for figure '{}'".format(vertical, name))
+        raise ValueError("Unknown align value vertical={} for figure '{}'".format(vertical, name))
     elif "left" in spec:
       left = spec["left"]
       assert left >= 0
@@ -380,6 +470,20 @@ class VideoPlotter(gym.Wrapper):
     return top, left
 
 
+  def _configure_fig_size(self, fconf):
+    width, height = fconf["width"], fconf["height"]
+
+    if height == -1:
+      fconf["height"] = self.height
+    else:
+      assert height > 0 and height <= self.height
+
+    if width == -1:
+      fconf["width"] = self.width
+    else:
+      assert width > 0 and width <= self.width
+
+
   def test_images(self, windows):
     """Render a test image with given test data in order to test how the video will look like
     Args:
@@ -387,6 +491,7 @@ class VideoPlotter(gym.Wrapper):
         that will be plotted on that image. This way, different data on the same figure can be
         tested by rendering different images
     """
+    assert self.allowed
     import cv2
     images = dict()
 

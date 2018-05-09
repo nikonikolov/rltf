@@ -71,9 +71,20 @@ class BstrapDQN(BaseDQN):
 
 
   def _act_train(self, agent_net, name):
+    """Select the greedy action from the selected head
+    Args:
+      agent_net: `tf.Tensor`, shape `[None, n_heads, n_actions]. The tensor output from
+        `self._nn_model()` for the agent
+    Returns:
+      `tf.Tensor` of shape `[None]`
+    """
+
     # Get the Q function from the active head
-    head_mask = tf.one_hot(self._active_head, self.n_heads, on_value=True, off_value=False, dtype=tf.bool)
-    q_head    = tf.boolean_mask(agent_net, head_mask)
+    head_mask = tf.one_hot(self._active_head, self.n_heads, dtype=tf.float32) # out: [1,    n_heads]
+    head_mask = tf.tile(head_mask, [tf.shape(agent_net)[0], 1])               # out: [None, n_heads]
+    head_mask = tf.expand_dims(head_mask, axis=-1)                            # out: [None, n_heads, 1]
+    q_head    = tf.reduce_sum(agent_net * head_mask, axis=1)                  # out: [None, n_actions]
+
     # Compute the greedy action
     action    = tf.argmax(q_head, axis=-1, output_type=tf.int32, name=name)
     return action
