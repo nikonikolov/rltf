@@ -61,7 +61,7 @@ def parse_args():
   return cmdargs.parse_args(args)
 
 
-def main():
+def make_agent():
 
   args = parse_args()
 
@@ -150,6 +150,13 @@ def main():
 
   # Create the agent
   dqn_agent = agent(**kwargs)
+
+  return dqn_agent, args
+
+
+def main():
+  # Create the agent
+  dqn_agent, args = make_agent()
 
   # Build the agent and the TF graph
   dqn_agent.build()
