@@ -145,3 +145,90 @@ class C51(BaseDQN):
 
   def _act_eval(self, agent_net, name):
     return tf.identity(self.a_train, name=name)
+
+
+
+class C51TS(C51):
+
+  def _act_train(self, agent_net, name):
+    """
+    Args:
+      agent_net: tf.Tensor, shape [None, n_actions, N]
+    """
+
+    # samples; out shape: [None, n_actions, N]
+    sample  = tf.random_uniform([tf.shape(agent_net)[0], 1], 0.0, 1.0)  # out shape: [None, 1]
+    sample  = tf.tile(sample, [1, self.n_actions])                      # out shape: [None, n_actions]
+    sample  = tf.expand_dims(sample, axis=-1)                           # out shape: [None, n_actions, N]
+
+    # CDF of each action; out shape: [None, n_actions, N]
+    cdf     = tf.cumsum(agent_net, axis=-1, exclusive=True)
+
+    # Find the sampled bin indices; out shape: [None, n_actions]
+    offset  = tf.where(cdf <= sample, tf.zeros_like(cdf), -2*tf.ones_like(cdf))
+    inds    = tf.argmax(cdf + offset, axis=-1, output_type=tf.int32)
+
+    # Get the value of the sampled bin; out shape: [None, n_actions]
+    inds    = tf.one_hot(inds, self.N, axis=-1, dtype=tf.float32)       # out shape: [None, n_actions, N]
+    q       = tf.reduce_sum(self.bins * inds, axis=-1)                  # out shape: [None, n_actions]
+
+    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)    # out shape: [None]
+
+    return action
+
+
+  def _compute_target(self, target_net):
+    # Double DQN target
+    target_z      = target_net
+
+    # Compute the Z and Q estimate swith the agent network variables
+    agent_z       = self._nn_model(self._obs_tp1, scope="agent_net")
+    agent_q       = tf.reduce_mean(agent_z * self.bins, axis=-1)
+
+    # Get the target Q probabilities; output shape [None, N]
+    target_act    = tf.argmax(agent_q, axis=-1)
+    a_mask        = tf.expand_dims(tf.one_hot(target_act, self.n_actions, dtype=tf.float32), axis=-1)
+    target_z      = tf.reduce_sum(target_z * a_mask, axis=1)
+
+    # Compute projected bin support; output shape [None, N]
+    done_mask     = tf.cast(tf.logical_not(self.done_ph), tf.float32)
+    done_mask     = tf.expand_dims(done_mask, axis=-1)
+    rew_t         = tf.expand_dims(self.rew_t_ph, axis=-1)
+    bins          = tf.squeeze(self.bins, axis=0)
+    target_bins   = rew_t + self.gamma * done_mask * bins
+    target_bins   = tf.clip_by_value(target_bins, self.V_min, self.V_max)
+
+    # Projected bin indices; output shape [None, N], dtype=float
+    bin_inds      = (target_bins - self.V_min) / self.dz
+    bin_inds_lo   = tf.floor(bin_inds)
+    bin_inds_hi   = tf.ceil(bin_inds)
+
+    lo_add        = target_z * (bin_inds_hi - bin_inds)
+    hi_add        = target_z * (bin_inds - bin_inds_lo)
+
+    # Initialize the Variable holding the target distribution - gets reset to 0 every time
+    zeros         = tf.zeros_like(target_bins, dtype=tf.float32)
+    target_z      = tf.Variable(0, trainable=False, dtype=tf.float32, validate_shape=False)
+    target_z      = tf.assign(target_z, zeros, validate_shape=False)
+
+    # Compute indices for scatter_nd_add
+    batch         = tf.shape(self.done_ph)[0]
+    row_inds      = tf.range(0, limit=batch, delta=1, dtype=tf.int32)
+    row_inds      = tf.tile(tf.expand_dims(row_inds, axis=-1), [1, self.N])
+    row_inds      = tf.expand_dims(row_inds, axis=-1)
+    bin_inds_lo   = tf.concat([row_inds, tf.expand_dims(tf.to_int32(bin_inds_lo), axis=-1)], axis=-1)
+    bin_inds_hi   = tf.concat([row_inds, tf.expand_dims(tf.to_int32(bin_inds_hi), axis=-1)], axis=-1)
+
+    with tf.control_dependencies([target_z]):
+      target_z    = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
+      target_z    = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
+      target_z    = tf.stop_gradient(target_z)
+
+    return target_z
+
+
+  def _act_eval(self, agent_net, name):
+    # Compute the Q-function as expectation of Z; output shape [None, n_actions]
+    q       = tf.reduce_sum(agent_net * self.bins, axis=-1)
+    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
+    return action

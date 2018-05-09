@@ -15,6 +15,7 @@ from rltf.models        import BstrapQRDQN_IDS
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
+from rltf.models        import C51TS
 from rltf.models        import QRDQN
 from rltf.models        import QRDQNTS
 from rltf.optimizers    import OptimizerConf
@@ -29,7 +30,8 @@ from rltf.utils         import layouts
 def parse_args():
 
   model_types = ["DQN", "DDQN", "C51", "QRDQN", "QRDQNTS", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_IDS",
-                 "BstrapDQN_Ensemble", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS"]
+                 "BstrapDQN_Ensemble", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS",
+                 "C51TS"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -97,7 +99,7 @@ def make_agent():
     if args.model == "BstrapDQN_IDS":
       model_kwargs["n_stds"] = args.n_stds
       # model_kwargs["policy"] = args.policy
-  elif args.model == "C51":
+  elif args.model in ["C51", "C51TS"]:
     model_kwargs  = dict(V_min=-10, V_max=10, N=51)
   elif args.model in ["QRDQN", "QRDQNTS"]:
     model_kwargs  = dict(N=200, k=int(args.huber_loss))
