@@ -122,4 +122,4 @@ class QRDQN(BaseDQN):
 
 
   def _act_eval(self, agent_net, name):
-    return None
+    return tf.identity(self.a_train, name=name)
