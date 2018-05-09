@@ -151,6 +151,7 @@ class QRDQN(BaseDQN):
     return tf.identity(self.a_train, name=name)
 
 
+
 class QRDQNTS(QRDQN):
 
   def _act_train(self, agent_net, name):

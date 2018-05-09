@@ -98,7 +98,7 @@ def make_agent():
       model_kwargs["n_stds"] = args.n_stds
       # model_kwargs["policy"] = args.policy
   elif args.model == "C51":
-    model_kwargs  = dict(V_min=-10, V_max=10, N=50)
+    model_kwargs  = dict(V_min=-10, V_max=10, N=51)
   elif args.model in ["QRDQN", "QRDQNTS"]:
     model_kwargs  = dict(N=200, k=int(args.huber_loss))
 

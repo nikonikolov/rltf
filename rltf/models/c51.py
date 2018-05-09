@@ -32,8 +32,10 @@ class C51(BaseDQN):
   def build(self):
 
     # Costruct the tensor of the bins for the probability distribution
-    bins          = np.arange(self.V_min, self.V_max + self.dz, self.dz)
-    self.bins     = tf.constant(bins, dtype=tf.float32)
+    # bins      = np.arange(self.V_min, self.V_max + self.dz, self.dz)
+    bins      = np.arange(0, self.N, 1, dtype=np.float32)
+    bins      = bins * self.dz + self.V_min
+    self.bins = tf.constant(bins[None, None, :], dtype=tf.float32)  # out shape: [1, 1, N]
 
     super().build()
 
@@ -88,7 +90,7 @@ class C51(BaseDQN):
     done_mask     = tf.cast(tf.logical_not(self.done_ph), tf.float32)
     done_mask     = tf.expand_dims(done_mask, axis=-1)
     rew_t         = tf.expand_dims(self.rew_t_ph, axis=-1)
-    bins          = tf.expand_dims(self.bins, axis=0)
+    bins          = tf.squeeze(self.bins, axis=0)
     target_bins   = rew_t + self.gamma * done_mask * bins
     target_bins   = tf.clip_by_value(target_bins, self.V_min, self.V_max)
 
@@ -142,4 +144,4 @@ class C51(BaseDQN):
 
 
   def _act_eval(self, agent_net, name):
-    return None
+    return tf.identity(self.a_train, name=name)
