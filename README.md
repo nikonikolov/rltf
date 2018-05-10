@@ -25,7 +25,7 @@ very slight differences for the purpose of improving results.
 
 ### Dependencies
 - Python >= 3.5
-- Tensorflow >= 1.4.0
+- Tensorflow >= 1.6.0
 - OpenAI gym >= 0.9.6
 - opencv-python (pip package or OpenCV library)
 - matplotlib (with TkAgg backend)

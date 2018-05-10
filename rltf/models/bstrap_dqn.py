@@ -95,7 +95,7 @@ class BstrapDQN(BaseDQN):
     def count_value(votes, i):
       count = tf.equal(votes, i)
       count = tf.cast(count, tf.int32)
-      count = tf.reduce_sum(count, axis=-1, keep_dims=True)
+      count = tf.reduce_sum(count, axis=-1, keepdims=True)
       return count
 
     # Get the greedy action from each head; output shape `[batch_size, n_heads]`

@@ -198,6 +198,10 @@ class VideoPlotter(gym.Wrapper):
         kwargs = fargs[subplot]
         ax_data["artist"] = plot_fn(ax, kwargs, self.env)
 
+        # Rescale the view according to the current data
+        ax.relim()
+        ax.autoscale_view()
+
       # Draw the figure
       fig.canvas.draw()
       # Get the image as np.array of shape (height, width, 3) (removes the unnecessary alpha channel)
