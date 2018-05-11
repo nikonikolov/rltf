@@ -1,11 +1,12 @@
 import numpy as np
 import tensorflow as tf
 
-from rltf.models.bstrap_dqn import BstrapDQN
+from rltf.models.bstrap_dqn import BaseBstrapDQN
+from rltf.models.bstrap_dqn import BstrapDQN_IDS
 from rltf.models            import tf_utils
 
 
-class BstrapQRDQN(BstrapDQN):
+class BaseBstrapQRDQN(BaseBstrapDQN):
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k):
     """
@@ -23,19 +24,6 @@ class BstrapQRDQN(BstrapDQN):
     self.n_heads  = n_heads
     self.N        = N
     self.k        = k
-
-    # Custom TF Tensors and Ops
-    self._active_head   = None
-    self._set_act_head  = None
-    self._conv_out      = None
-
-
-  def build(self):
-    self._active_head   = tf.Variable([0], trainable=False, name="active_head")
-    sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
-    self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
-
-    super().build()
 
 
   def _conv_nn(self, x):
@@ -78,31 +66,6 @@ class BstrapQRDQN(BstrapDQN):
     return x
 
 
-  def _act_train(self, agent_net, name):
-    """Select the greedy action from the selected head based on E[Z]
-    Args:
-      agent_net: `tf.Tensor`, shape `[None, n_heads, n_actions, N]. The tensor output from
-        `self._nn_model()` for the agent
-    Returns:
-      `tf.Tensor` of shape `[None]`
-    """
-    # Get the Z distribution from the active head
-    head_mask = tf.one_hot(self._active_head, self.n_heads, dtype=tf.float32) # out: [1,    n_heads]
-    head_mask = tf.tile(head_mask, [tf.shape(agent_net)[0], 1])               # out: [None, n_heads]
-    head_mask = tf.reshape(head_mask, [-1, self.n_heads, 1, 1])               # out: [None, n_heads, 1, 1]
-    z         = tf.reduce_sum(agent_net * head_mask, axis=1)                  # out: [None, n_actions, N]
-
-    # Compute the greedy action
-    q       = tf.reduce_mean(z, axis=-1)                                      # out: [None, n_actions]
-    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)          # out: [None]
-    return action
-
-
-  def _act_eval(self, agent_net, name):
-    q = tf.reduce_mean(agent_net, axis=-1)  # out: [1, n_heads, n_actions]
-    return super()._act_eval(q, name)
-
-
   def _compute_estimate(self, agent_net):
     """Get the Q value for the selected action
     Args:
@@ -121,17 +84,20 @@ class BstrapQRDQN(BstrapDQN):
 
 
   def _compute_target(self, target_net):
-    """Compute the Double DQN backup value - use the greedy action from the q estimate
+    """Compute the backup value
     Args:
       target_net: `tf.Tensor`. The tensor output from `self._nn_model()` for the target
     Returns:
       `tf.Tensor` of shape `[None, n_heads, N]`
     """
-    # Compute the Q-estimate with the agent network variables
-    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")    # out: [None, n_heads, n_actions, N]
+
+    # # Compute the Double Q-estimate tartget
+    # agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")    # out: [None, n_heads, n_actions, N]
+    # target_q    = tf.reduce_mean(agent_net, axis=-1)                  # out: [None, n_heads, n_actions]
 
     # Compute the target q function and the greedy action
-    target_q    = tf.reduce_mean(agent_net, axis=-1)                  # out: [None, n_heads, n_actions]
+    target_z    = target_net
+    target_q    = tf.reduce_mean(target_z, axis=-1)                   # out: [None, n_heads, n_actions]
     target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)  # out: [None, n_heads]
     target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)  # out: [None, n_heads, n_actions]
     target_mask = tf.expand_dims(target_mask, axis=-1)                # out: [None, n_heads, n_actions, 1]
@@ -202,7 +168,60 @@ class BstrapQRDQN(BstrapDQN):
 
 
 
-class BstrapQRDQN_IDS(BstrapQRDQN):
+class BstrapQRDQN(BaseBstrapQRDQN):
+
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k):
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, N, k)
+
+    # Custom TF Tensors and Ops
+    self._active_head   = None
+    self._set_act_head  = None
+
+
+  def build(self):
+    self._active_head   = tf.Variable([0], trainable=False, name="active_head")
+    sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
+    self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
+    super().build()
+
+
+  def _act_train(self, agent_net, name):
+    """Select the greedy action from the selected head based on E[Z]
+    Args:
+      agent_net: `tf.Tensor`, shape `[None, n_heads, n_actions, N]. The tensor output from
+        `self._nn_model()` for the agent
+    Returns:
+      `tf.Tensor` of shape `[None]`
+    """
+    # Get the Z distribution from the active head
+    head_mask = tf.one_hot(self._active_head, self.n_heads, dtype=tf.float32) # out: [1,    n_heads]
+    head_mask = tf.tile(head_mask, [tf.shape(agent_net)[0], 1])               # out: [None, n_heads]
+    head_mask = tf.reshape(head_mask, [-1, self.n_heads, 1, 1])               # out: [None, n_heads, 1, 1]
+    z         = tf.reduce_sum(agent_net * head_mask, axis=1)                  # out: [None, n_actions, N]
+
+    # Compute the greedy action
+    q       = tf.reduce_mean(z, axis=-1)                                      # out: [None, n_actions]
+    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)          # out: [None]
+    return action
+
+
+  def _act_eval(self, agent_net, name):
+    q = tf.reduce_mean(agent_net, axis=-1)  # out: [1, n_heads, n_actions]
+    return self._act_eval_vote(q, name)
+
+
+  def reset(self, sess):
+    sess.run(self._set_act_head)
+
+
+  def _restore(self, graph):
+    super()._restore(graph)
+    self._active_head   = graph.get_tensor_by_name("active_head:0")
+    self._set_act_head  = graph.get_operation_by_name("set_act_head")
+
+
+
+class BstrapQRDQN_IDS(BaseBstrapQRDQN):
   """IDS policy from Boostrapped QRDQN"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, policy, n_stds=0.1):
@@ -211,7 +230,7 @@ class BstrapQRDQN_IDS(BstrapQRDQN):
     assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
     self.policy = policy
-    # self.rho    = 0.5       # Const for IDS Info Gain
+    self.rho2   = None
 
 
   def _act_train(self, agent_net, name):
@@ -223,81 +242,35 @@ class BstrapQRDQN_IDS(BstrapQRDQN):
     z_center  = agent_net - tf.expand_dims(q_heads, axis=-1)  # out: [None, n_heads, n_actions, N]
     z_var     = tf.reduce_mean(tf.square(z_center), axis=-1)  # out: [None, n_heads, n_actions]
     rho2      = tf.reduce_mean(z_var, axis=1)                 # out: [None, n_actions]
+    self.rho2 = rho2 + 1e-5
+    # self.rho2   = 0.5**2    # Const for IDS Info Gain
 
-    # Estimate parameter std
-    mean      = tf.reduce_mean(q_heads, axis=1)               # out: [None, n_actions]
-    zero_mean = q_heads - tf.expand_dims(mean, axis=-2)       # out: [None, n_heads, n_actions]
-    var       = tf.reduce_mean(tf.square(zero_mean), axis=1)  # out: [None, n_actions]
-    std       = tf.sqrt(var)                                  # out: [None, n_actions]
+    # Compute the IDS action - ugly way
+    action    = BstrapDQN_IDS._act_train(self, q_heads, name)
 
-    # Compute IDS scores
-    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keepdims=True)
-    regret    = regret - (mean - self.n_stds * std)
-    regret_sq = tf.square(regret)
-    info_gain = tf.log(1 + var / (rho2 + 1e-5)) + 1e-5
-    ids_score = tf.div(regret_sq, info_gain)
-    ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
+    # Add debugging data for  TB
+    tf.summary.histogram("debug/a_rho2", self.rho2)
+    tf.summary.scalar("debug/rho2", tf.reduce_mean(self.rho2))
 
-    if self.policy == "deterministic":
-      action  = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
-      a_ucb   = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
-    else:
-      # Sample via categorical distribution
-      scores  = -ids_score    # NOTE: Take -ids_score to make the min have highest probability
-      sample  = tf.random_uniform([tf.shape(ids_score)[0], 1], 0.0, 1.0)
-      pdf     = scores - tf.expand_dims(tf.reduce_max(scores, axis=-1), axis=-1)
-      pdf     = tf.nn.softmax(pdf, axis=-1)
-      cdf     = tf.cumsum(pdf, axis=-1, exclusive=True)
-      offset  = tf.where(cdf <= sample, tf.zeros_like(cdf), -2*tf.ones_like(cdf))
-      sample  = cdf + offset
-      action  = tf.argmax(sample, axis=-1, output_type=tf.int32, name=name)
+    p_rho2  = tf.identity(self.rho2[0], name="plot/train/rho2")
+    p_a     = self.plot_train["train_actions"]["a_mean"]["a"]
 
-      a_ucb   = None
-      a_det   = tf.argmin(ids_score, axis=-1, output_type=tf.int32)
-
-      # Add debug score for stochastic vs deterministic difference
-      a_diff_ds = tf.reduce_mean(tf.cast(tf.equal(a_det, action), tf.float32))
-      tf.summary.scalar("debug/a_det_vs_stoch", a_diff_ds)
-
-    # Add debug histograms
-    tf.summary.histogram("debug/a_mean",    mean)
-    tf.summary.histogram("debug/a_std",     std)
-    tf.summary.histogram("debug/a_regret",  regret)
-    tf.summary.histogram("debug/a_rho2",    rho2)
-    tf.summary.histogram("debug/a_info",    info_gain)
-    tf.summary.histogram("debug/a_ids",     ids_score)
-
-    if a_ucb is not None:
-      a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
-      tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
-
-    # Set the plottable tensors for video. Use only the first action in the batch
-    self.plot_train["train_actions"] = {
-      "a_mean": dict(height=tf.identity(mean[0],      name="plot_mean")),
-      "a_std":  dict(height=tf.identity(std[0],       name="plot_std")),
-      "a_rho":  dict(height=tf.identity(rho2[0],      name="plot_rho2")),
-      "a_ids":  dict(height=tf.identity(ids_score[0], name="plot_ids_score")),
-    }
+    self.plot_train["train_actions"]["a_rho2"] = dict(height=p_rho2,  a=p_a)
 
     return action
 
 
-  def reset(self, sess):
-    pass
+  def _act_eval(self, agent_net, name):
+    q = tf.reduce_mean(agent_net, axis=-1)    # out: [1, n_heads, n_actions]
+    # return self._act_eval_greedy(q, name)
+    return self._act_eval_vote(q, name)
 
 
   def _restore(self, graph):
-    super()._restore(graph)
+    # Ulgy way to restore IDS data
+    BstrapDQN_IDS._restore(self, graph)
 
-    # Restore plot_train
-    means       = graph.get_tensor_by_name("plot_mean:0")
-    stds        = graph.get_tensor_by_name("plot_std:0")
-    rho2s       = graph.get_tensor_by_name("plot_rho2:0")
-    ids_scores  = graph.get_tensor_by_name("plot_ids_score:0")
+    a     = graph.get_tensor_by_name("plot/train/a:0")
+    rho2  = graph.get_tensor_by_name("plot/train/rho2:0")
 
-    self.plot_train["train_actions"] = {
-      "a_mean": dict(height=means),
-      "a_std":  dict(height=stds),
-      "a_rho":  dict(height=rho2s),
-      "a_ids":  dict(height=ids_scores),
-    }
+    self.plot_train["train_actions"]["a_rho2"] = dict(height=rho2, a=a)

@@ -87,11 +87,11 @@ ids_layout = {
       "fig": {
         "subplots": dict(nrows=1, ncols=1),
         "subplots_conf": OrderedDict(
-          a_means={
+          a_mean={
             "set_title": dict(label="MEANS", size=8),
             "tick_params": dict(axis='y', labelsize=8),
           },
-          # a_votes={
+          # a_vote={
           #   "set_title": dict(label="VOTES", size=8),
           #   "tick_params": dict(axis='y', labelsize=8),
           # },
@@ -110,14 +110,14 @@ ids_layout = {
 
 
 qrids_layout = {
-  "width": 800,
+  "width": 840,
   "height": 440,
   "obs_align": dict(vertical='center', horizontal='left'),
   # "obs_scale": 1.0,
   "figures": {
     "train_actions": {
       "align": dict(vertical='center', horizontal='right'),
-      "width": 620,
+      "width": 660,
       "height": -1,
       "fig": {
         "subplots": dict(nrows=4, ncols=1, sharex=True),
@@ -130,7 +130,7 @@ qrids_layout = {
             "tick_params": dict(axis='y', labelsize=5.5),
             "set_title": dict(label="STD", size=6),
           },
-          a_rho={
+          a_rho2={
             "tick_params": dict(axis='y', labelsize=5.5),
             "set_title": dict(label="RHO2", size=6),
           },
@@ -147,16 +147,16 @@ qrids_layout = {
           "tight_layout": dict(pad=1.0, h_pad=0.0),
         },
       },
-      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#1f77b4'),
+      "plot_function": plot_highlight_bars,
     },
     "eval_actions": {
       "align": dict(vertical='center', horizontal='right'),
-      "width": 620,
+      "width": 660,
       "height": -1,
       "fig": {
         "subplots": dict(nrows=1, ncols=1),
         "subplots_conf": OrderedDict(
-          a_votes={
+          a_vote={
             "set_title": dict(label="VOTES", size=8),
             "tick_params": dict(axis='y', labelsize=8),
           },
@@ -168,7 +168,7 @@ qrids_layout = {
           "tight_layout": dict(pad=1.0, h_pad=0.0),
         },
       },
-      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#d62728'),
+      "plot_function": plot_highlight_bars,
     },
   }
 }
