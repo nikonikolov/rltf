@@ -169,7 +169,7 @@ class BDQN_IDS(BDQN_UCB):
     mean      = agent_net
     var       = self.a_var
     std       = tf.sqrt(var)
-    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keep_dims=True)
+    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keepdims=True)
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
     info_gain = tf.log(1 + var / self.rho**2) + 1e-5

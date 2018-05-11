@@ -205,9 +205,13 @@ class BstrapQRDQN(BstrapDQN):
 class BstrapQRDQN_IDS(BstrapQRDQN):
   """IDS policy from Boostrapped QRDQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, n_stds=0.1):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, policy, n_stds=0.1):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, N, k)
+
+    assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
+    self.policy = policy
+    # self.rho    = 0.5       # Const for IDS Info Gain
 
 
   def _act_train(self, agent_net, name):
@@ -227,25 +231,45 @@ class BstrapQRDQN_IDS(BstrapQRDQN):
     std       = tf.sqrt(var)                                  # out: [None, n_actions]
 
     # Compute IDS scores
-    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keep_dims=True)
+    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keepdims=True)
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
     info_gain = tf.log(1 + var / (rho2 + 1e-5)) + 1e-5
     ids_score = tf.div(regret_sq, info_gain)
     ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
-    action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+
+    if self.policy == "deterministic":
+      action  = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+      a_ucb   = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
+    else:
+      # Sample via categorical distribution
+      scores  = -ids_score    # NOTE: Take -ids_score to make the min have highest probability
+      sample  = tf.random_uniform([tf.shape(ids_score)[0], 1], 0.0, 1.0)
+      pdf     = scores - tf.expand_dims(tf.reduce_max(scores, axis=-1), axis=-1)
+      pdf     = tf.nn.softmax(pdf, axis=-1)
+      cdf     = tf.cumsum(pdf, axis=-1, exclusive=True)
+      offset  = tf.where(cdf <= sample, tf.zeros_like(cdf), -2*tf.ones_like(cdf))
+      sample  = cdf + offset
+      action  = tf.argmax(sample, axis=-1, output_type=tf.int32, name=name)
+
+      a_ucb   = None
+      a_det   = tf.argmin(ids_score, axis=-1, output_type=tf.int32)
+
+      # Add debug score for stochastic vs deterministic difference
+      a_diff_ds = tf.reduce_mean(tf.cast(tf.equal(a_det, action), tf.float32))
+      tf.summary.scalar("debug/a_det_vs_stoch", a_diff_ds)
 
     # Add debug histograms
-    a_ucb     = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
-    a_diff    = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
-
     tf.summary.histogram("debug/a_mean",    mean)
     tf.summary.histogram("debug/a_std",     std)
     tf.summary.histogram("debug/a_regret",  regret)
     tf.summary.histogram("debug/a_rho2",    rho2)
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
-    tf.summary.scalar("debug/a_ucb_vs_ids", a_diff)
+
+    if a_ucb is not None:
+      a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
+      tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
 
     # Set the plottable tensors for video. Use only the first action in the batch
     self.plot_train["train_actions"] = {

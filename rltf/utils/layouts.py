@@ -98,7 +98,7 @@ ids_layout = {
 
 qrids_layout = {
   "width": 800,
-  "height": 380,
+  "height": 440,
   "obs_align": dict(vertical='center', horizontal='left'),
   # "obs_scale": 1.0,
   "figures": {

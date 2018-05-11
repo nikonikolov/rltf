@@ -100,7 +100,7 @@ class BLR(tf.layers.Layer):
       mu  = tf.matmul(X, self.w_mu)
 
     # var ends up being diag(sigma**2 + matmul(matmul(X, w_Sigma), X.T))
-    var = self.sigma**2 + tf.reduce_sum(tf.matmul(X, self.w_Sigma) * X, axis=-1, keep_dims=True)
+    var = self.sigma**2 + tf.reduce_sum(tf.matmul(X, self.w_Sigma) * X, axis=-1, keepdims=True)
     # std = tf.sqrt(var)
 
     outputs = [mu, var]

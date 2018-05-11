@@ -96,7 +96,7 @@ class BstrapDQN(BaseDQN):
     def count_value(votes, i):
       count = tf.equal(votes, i)
       count = tf.cast(count, tf.int32)
-      count = tf.reduce_sum(count, axis=-1, keep_dims=True)
+      count = tf.reduce_sum(count, axis=-1, keepdims=True)
       return count
 
     # Get the greedy action from each head; output shape `[batch_size, n_heads]`
@@ -267,7 +267,7 @@ class BstrapDQN_IDS(BstrapDQN):
     zero_mean = agent_net - tf.expand_dims(mean, axis=-2)
     var       = tf.reduce_mean(tf.square(zero_mean), axis=1)
     std       = tf.sqrt(var)
-    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keep_dims=True)
+    regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keepdims=True)
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
     info_gain = tf.log(1 + var / self.rho**2) + 1e-5
@@ -282,7 +282,7 @@ class BstrapDQN_IDS(BstrapDQN):
       scores  = -ids_score    # NOTE: Take -ids_score to make the min have highest probability
       sample  = tf.random_uniform([tf.shape(ids_score)[0], 1], 0.0, 1.0)
       pdf     = scores - tf.expand_dims(tf.reduce_max(scores, axis=-1), axis=-1)
-      pdf     = tf.nn.softmax(pdf, dim=-1)
+      pdf     = tf.nn.softmax(pdf, axis=-1)
       cdf     = tf.cumsum(pdf, axis=-1, exclusive=True)
       offset  = tf.where(cdf <= sample, tf.zeros_like(cdf), -2*tf.ones_like(cdf))
       sample  = cdf + offset

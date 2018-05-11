@@ -96,9 +96,9 @@ def make_agent():
     agent = AgentBDQN
   elif args.model in ["BstrapQRDQN", "BstrapQRDQN_IDS"]:
     model_kwargs  = dict(n_heads=args.n_heads, N=200, k=int(args.huber_loss))
-    if args.model == "BstrapDQN_IDS":
+    if args.model == "BstrapQRDQN_IDS":
       model_kwargs["n_stds"] = args.n_stds
-      # model_kwargs["policy"] = args.policy
+      model_kwargs["policy"] = args.policy
   elif args.model in ["C51", "C51TS"]:
     model_kwargs  = dict(V_min=-10, V_max=10, N=51)
   elif args.model in ["QRDQN", "QRDQNTS"]:
