@@ -322,12 +322,21 @@ class BstrapDQN_IDS(BstrapDQN):
     return action
 
 
-  def reset(self, sess):
-    pass
+  def _act_eval(self, agent_net, name):
+    means   = tf.reduce_mean(agent_net, axis=1)
+    action  = tf.argmax(means, axis=-1, output_type=tf.int32, name=name)
+
+    # Set the plottable tensors for video. Use only the first action in the batch
+    self.plot_eval["eval_actions"] = {
+      "a_means": dict(height=tf.identity(means[0], name="plot_means")),
+    }
+
+    return action
 
 
   def _restore(self, graph):
-    super()._restore(graph)
+    # Need to avoid calling BstrapDQN._restore() since some tensors will not be in the graph
+    BaseDQN._restore(self, graph)
 
     # Restore plot_train
     means       = graph.get_tensor_by_name("plot_mean:0")
@@ -339,3 +348,26 @@ class BstrapDQN_IDS(BstrapDQN):
       "a_std":  dict(height=stds),
       "a_ids":  dict(height=ids_scores),
     }
+
+    means       = graph.get_tensor_by_name("plot_means:0")
+    self.plot_eval["eval_actions"] = {
+      "a_means": dict(height=means),
+    }
+
+
+  # def _restore(self, graph):
+  #   super()._restore(graph)
+
+  #   # Restore plot_train
+  #   means       = graph.get_tensor_by_name("plot_mean:0")
+  #   stds        = graph.get_tensor_by_name("plot_std:0")
+  #   ids_scores  = graph.get_tensor_by_name("plot_ids_score:0")
+
+  #   self.plot_train["train_actions"] = {
+  #     "a_mean": dict(height=means),
+  #     "a_std":  dict(height=stds),
+  #     "a_ids":  dict(height=ids_scores),
+  #   }
+
+  def reset(self, sess):
+    pass

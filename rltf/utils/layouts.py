@@ -78,10 +78,14 @@ ids_layout = {
       "fig": {
         "subplots": dict(nrows=1, ncols=1),
         "subplots_conf": OrderedDict(
-          a_votes={
-            "set_title": dict(label="VOTES", size=8),
+          a_means={
+            "set_title": dict(label="MEANS", size=8),
             "tick_params": dict(axis='y', labelsize=8),
           },
+          # a_votes={
+          #   "set_title": dict(label="VOTES", size=8),
+          #   "tick_params": dict(axis='y', labelsize=8),
+          # },
         ),
         "subplots_common": {
           "tick_params": dict(axis='x', labelsize=6.5),
