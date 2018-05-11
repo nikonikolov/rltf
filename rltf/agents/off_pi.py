@@ -1,5 +1,4 @@
 import logging
-import signal
 import threading
 import tensorflow as tf
 
@@ -25,31 +24,44 @@ class OffPolicyAgent(Agent):
 
 
   def train(self):
-    # Attach function to handle kills differently
-    signal.signal(signal.SIGTERM, self.terminate)
-
     # Start threads
     for t in self.threads:
       t.start()
 
     # Wait for threads
-    try:
-      for t in self.threads:
-        t.join()
-    except KeyboardInterrupt:
-      logger.info("EXITING")
-      self._terminate = True
-      for t in self.threads:
-        t.join()
+    while not self._terminate:
+      try:
+        for t in self.threads:
+          t.join()
+      except KeyboardInterrupt:
+        # Confirm the kill
+        if not self._confirm_kill():
+          logger.info("CONTINUING EXECUTION")
+          continue
+        logger.info("EXITING")
+        self._terminate = True
+        for t in self.threads:
+          t.join()
 
 
-  def terminate(self, signal, frame):
-    logger.info("PROCESS KILLED. EXITING")
-    self._terminate = True
-    self._save_buf  = True
-    for t in self.threads:
-      t.join()
-    # self.close()
+  def _confirm_kill(self):
+    """Check if Ctrl+C was genuine and if the buffer should be saved.
+    Returns:
+      `bool`. If True, kill. If False, continue
+    """
+    if self.confirm_kill:
+      y = ''
+      while True:
+        y = input("Do you really want to exit? [y/n]. If you want to exit and save buffer, type 's'")
+        if y not in ['y', 'n', 's']:
+          print("Response not recognized. Expected 'y', 'n' or 's'.")
+        else:
+          break
+      if y == 'n':
+        return False
+      elif y == 's':
+        self._save_buf = True
+    return True
 
 
   def _restore(self, graph, resume):

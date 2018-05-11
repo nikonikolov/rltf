@@ -25,6 +25,7 @@ class Agent:
                save_freq=100000,
                restore_dir=None,
                plots_layout=None,
+               confirm_kill=False,
               ):
     """
     Args:
@@ -42,7 +43,8 @@ class Agent:
         `restore_dir==model_dir`, then training is continued from the saved model time step and
         the existing model is overwritten. Otherwise, the saved weights are used but training
         starts from step 0 and the model is saved in `model_dir`. If `None`, no restoring
-      layout: dict or None. Used to configure the layout for video plots.
+      plots_layout: dict or None. Used to configure the layout for video plots
+      confirm_kill: bool. If True, you will be asked to confirm Ctrl+C
     """
 
     self.env            = env
@@ -54,6 +56,7 @@ class Agent:
     self.log_freq       = log_freq
     self.restore_dir    = restore_dir
     self.prng           = seeding.get_prng()
+    self.confirm_kill   = confirm_kill
 
     self.start_step     = None          # Step from which the agent starts
     self.warm_up        = warm_up       # Step from which training starts
