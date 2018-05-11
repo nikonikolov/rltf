@@ -44,6 +44,7 @@ def parse_args(custom_args):
       use the network weights from the dir, but create a new model and train it on a new env')),
     ('--extra-info',   dict(default="",     type=str,     help='extra info, not captured by command \
       line args that should be added to the program log')),
+    ('--confirm-kill', dict(default=False,  type=str2bool,help='if True, Ctrl+C has to be confirmed')),
   ]
 
   common_args_names = { arg[0]: i for i, arg in enumerate(common_args)}

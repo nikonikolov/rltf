@@ -137,6 +137,7 @@ def make_agent():
     log_freq=args.log_freq,
     save_freq=args.save_freq,
     restore_dir=restore_dir,
+    confirm_kill=args.confirm_kill,
   )
 
   dqn_agent_kwargs = dict(
