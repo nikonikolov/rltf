@@ -4,6 +4,15 @@ def plot_bars(ax, kwargs, env, color):
   x = atari_labels(env.unwrapped.get_action_meanings())
   return ax.bar(x=x, **kwargs, color=color)
 
+
+def plot_highlight_bars(ax, kwargs, env, color_n='#1f77b4', color_hi='#d62728'):
+  x = atari_labels(env.unwrapped.get_action_meanings())
+  color = [color_n] * len(x)
+  a = kwargs.pop("a")
+  color[a] = color_hi
+  return ax.bar(x=x, **kwargs, color=color)
+
+
 def atari_labels(x):
   for i, label in enumerate(x):
 
@@ -69,7 +78,7 @@ ids_layout = {
           "tight_layout": dict(pad=1.0, h_pad=0.0),
         },
       },
-      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#1f77b4'),
+      "plot_function": plot_highlight_bars,
     },
     "eval_actions": {
       "align": dict(vertical='center', horizontal='right'),
@@ -94,7 +103,7 @@ ids_layout = {
           "tight_layout": dict(pad=1.0, h_pad=0.0),
         },
       },
-      "plot_function": lambda ax, data, env: plot_bars(ax, data, env, '#d62728'),
+      "plot_function": plot_highlight_bars,
     },
   }
 }

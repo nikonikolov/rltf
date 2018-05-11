@@ -312,11 +312,13 @@ class BstrapDQN_IDS(BstrapDQN):
       a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
       tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
 
+
     # Set the plottable tensors for video. Use only the first action in the batch
+    a = tf.identity(action[0], name="plot_a_train")
     self.plot_train["train_actions"] = {
-      "a_mean": dict(height=tf.identity(mean[0], name="plot_mean")),
-      "a_std":  dict(height=tf.identity(std[0], name="plot_std")),
-      "a_ids":  dict(height=tf.identity(ids_score[0], name="plot_ids_score")),
+      "a_mean": dict(height=tf.identity(mean[0], name="plot_mean"), a=a),
+      "a_std":  dict(height=tf.identity(std[0], name="plot_std"), a=a),
+      "a_ids":  dict(height=tf.identity(ids_score[0], name="plot_ids_score"), a=a),
     }
 
     return action
@@ -327,8 +329,9 @@ class BstrapDQN_IDS(BstrapDQN):
     action  = tf.argmax(means, axis=-1, output_type=tf.int32, name=name)
 
     # Set the plottable tensors for video. Use only the first action in the batch
+    a = tf.identity(action[0], name="plot_a_eval")
     self.plot_eval["eval_actions"] = {
-      "a_means": dict(height=tf.identity(means[0], name="plot_means")),
+      "a_means": dict(height=tf.identity(means[0], name="plot_means"), a=a),
     }
 
     return action
@@ -342,16 +345,18 @@ class BstrapDQN_IDS(BstrapDQN):
     means       = graph.get_tensor_by_name("plot_mean:0")
     stds        = graph.get_tensor_by_name("plot_std:0")
     ids_scores  = graph.get_tensor_by_name("plot_ids_score:0")
+    a           = graph.get_tensor_by_name("plot_a_train:0")
 
     self.plot_train["train_actions"] = {
-      "a_mean": dict(height=means),
-      "a_std":  dict(height=stds),
-      "a_ids":  dict(height=ids_scores),
+      "a_mean": dict(height=means, a=a),
+      "a_std":  dict(height=stds, a=a),
+      "a_ids":  dict(height=ids_scores, a=a),
     }
 
-    means       = graph.get_tensor_by_name("plot_means:0")
+    a     = graph.get_tensor_by_name("plot_a_eval:0")
+    means = graph.get_tensor_by_name("plot_means:0")
     self.plot_eval["eval_actions"] = {
-      "a_means": dict(height=means),
+      "a_means": dict(height=means, a=a),
     }
 
 
