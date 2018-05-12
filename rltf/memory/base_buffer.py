@@ -111,7 +111,7 @@ class BaseBuffer():
       json.dump(data, f, indent=4, sort_keys=True)
 
 
-  def resume(self, model_dir):
+  def restore(self, model_dir):
     """Populate the buffer from data previously saved to disk
     Args:
       model_dir: Full path of the directory of the data

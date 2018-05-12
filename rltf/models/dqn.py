@@ -70,6 +70,7 @@ class BaseDQN(Model):
 
     self._train_op      = train_op
     self._update_target = update_target
+    self._variables     = agent_vars + target_vars
 
 
   def _preprocess_obs(self, obs):

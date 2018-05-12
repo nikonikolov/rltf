@@ -74,9 +74,9 @@ class AgentDQN(ParallelOffPolicyAgent):
     tf.summary.scalar("train/learn_rate", self.learn_rate_ph)
 
 
-  def _restore(self, graph, resume):
-    self.learn_rate_ph  = graph.get_tensor_by_name("learn_rate_ph:0")
-    super()._restore(graph, resume)
+  def _restore(self, graph):
+    self.learn_rate_ph = graph.get_tensor_by_name("learn_rate_ph:0")
+    super()._restore(graph)
 
 
   def _append_log_info(self):
