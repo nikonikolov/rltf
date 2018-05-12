@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tensorflow as tf
 
 from rltf.envs.utils  import get_env_monitor
@@ -26,6 +27,7 @@ class Agent:
                restore_dir=None,
                plots_layout=None,
                confirm_kill=False,
+               reuse_regex=None,
               ):
     """
     Args:
@@ -45,6 +47,8 @@ class Agent:
         starts from step 0 and the model is saved in `model_dir`. If `None`, no restoring
       plots_layout: dict or None. Used to configure the layout for video plots
       confirm_kill: bool. If True, you will be asked to confirm Ctrl+C
+      reuse_regex: str or None. Regular expression for matching variables whose values should be reused.
+        If None, all model variables are reused
     """
 
     self.env            = env
@@ -57,6 +61,7 @@ class Agent:
     self.restore_dir    = restore_dir
     self.prng           = seeding.get_prng()
     self.confirm_kill   = confirm_kill
+    self.reuse_regex    = reuse_regex
 
     self.start_step     = None          # Step from which the agent starts
     self.warm_up        = warm_up       # Step from which training starts
@@ -87,20 +92,29 @@ class Agent:
 
 
   def build(self):
-    """Build the graph. If `restore_dir is not None`, the graph will be restored from
-    `restore_dir`. Automatically calls (in order) `self._build()` and `self.model.build()`
+    """Build the graph. Automatically calls (in order) `self._build()` and `self.model.build()`
     or `self._restore()` and `self.model.restore()`.
+    If `restore_dir is None`, the graph will be built and initialized from scratch.
+    If `restore_dir == model_dir`, the graph will be restored and the build procedure will not be called.
+    If `restore_dir != model_dir`, the graph will be built from scratch and initialized with the values.
+    of the variables in `restore_dir` which match the provided pattern
     """
 
-    # Build the model from scratch
-    if self.restore_dir is None:
+    restore = self.restore_dir is not None and self.restore_dir == self.model_dir
+    reuse   = self.restore_dir is not None and self.restore_dir != self.model_dir
+
+    if not restore:
+      # Build the model from scratch
       self._build_base()
-    # Restore an existing model
+      if reuse:
+        # Reuse variables
+        self._reuse_base()
     else:
+      # Restore an existing model
       self._restore_base()
 
     # NOTE: Create the tf.train.Saver  **after** building the whole graph
-    self.saver     = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
+    self.saver = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
     # Create TensorBoard summary writers
     self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tf/tb/", self.sess.graph)
     self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tf/tb/")
@@ -179,17 +193,10 @@ class Agent:
 
 
   def _restore_base(self):
-
-    resume = self.restore_dir == self.model_dir
-
-    logger.info("%s model", "Resuming" if resume else "Reusing")
+    logger.info("Restoring model")
 
     # Get the checkpoint
-    restore_dir = os.path.join(self.restore_dir, "tf/")
-    ckpt = tf.train.get_checkpoint_state(restore_dir)
-    if ckpt is None:
-      raise ValueError("No checkpoint found in {}".format(restore_dir))
-    ckpt_path = ckpt.model_checkpoint_path
+    ckpt_path = self._ckpt_path()
 
     # Restore the graph structure
     saver = tf.train.import_meta_graph(ckpt_path + '.meta')
@@ -206,7 +213,7 @@ class Agent:
     self.model.restore(graph)
 
     # Recover the agent subclass variables
-    self._restore(graph, resume)
+    self._restore(graph)
 
     # Restore the values of all tf.Variables
     self.sess = self._get_sess()
@@ -216,15 +223,40 @@ class Agent:
     self.summary_op = graph.get_tensor_by_name("Merge/MergeSummary:0")
 
     # Set control variables
-    if resume:
-      self.start_step = self.sess.run(self.t_train)
-      # Ensure that you have enough random experience before training starts
-      self.warm_up    = self.start_step + self.warm_up
+    self.start_step = self.sess.run(self.t_train)
+    # Ensure that you have enough random experience before training starts
+    # self.warm_up    = self.start_step + self.warm_up
+    self.learn_started = self.start_step >= self.warm_up
+
+
+  def _reuse_base(self):
+    logger.info("Reusing model variables:")
+
+    # Get the list of variables to restore
+    if self.reuse_regex is not None:
+      # pattern   = self.reuse_regex.encode('unicode-escape')
+      pattern   = self.reuse_regex
+      regex     = re.compile(pattern, flags=0)
+      var_list  = [v for v in self.model.variables if regex.search(v.name)]
     else:
-      # Reset all step variables
-      self.start_step = 1
-      self.sess.run(tf.assign(self.t_train, 0))
-      self.sess.run(tf.assign(self.t_eval,  0))
+      var_list  = self.model.variables
+
+    # Log the variables being restored
+    for v in var_list:
+      logger.info(v.name)
+
+    # Restore the variables
+    saver = tf.train.Saver(var_list)
+    saver.restore(self.sess, self._ckpt_path())
+
+
+  def _ckpt_path(self):
+    restore_dir = os.path.join(self.restore_dir, "tf/")
+    ckpt = tf.train.get_checkpoint_state(restore_dir)
+    if ckpt is None:
+      raise ValueError("No checkpoint found in {}".format(restore_dir))
+    ckpt_path = ckpt.model_checkpoint_path
+    return ckpt_path
 
 
   def _build(self):
@@ -257,7 +289,7 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _restore(self, graph, resume):
+  def _restore(self, graph):
     """Restore the Variables, placeholders and Ops needed by the class so that
     it can operate in exactly the same way as if `self._build()` was called
     Args:

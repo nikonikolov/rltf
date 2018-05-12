@@ -120,6 +120,9 @@ class DDPG(Model):
     logger.debug("Creating initialization Op")
     self._init_op   = tf_utils.assign_vars(target_vars, agent_vars, name="init_op")
 
+    # Rememeber the model variables
+    self._variables = agent_vars + target_vars
+
     # Summaries
     tf.summary.scalar("train/actor_loss",   actor_loss)
     tf.summary.scalar("train/critic_loss",  critic_loss)

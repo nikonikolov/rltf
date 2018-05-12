@@ -35,6 +35,7 @@ class Model:
     # TF Ops that should be set
     self._train_op      = None
     self._update_target = None  # Optional
+    self._variables     = None
 
 
   def build(self):
@@ -218,7 +219,7 @@ class Model:
   def done_ph(self):
     """
     Returns:
-    `tf.placeholder` to indicate end of episode for examples in the training batch
+      `tf.placeholder` to indicate end of episode for examples in the training batch
     """
     if self._done_ph is not None:
       return self._done_ph
@@ -228,3 +229,15 @@ class Model:
   # @property
   # def training_ph(self):
   #   return self._training_ph
+
+  @property
+  def variables(self):
+    """
+    Returns:
+      `list` of `tf.Variable`s which contains all variables used by the model. If there is a target
+      network, its variables must be included. Optimizer related variables must be excluded
+    """
+    if self._variables is not None:
+      return self._variables
+    else:
+      raise NotImplementedError()

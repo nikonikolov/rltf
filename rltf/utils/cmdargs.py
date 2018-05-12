@@ -45,6 +45,7 @@ def parse_args(custom_args):
     ('--extra-info',   dict(default="",     type=str,     help='extra info, not captured by command \
       line args that should be added to the program log')),
     ('--confirm-kill', dict(default=False,  type=str2bool,help='if True, Ctrl+C has to be confirmed')),
+    ('--reuse-regex',  dict(default=None,   type=str,     help='regex for matching vars to reuse')),
   ]
 
   common_args_names = { arg[0]: i for i, arg in enumerate(common_args)}
@@ -91,12 +92,15 @@ def parse_args(custom_args):
     assert os.path.exists(args.reuse_model)
     assert os.path.exists(os.path.join(args.reuse_model, "tf"))
 
-  # Grad clip and huber loss cannot be simultaneously set
-  try:
-    if args.grad_clip is not None:
-      assert args.grad_clip > 0
-      assert not args.huber_loss
-  except AttributeError:
-    pass
+  if args.reuse_regex is not None:
+    assert args.reuse_model is not None
+
+  # # Grad clip and huber loss cannot be simultaneously set
+  # try:
+  #   if args.grad_clip is not None:
+  #     assert args.grad_clip > 0
+  #     assert not args.huber_loss
+  # except AttributeError:
+  #   pass
 
   return args

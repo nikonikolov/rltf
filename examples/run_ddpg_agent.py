@@ -130,6 +130,7 @@ def make_agent():
     save_freq=args.save_freq,
     restore_dir=restore_dir,
     confirm_kill=args.confirm_kill,
+    reuse_regex=args.reuse_regex,
   )
 
   ddpg_agent_kwargs = dict(
