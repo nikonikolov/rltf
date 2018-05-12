@@ -29,22 +29,48 @@ class OffPolicyAgent(Agent):
       t.start()
 
     # Wait for threads
-    while not self._terminate:
+    stop = False
+    while not stop:
       try:
         for t in self.threads:
           t.join()
+        stop = True
       except KeyboardInterrupt:
         # Confirm the kill
-        if not self._confirm_kill():
+        if not self._kill_confirmed():
           logger.info("CONTINUING EXECUTION")
           continue
         logger.info("EXITING")
         self._terminate = True
         for t in self.threads:
           t.join()
+        stop = True
 
 
-  def _confirm_kill(self):
+  def eval(self):
+    # Use a thread to avoid accidental KeyboardInterrupt
+    eval_thread = threading.Thread(name='eval_thread', target=self._eval)
+
+    eval_thread.start()
+
+    # Wait for eval thread
+    stop = False
+    while not stop:
+      try:
+        eval_thread.join()
+        stop = True
+      except KeyboardInterrupt:
+        # Confirm the kill
+        if not self._kill_confirmed():
+          logger.info("CONTINUING EXECUTION")
+          continue
+        logger.info("EXITING")
+        self._terminate = True
+        eval_thread.join()
+        stop = True
+
+
+  def _kill_confirmed(self):
     """Check if Ctrl+C was genuine and if the buffer should be saved.
     Returns:
       `bool`. If True, kill. If False, continue
@@ -93,29 +119,7 @@ class OffPolicyAgent(Agent):
       self.sess.run(self.model.update_target)
 
 
-  def _wait_act_chosen(self):
-    raise NotImplementedError()
-
-
-  def _action_train(self, state, t):
-    """Return action selected by the agent for a training step
-    Args:
-      state: np.array. Current state
-      t: int. Current timestep
-    """
-    raise NotImplementedError()
-
-
-  def _action_eval(self, state, t):
-    """Return action selected by the agent for an evaluation step
-    Args:
-      state: np.array. Current state
-      t: int. Current timestep
-    """
-    raise NotImplementedError()
-
-
-  def eval(self):
+  def _eval(self):
 
     logger.info("Starting evaluation")
 
@@ -128,7 +132,7 @@ class OffPolicyAgent(Agent):
 
     obs = self.reset()
 
-    for t in range (start_step, stop_step):
+    for t in range(start_step, stop_step):
       if self._terminate:
         break
 
@@ -156,6 +160,28 @@ class OffPolicyAgent(Agent):
     self.env_monitor.mode = 't'
 
     logger.info("Evaluation finished")
+
+
+  def _wait_act_chosen(self):
+    raise NotImplementedError()
+
+
+  def _action_train(self, state, t):
+    """Return action selected by the agent for a training step
+    Args:
+      state: np.array. Current state
+      t: int. Current timestep
+    """
+    raise NotImplementedError()
+
+
+  def _action_eval(self, state, t):
+    """Return action selected by the agent for an evaluation step
+    Args:
+      state: np.array. Current state
+      t: int. Current timestep
+    """
+    raise NotImplementedError()
 
 
 
