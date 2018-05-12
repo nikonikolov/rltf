@@ -225,7 +225,8 @@ class Agent:
     # Set control variables
     self.start_step = self.sess.run(self.t_train)
     # Ensure that you have enough random experience before training starts
-    self.warm_up    = self.start_step + self.warm_up
+    # self.warm_up    = self.start_step + self.warm_up
+    self.learn_started = self.start_step >= self.warm_up
 
 
   def _reuse_base(self):
