@@ -224,9 +224,11 @@ class Agent:
 
     # Set control variables
     self.start_step = self.sess.run(self.t_train)
-    # Ensure that you have enough random experience before training starts
-    # self.warm_up    = self.start_step + self.warm_up
     self.learn_started = self.start_step >= self.warm_up
+
+    if not self.learn_started:
+      logger.warning("Training the restored model will not start immediately")
+      logger.warning("Random policy will be run for %d steps", self.warm_up-self.start_step)
 
 
   def _reuse_base(self):
