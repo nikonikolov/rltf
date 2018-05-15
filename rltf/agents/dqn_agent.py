@@ -152,7 +152,7 @@ class AgentBDQN(AgentDQN):
       #   self.sess.run(self.model.train_blr, feed_dict=feed_dict)
 
       # Reset BLR
-      self.sess.run(self.model.reset_blr)
+      # self.sess.run(self.model.reset_blr)
 
       # Train BLR
       n = int(self.blr_batch_size / self.batch_size)
