@@ -305,7 +305,7 @@ class BstrapDQN_IDS(BaseBstrapDQN):
 
     assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
-    self.rho2   = 0.5**2    # Const for IDS Info Gain
+    self.rho2   = 1.0**2    # Const for IDS Info Gain
     self.policy = policy
 
 
