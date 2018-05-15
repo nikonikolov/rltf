@@ -113,8 +113,8 @@ class Agent:
       # Restore an existing model
       self._restore_base()
 
-    # NOTE: Create the tf.train.Saver  **after** building the whole graph
-    self.saver = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
+    # NOTE: Create the tf.train.Saver **after** building the whole graph
+    self.saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
     # Create TensorBoard summary writers
     self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tf/tb/", self.sess.graph)
     self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tf/tb/")
