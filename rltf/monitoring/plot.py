@@ -143,8 +143,7 @@ class VideoPlotter(gym.Wrapper):
     if self.changed:
       for name in self.figs:
         # Get the latest figure image
-        obs   = self.figs[name]["image"]
-        # image = _overlay_image(image, obs, self.conf[name]["top"], self.conf[name]["left"])
+        obs = self.figs[name]["image"]
         self._overlay_image(obs, self.conf[name]["top"], self.conf[name]["left"])
 
     return self.image

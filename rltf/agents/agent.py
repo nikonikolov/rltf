@@ -113,8 +113,8 @@ class Agent:
       # Restore an existing model
       self._restore_base()
 
-    # NOTE: Create the tf.train.Saver  **after** building the whole graph
-    self.saver = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
+    # NOTE: Create the tf.train.Saver **after** building the whole graph
+    self.saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
     # Create TensorBoard summary writers
     self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tf/tb/", self.sess.graph)
     self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tf/tb/")
@@ -224,9 +224,11 @@ class Agent:
 
     # Set control variables
     self.start_step = self.sess.run(self.t_train)
-    # Ensure that you have enough random experience before training starts
-    # self.warm_up    = self.start_step + self.warm_up
     self.learn_started = self.start_step >= self.warm_up
+
+    if not self.learn_started:
+      logger.warning("Training the restored model will not start immediately")
+      logger.warning("Random policy will be run for %d steps", self.warm_up-self.start_step)
 
 
   def _reuse_base(self):
