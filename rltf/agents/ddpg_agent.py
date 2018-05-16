@@ -32,6 +32,8 @@ class AgentDDPG(ParallelOffPolicyAgent):
       critic_opt_conf: rltf.optimizers.OptimizerConf. Config for the critic network optimizer
       action_noise: rltf.exploration.ExplorationNoise. Action exploration noise
         to add to the selected action
+      update_target_freq: Period in number of parameter updates (not steps!) at which to update the
+        target net. Results in the period `train_freq * update_target_freq` number in number of step
       memory_size: int. Size of the replay buffer
       obs_len: int. How many environment observations comprise a single state.
     """
@@ -40,13 +42,12 @@ class AgentDDPG(ParallelOffPolicyAgent):
 
     assert isinstance(self.env.observation_space, gym.spaces.Box)
     assert isinstance(self.env.action_space,      gym.spaces.Box)
-    assert update_target_freq % self.train_freq == 0
 
     self.action_noise = action_noise
 
     self.actor_opt_conf   = actor_opt_conf
     self.critic_opt_conf  = critic_opt_conf
-    self.update_target_freq = update_target_freq
+    self.update_target_freq = update_target_freq * self.train_freq
 
     # Get environment specs
     act_shape = list(self.env.action_space.shape)

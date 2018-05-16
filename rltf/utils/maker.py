@@ -12,7 +12,7 @@ import rltf.monitoring
 logger = logging.getLogger(__name__)
 
 
-def make_env(env_id, seed, model_dir, video_freq=None):
+def make_env(env_id, seed, model_dir, video_freq=None, max_ep_steps=None):
   """Create an instance of a gym environment, wrap it in a Monitor class and
   set seeds for the environment and for other modules (tf, np, random)
 
@@ -22,6 +22,7 @@ def make_env(env_id, seed, model_dir, video_freq=None):
     model_dir: std. Path where videos from the Monitor class will be saved
     video_freq: int. Every `video_freq` episode will be recorded. If `None`,
       then the monitor default is used. If `<=0`, then no videos are recorded
+    max_ep_steps: int. Set a bound on the max steps in an episode. If None, no limit
   Returns:
     The environment wrapped inside a Monitor class
   """
@@ -44,7 +45,11 @@ def make_env(env_id, seed, model_dir, video_freq=None):
   env = gym.make(env_id)
   if seed >= 0:
     env.seed(seed)
-  # env = gym.wrappers.Monitor(env, monitor_dir, video_callable=video_callable)
+
+  # NOTE: Episode steps limit wrapper must be set before the Monitor. Otherwise, statistics of
+  # reported reward will be wrong
+  if max_ep_steps is not None:
+    env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
   env = rltf.monitoring.Monitor(env, monitor_dir, video_callable=video_callable)
 
   return env

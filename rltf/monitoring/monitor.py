@@ -61,8 +61,7 @@ class Monitor(Wrapper):
       video_callable: function or False. False disables video recording. If function is provided, it
         has to take the number of the episode and return True/False if a video should be recorded.
         If `None`, every 1000th episode is recorded
-      mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor. Can be
-        changed with self.set_mode()
+      mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor
     """
 
     self._detect_wrapped_env(env)
@@ -75,16 +74,14 @@ class Monitor(Wrapper):
     self._enabled       = False
 
     self.videos         = []      # List of files for the recorded videos and their manifests
-    self._mode          = None
     self.log_dir        = log_dir
     self.done           = None
     self.env_started    = False
     self.env_id         = self._get_env_id()
     self.video_callable = self._get_video_callable(video_callable)
 
-    self.stats_recorder = StatsRecorder(os.path.join(self.log_dir, "data"))
+    self.stats_recorder = StatsRecorder(os.path.join(self.log_dir, "data"), mode)
     self.video_recorder = None
-    self.mode           = mode
 
     # Create the monitor directory
     self._make_log_dir()
@@ -145,16 +142,15 @@ class Monitor(Wrapper):
 
   @property
   def mode(self):
-    return self._mode
+    return self.stats_recorder.mode
 
   @mode.setter
   def mode(self, mode):
     if mode not in ['t', 'e']:
       raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
 
-    self._mode = mode
     self.stats_recorder.mode = mode
-    logger.info("Monitor mode set to %s", "TRAIN" if mode == 't' else "EVAL")
+    # logger.info("Monitor mode set to %s", "TRAIN" if mode == 't' else "EVAL")
 
 
   def save(self):
@@ -251,7 +247,8 @@ class Monitor(Wrapper):
       self._close_video_recorder()
 
     ep_id = self.episode_id
-    video_file = "openaigym_video_{}_episode_{:06}".format("train" if self._mode == 't' else "eval", ep_id)
+    mode  = self.stats_recorder.mode
+    video_file = "openaigym_video_{}_episode_{:06}".format("train" if mode == 't' else "eval", ep_id)
     video_file = os.path.join(self.log_dir, video_file)
 
     # Start recording the next video
@@ -286,37 +283,6 @@ class Monitor(Wrapper):
     self.close()
 
 
-  def get_total_steps(self, mode='t'):
-    if mode == 't':
-      return self.stats_recorder.train_steps
-    elif mode == 'e':
-      return self.stats_recorder.eval_steps
-    else:
-      raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
-
-  @property
-  def episode_id(self):
-    return self.stats_recorder.episode_id
-
-
-  def get_episode_rewards(self, mode='t'):
-    if mode == 't':
-      return self.stats_recorder.train_ep_rews
-    elif mode == 'e':
-      return self.stats_recorder.eval_ep_rews
-    else:
-      raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
-
-
-  def get_episode_lens(self, mode='t'):
-    if mode == 't':
-      return self.stats_recorder.train_ep_lens
-    elif mode == 'e':
-      return self.stats_recorder.eval_ep_lens
-    else:
-      raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
-
-
   def define_log_info(self, custom_log_info):
     self.stats_recorder.define_log_info(custom_log_info)
 
@@ -325,9 +291,30 @@ class Monitor(Wrapper):
     self.stats_recorder.log_stats(t)
 
 
-  def get_mean_ep_rew(self):
-    return self.stats_recorder.get_mean_ep_rew()
-
-
   def conf_video_plots(self, **kwargs):
     self.env.conf_plots(**kwargs)
+
+
+  @property
+  def episode_id(self):
+    return self.stats_recorder.episode_id
+
+
+  @property
+  def total_steps(self):
+    return self.stats_recorder.total_steps
+
+
+  @property
+  def mean_ep_rew(self):
+    return self.stats_recorder.mean_ep_rew
+
+
+  @property
+  def episode_rewards(self):
+    return self.stats_recorder.episode_rewards
+
+
+  @property
+  def episode_lens(self):
+    return self.stats_recorder.episode_lens

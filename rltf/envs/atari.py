@@ -29,7 +29,7 @@ import cv2
 import gym
 import numpy as np
 
-from rltf.utils import seeding
+# from rltf.utils import seeding
 
 class NoopResetEnv(gym.Wrapper):
   def __init__(self, env, noop_max=30):
@@ -39,7 +39,7 @@ class NoopResetEnv(gym.Wrapper):
     super().__init__(env)
     self.noop_max = noop_max
     assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
-    self.prng = seeding.get_prng()
+    # self.prng = seeding.get_prng()
 
   def step(self, action):
     return self.env.step(action)
@@ -47,8 +47,8 @@ class NoopResetEnv(gym.Wrapper):
   def reset(self, **kwargs):
     """Do no-op action for a number of steps in [1, noop_max]."""
     self.env.reset(**kwargs)
-    # noops = np.random.randint(1, self.noop_max + 1)
-    noops = self.prng.randint(1, self.noop_max + 1)
+    # noops = self.prng.randint(1, self.noop_max + 1)
+    noops = self.unwrapped.np_random.randint(1, self.noop_max + 1)
     for _ in range(noops):
       obs, _, done, _ = self.env.step(0)
       if done:
@@ -119,30 +119,29 @@ class MaxAndSkipEnv(gym.Wrapper):
     """Return only every `skip`-th frame"""
     super().__init__(env)
     # most recent raw observations (for max pooling across time steps)
-    self._obs_buffer = deque(maxlen=2)
+    # self._obs_buffer = deque(maxlen=2)
+    self._obs_buffer = np.zeros((2,)+env.observation_space.shape, dtype=np.uint8)
     self._skip       = skip
+    assert self._skip >= 1
 
   def step(self, action):
     """Repeat action, sum reward, and max over last observations."""
     total_reward = 0.0
-    done = None
-    for _ in range(self._skip):
+    for i in range(self._skip):
       obs, reward, done, info = self.env.step(action)
-      self._obs_buffer.append(obs)
+      if i == self._skip - 2: self._obs_buffer[0] = obs
+      if i == self._skip - 1: self._obs_buffer[1] = obs
       total_reward += reward
       if done:
         break
 
-    max_frame = np.max(np.stack(self._obs_buffer), axis=0)
+    # NOTE: The observation on the done=True doesn't matter - it is never used
+    max_frame = self._obs_buffer.max(axis=0)
 
     return max_frame, total_reward, done, info
 
   def reset(self, **kwargs):
-    """Clear past frame buffer and init to first obs. from inner env."""
-    self._obs_buffer.clear()
-    obs = self.env.reset(**kwargs)
-    self._obs_buffer.append(obs)
-    return obs
+    return self.env.reset(**kwargs)
 
 
 class WarpFrame(gym.ObservationWrapper):
@@ -206,9 +205,7 @@ class StackFrames(gym.Wrapper):
 
 
 def wrap_deepmind_atari(env):
-  """Wraps an Atari environment to have the same settings as in the original
-  DQN Nature paper by Deepmind.
-
+  """Wraps an Atari environment to have the same settings as in the original DQN Nature paper by Deepmind.
   Args:
     env: gym.Env
   Returns:

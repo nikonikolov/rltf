@@ -41,18 +41,18 @@ def parse_args():
     ('--noise-decay',  dict(default=500000, type=int,   help='action noise decay; \
       # steps to decay noise weight from 1 to 0; if <=0, no decay')),
 
-    ('--warm-up',      dict(default=10000,  type=int,   help='# steps before training starts')),
-    ('--update-freq',  dict(default=1,      type=int,   help='how often to update target')),
-    ('--train-freq',   dict(default=1,      type=int,   help='training frequency in # steps')),
-    ('--stop-step',    dict(default=2500000,type=int,   help='steps to run the agent for')),
+    ('--warm-up',      dict(default=10000,  type=int,   help='# *agent* steps before training starts')),
+    ('--update-freq',  dict(default=1,      type=int,   help='update target freq in # *param updates*')),
+    ('--train-freq',   dict(default=1,      type=int,   help='train frequency in # *agent* steps')),
+    ('--stop-step',    dict(default=2500000,type=int,   help='steps to run the *agent* for')),
     ('--batch-norm',   dict(default=False,  type=s2b,   help='apply batch normalization')),
     ('--obs-norm',     dict(default=False,  type=s2b,   help='normalize observations')),
     ('--huber-loss',   dict(default=False,  type=s2b,   help='use huber loss for critic')),
     ('--reward-scale', dict(default=1.0,    type=float, help='scale env reward')),
     ('--max-ep-steps', dict(default=None,   type=int,   help='max # steps for an episode')),
 
-    ('--eval-freq',    dict(default=500000, type=int,   help='how often to evaluate model')),
-    ('--eval-len',     dict(default=50000,  type=int,   help='for how many steps to eval each time')),
+    ('--eval-freq',    dict(default=500000,  type=int,   help='freq in # *agent* steps to run eval')),
+    ('--eval-len',     dict(default=50000,   type=int,   help='# *agent* steps to run eval each time')),
   ]
 
   return cmdargs.parse_args(args)
@@ -92,8 +92,8 @@ def make_agent():
 
 
   # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
-  env = wrap_deepmind_ddpg(env, rew_scale=args.reward_scale, max_ep_len=args.max_ep_steps)
+  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq, max_ep_steps=args.max_ep_steps)
+  env = wrap_deepmind_ddpg(env, rew_scale=args.reward_scale)
 
   # Set additional arguments
   if args.batch_size is None:
@@ -104,8 +104,8 @@ def make_agent():
   critic_opt_conf = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.critic_lr))
 
   # Create the exploration noise
-  mu            = np.zeros(env.action_space.shape, dtype=np.float32)
-  sigma         = np.ones(env.action_space.shape,  dtype=np.float32) * args.sigma
+  mu    = np.zeros(env.action_space.shape, dtype=np.float32)
+  sigma = np.ones(env.action_space.shape,  dtype=np.float32) * args.sigma
   if args.noise_type == "OU":
     action_noise = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
   elif args.noise_type == "Gaussian":

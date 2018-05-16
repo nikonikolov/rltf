@@ -36,12 +36,17 @@ class StatsRecorder:
     self.train_ep_lens = []
     self.train_steps   = 0      # Total number of environment steps in train mode
     self.train_stats   = None   # A dictionary with runtime statistics about training
+    self.train_ep_id   = 0
 
     # Evaluation statistics
     self.eval_ep_rews = []
     self.eval_ep_lens = []
     self.eval_steps   = 0       # Total number of environment steps in eval mode
     self.eval_stats   = None    # A dictionary with runtime statistics about evaluation
+    self.eval_ep_id   = 0
+
+    # NOTE: self.train_ep_id and self.eval_ep_id are the episode IDs as seen by the agent.
+    # The length of  train_ep_lens and eval_ep_lens is not guaranteed to be the same
 
     # Runtime variables
     self.ep_reward  = None
@@ -49,6 +54,7 @@ class StatsRecorder:
     self.env_steps  = 0         # Total number of environment steps in any mode
     self.disabled   = False
     self._mode      = mode      # Running mode: either 't' (train) or 'e' (eval)
+    self._new_mode  = mode      # Used to synchronize changes when mode is changed mid-episode
 
     if not os.path.exists(self.log_dir):
       logger.info('Creating stats directory %s', self.log_dir)
@@ -67,7 +73,7 @@ class StatsRecorder:
   def mode(self, mode):
     if mode not in ['t', 'e']:
       raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
-    self._mode = mode
+    self._new_mode = mode
 
 
   def before_step(self, action):
@@ -102,6 +108,16 @@ class StatsRecorder:
   def after_reset(self, obs):
     self.ep_steps   = 0
     self.ep_reward  = 0
+
+    # Mode should be changed before episode_id is incremented!
+    if self._mode != self._new_mode:
+      self._mode = self._new_mode
+      logger.info("Monitor mode set to %s", "TRAIN" if self._mode == 't' else "EVAL")
+
+    if self._mode == 't':
+      self.train_ep_id += 1
+    else:
+      self.eval_ep_id  += 1
 
 
   def close(self):
@@ -146,8 +162,8 @@ class StatsRecorder:
       ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
 
       ("train/agent_steps",                     "d",    lambda t: t),
-      ("train/env_steps",                       "d",    lambda t: self.train_steps),
-      ("train/episodes",                        "d",    lambda t: len(self.train_ep_rews)),
+      ("train/env_steps",                       "d",    lambda t: self.train_steps+self.ep_steps),
+      ("train/episodes",                        "d",    lambda t: self.train_ep_id),
       ("train/best_episode_rew",                ".3f",  lambda t: self.train_stats["best_ep_rew"]),
       ("train/best_mean_ep_rew (%d eps)"%n,     ".3f",  lambda t: self.train_stats["best_mean_rew"]),
       ("train/ep_len_mean (%d eps)"%n,          ".3f",  lambda t: self.train_stats["ep_len_mean"]),
@@ -157,8 +173,8 @@ class StatsRecorder:
 
 
       ("eval/agent_steps",                      "d",    lambda t: t),
-      ("eval/env_steps",                        "d",    lambda t: self.eval_steps),
-      ("eval/episodes",                         "d",    lambda t: len(self.eval_ep_rews)),
+      ("eval/env_steps",                        "d",    lambda t: self.eval_steps+self.ep_steps),
+      ("eval/episodes",                         "d",    lambda t: self.eval_ep_id),
       ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
       ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
       ("eval/ep_len_mean (%d eps)"%n,           ".3f",  lambda t: self.eval_stats["ep_len_mean"]),
@@ -219,17 +235,6 @@ class StatsRecorder:
     self.t_last_log = t_now
 
 
-  def get_mean_ep_rew(self):
-    if self._mode == 't':
-      return self._stats_mean(self.train_ep_rews)
-    else:
-      return self._stats_mean(self.eval_ep_rews)
-
-  @property
-  def episode_id(self):
-    return (len(self.train_ep_rews) if self._mode == 't' else len(self.eval_ep_rews)) + 1
-
-
   def log_stats(self, t):
     """Log the training progress
     Args:
@@ -259,10 +264,9 @@ class StatsRecorder:
     data = {
       "total_env_steps":  self.env_steps,
       "train_steps":      self.train_steps,
-      "train_episodes":   len(self.train_ep_rews),
+      "train_episodes":   self.train_ep_id,
       "eval_steps":       self.eval_steps,
-      "eval_episodes":    len(self.eval_ep_rews),
-      "steps_per_s":      self.steps_p_s,
+      "eval_episodes":    self.eval_ep_id,
     }
 
     with atomic_write.atomic_write(summary_file) as f:
@@ -307,6 +311,42 @@ class StatsRecorder:
     with open(os.path.join(self.log_dir, "stats_summary.json"), 'r') as f:
       data = json.load(f)
 
+    self.train_ep_id  = data["train_episodes"]
+    self.eval_ep_id   = data["eval_episodes"]
     self.train_steps  = data["train_steps"]
     self.eval_steps   = data["eval_steps"]
     self.env_steps    = data["total_env_steps"]
+
+
+  @property
+  def episode_id(self):
+    return self.train_ep_id if self._mode == 't' else self.eval_ep_id
+
+
+  @property
+  def total_steps(self):
+    return (self.train_steps if self._mode == 't' else self.eval_steps) + self.ep_steps
+
+
+  @property
+  def mean_ep_rew(self):
+    if self._mode == 't':
+      return self._stats_mean(self.train_ep_rews)
+    else:
+      return self._stats_mean(self.eval_ep_rews)
+
+
+  @property
+  def episode_rewards(self):
+    if self._mode == 't':
+      return list(self.train_ep_rews)
+    else:
+      return list(self.eval_ep_rews)
+
+
+  @property
+  def episode_lens(self):
+    if self._mode == 't':
+      return list(self.train_ep_lens)
+    else:
+      return list(self.eval_ep_lens)

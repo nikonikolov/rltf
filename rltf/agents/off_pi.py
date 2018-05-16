@@ -152,7 +152,7 @@ class OffPolicyAgent(Agent):
 
         # Add a TB summary
         summary = tf.Summary()
-        summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.get_mean_ep_rew())
+        summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.mean_ep_rew)
         self.tb_eval_writer.add_summary(summary, t)
 
     # Set the monitor back to train mode
@@ -219,12 +219,6 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
         self._signal_act_chosen()
         break
 
-      # Stop and run evaluation procedure
-      if self.eval_len > 0 and t % self.eval_freq == 0:
-        self.eval()
-        # Reset the environment on return
-        obs = self.reset()
-
       # Get an action to run
       if self.learn_started:
         try:
@@ -260,6 +254,12 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
       if done:
         next_obs = self.reset()
       obs = next_obs
+
+      # Stop and run evaluation procedure
+      if self.eval_len > 0 and t % self.eval_freq == 0:
+        self.eval()
+        # Reset the environment on return
+        obs = self.reset()
 
 
   def _train_model(self):
@@ -336,12 +336,6 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
       if self._terminate:
         break
 
-      # Stop and run evaluation procedure
-      if self.eval_len > 0 and t % self.eval_freq == 0:
-        self.eval()
-        # Reset the environment on return
-        obs = self.reset()
-
       # Get an action to run
       if self.learn_started:
         action = self._action_train(obs, t)
@@ -379,6 +373,12 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
       # Log data
       self._log_stats(t)
+
+      # Stop and run evaluation procedure
+      if self.eval_len > 0 and t % self.eval_freq == 0:
+        self.eval()
+        # Reset the environment on return
+        obs = self.reset()
 
 
   def _wait_act_chosen(self):

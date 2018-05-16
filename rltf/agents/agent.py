@@ -344,7 +344,7 @@ class Agent:
         byte_summary = self.summary
         summary = tf.Summary()
         summary.ParseFromString(byte_summary)
-        summary.value.add(tag="train/mean_ep_rew", simple_value=self.env_monitor.get_mean_ep_rew())
+        summary.value.add(tag="train/mean_ep_rew", simple_value=self.env_monitor.mean_ep_rew)
         self._append_summary(summary, t)
 
         # Log with TensorBoard

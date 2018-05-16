@@ -33,11 +33,11 @@ def parse_args(custom_args):
     ('--mode',         dict(default='train',type=str,     choices=['train', 'eval'])),
     ('--log-lvl',      dict(default='INFO', type=str,     help='logger lvl')),
     ('--plot-video',   dict(default=False,  type=str2bool,help='if True, add model plots to video')),
-    ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # steps')),
+    ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # *agent* steps')),
     ('--save-freq',    dict(default=0,      type=int,     help='how often to save the model in # \
-      steps; if <=0, model is saved only at the end')),
+      *agent* steps; if <=0, model is saved only at the end')),
     ('--video-freq',   dict(default=500,    type=int,     help='how often to record videos in # \
-      episodes; if <=0, do not record any video')),
+      *episodes*; if <=0, do not record any video')),
     ('--restore-model',dict(default=None,   type=str,     help='path to existing dir; if set, will \
       continue training with the network and the env from the the dir')),
     ('--reuse-model',  dict(default=None,   type=str,     help='path to existing dir; if set, will \
