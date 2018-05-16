@@ -40,12 +40,11 @@ class BLR(tf.layers.Layer):
     else:
       assert self.w_dim == input_shape[-1].value
 
-    I     = tf.eye(self.w_dim, dtype=self.dtype)
-    tau2  = self.tau**2
+    I = tf.eye(self.w_dim, dtype=self.dtype)
 
     mu_init     = tf.zeros([self.w_dim, 1], dtype=self.dtype)
-    Sigma_init  = tau2 * I
-    Lambda_init = 1.0/tau2 * I
+    Sigma_init  = 1.0/self.tau * I
+    Lambda_init = self.tau * I
 
     self.w_mu     = self.add_variable("w_mu",
                                       shape=[self.w_dim, 1],
@@ -97,7 +96,7 @@ class BLR(tf.layers.Layer):
       mu = tf.matmul(X, self.w)
     # Bayesian Regression Output
     else:
-      mu  = tf.matmul(X, self.w_mu)
+      mu = tf.matmul(X, self.w_mu)
 
     # var ends up being diag(sigma**2 + matmul(matmul(X, w_Sigma), X.T))
     var = self.sigma**2 + tf.reduce_sum(tf.matmul(X, self.w_Sigma) * X, axis=-1, keepdims=True)
@@ -148,7 +147,7 @@ class BLR(tf.layers.Layer):
       A = tf.matmul(U, tf.diag(tf.sqrt(S)))
 
     w = self.w_mu + tf.matmul(A, sample)
-    return tf.assign(self.w, w)
+    return tf.assign(self.w, w, name="resample_w")
 
 
   @property
