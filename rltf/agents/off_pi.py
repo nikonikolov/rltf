@@ -152,7 +152,7 @@ class OffPolicyAgent(Agent):
 
         # Add a TB summary
         summary = tf.Summary()
-        summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.get_mean_ep_rew())
+        summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.mean_ep_rew)
         self.tb_eval_writer.add_summary(summary, t)
 
     # Set the monitor back to train mode

@@ -162,7 +162,7 @@ class StatsRecorder:
       ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
 
       ("train/agent_steps",                     "d",    lambda t: t),
-      ("train/env_steps",                       "d",    lambda t: self.train_steps),
+      ("train/env_steps",                       "d",    lambda t: self.train_steps+self.ep_steps),
       ("train/episodes",                        "d",    lambda t: self.train_ep_id),
       ("train/best_episode_rew",                ".3f",  lambda t: self.train_stats["best_ep_rew"]),
       ("train/best_mean_ep_rew (%d eps)"%n,     ".3f",  lambda t: self.train_stats["best_mean_rew"]),
@@ -173,7 +173,7 @@ class StatsRecorder:
 
 
       ("eval/agent_steps",                      "d",    lambda t: t),
-      ("eval/env_steps",                        "d",    lambda t: self.eval_steps),
+      ("eval/env_steps",                        "d",    lambda t: self.eval_steps+self.ep_steps),
       ("eval/episodes",                         "d",    lambda t: self.eval_ep_id),
       ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
       ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
@@ -233,18 +233,6 @@ class StatsRecorder:
       self.steps_p_s = (step - self.step_last_log) / (t_now - self.t_last_log)
       self.step_last_log = step
     self.t_last_log = t_now
-
-
-  def get_mean_ep_rew(self):
-    if self._mode == 't':
-      return self._stats_mean(self.train_ep_rews)
-    else:
-      return self._stats_mean(self.eval_ep_rews)
-
-  @property
-  def episode_id(self):
-    # return (len(self.train_ep_rews) if self._mode == 't' else len(self.eval_ep_rews)) + 1
-    return self.train_ep_id if self._mode == 't' else self.eval_ep_id
 
 
   def log_stats(self, t):
@@ -328,3 +316,37 @@ class StatsRecorder:
     self.train_steps  = data["train_steps"]
     self.eval_steps   = data["eval_steps"]
     self.env_steps    = data["total_env_steps"]
+
+
+  @property
+  def episode_id(self):
+    return self.train_ep_id if self._mode == 't' else self.eval_ep_id
+
+
+  @property
+  def total_steps(self):
+    return (self.train_steps if self._mode == 't' else self.eval_steps) + self.ep_steps
+
+
+  @property
+  def mean_ep_rew(self):
+    if self._mode == 't':
+      return self._stats_mean(self.train_ep_rews)
+    else:
+      return self._stats_mean(self.eval_ep_rews)
+
+
+  @property
+  def episode_rewards(self):
+    if self._mode == 't':
+      return list(self.train_ep_rews)
+    else:
+      return list(self.eval_ep_rews)
+
+
+  @property
+  def episode_lens(self):
+    if self._mode == 't':
+      return list(self.train_ep_lens)
+    else:
+      return list(self.eval_ep_lens)

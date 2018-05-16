@@ -29,7 +29,7 @@ import cv2
 import gym
 import numpy as np
 
-from rltf.utils import seeding
+# from rltf.utils import seeding
 
 class NoopResetEnv(gym.Wrapper):
   def __init__(self, env, noop_max=30):

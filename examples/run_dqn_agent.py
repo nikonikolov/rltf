@@ -32,15 +32,15 @@ def parse_args():
     ('--explore-decay', dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
     ('--epsilon-eval',  dict(default=0.001,  type=float, help='epsilon value during evaluation')),
 
-    ('--warm-up',       dict(default=50000,  type=int,   help='# steps before training starts')),
-    ('--train-freq',    dict(default=4,      type=int,   help='learn frequency')),
-    ('--update-freq',   dict(default=10000,  type=int,   help='how often to update target')),
-    ('--stop-step',     dict(default=5*10**7,type=int,   help='steps to run the agent for')),
+    ('--warm-up',       dict(default=50000,  type=int,   help='# *agent* steps before training starts')),
+    ('--train-freq',    dict(default=4,      type=int,   help='train frequency in # *agent* steps')),
+    ('--update-freq',   dict(default=10000,  type=int,   help='update target freq in # *param updates*')),
+    ('--stop-step',     dict(default=5*10**7,type=int,   help='steps to run the *agent* for')),
     ('--huber-loss',    dict(default=True,   type=s2b,   help='use huber loss')),
     # ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
 
-    ('--eval-freq',     dict(default=10**6,  type=int,   help='how often to evaluate model')),
-    ('--eval-len',      dict(default=500000, type=int,   help='for how many steps to eval each time')),
+    ('--eval-freq',     dict(default=250000,  type=int,   help='freq in # *agent* steps to run eval')),
+    ('--eval-len',      dict(default=125000,  type=int,   help='# *agent* steps to run eval each time')),
   ]
 
   return cmdargs.parse_args(args)
