@@ -31,7 +31,7 @@ def parse_args():
 
   model_types = ["DQN", "DDQN", "C51", "QRDQN", "QRDQNTS", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_IDS",
                  "BstrapDQN_Ensemble", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS",
-                 "C51TS"]
+                 "BDQN_TS", "C51TS"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -90,7 +90,7 @@ def make_agent():
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
     if args.model in ["BstrapDQN_IDS", "BstrapDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
     if args.model == "BstrapDQN_IDS": model_kwargs["policy"] = args.policy
-  elif args.model in ["BDQN", "BDQN_IDS", "BDQN_UCB"]:
+  elif args.model in ["BDQN", "BDQN_TS", "BDQN_IDS", "BDQN_UCB"]:
     model_kwargs  = dict(huber_loss=args.huber_loss, sigma_e=args.sigma_e, tau=args.tau)
     if args.model in ["BDQN_IDS", "BDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
     agent = AgentBDQN

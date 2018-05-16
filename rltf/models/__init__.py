@@ -1,6 +1,7 @@
 from rltf.models.blr          import BLR
 from rltf.models.bdqn         import BDQN
 from rltf.models.bdqn         import BDQN_IDS
+from rltf.models.bdqn         import BDQN_TS
 from rltf.models.bdqn         import BDQN_UCB
 from rltf.models.bstrap_dqn   import BstrapDQN
 from rltf.models.bstrap_dqn   import BstrapDQN_IDS

@@ -8,7 +8,7 @@ from rltf.models      import tf_utils
 class BDQN(DDQN):
   """Bayesian Double DQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="ts"):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean"):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -30,19 +30,14 @@ class BDQN(DDQN):
     self._phi       = None    # BLR features
     self.train_blr  = None    # Op for updating the BLR weight posterior
     self.reset_blr  = None    # Op for reseting the BLR to initial weights
-    self.reset_ts   = None    # Op that resamples the parameters for TS
     self.a_var      = None    # Tensor with BLR stds
 
 
   def build(self):
     super().build()
-
-    agent_w   = [blr.w            for blr in self.agent_blr]
-    target_w  = [blr.resample_w() for blr in self.target_blr]
-    reset_ops = [blr.reset_op     for blr in self.agent_blr]
-
-    self.reset_ts   = tf_utils.assign_vars(agent_w, target_w, name="reset_ts")
-    self.reset_blr  = tf.group(*reset_ops, name="reset_blr")
+    # reset_ops = [blr.reset_op for blr in self.agent_blr]
+    # self.reset_blr = tf.group(*reset_ops, name="reset_blr")
+    self.reset_blr = tf.group(*[blr.reset_op for blr in self.agent_blr], name="reset_blr")
 
 
   def _conv_nn(self, x):
@@ -113,15 +108,40 @@ class BDQN(DDQN):
     return super()._build_train_op(optimizer, loss, agent_vars, name)
 
 
+  def _restore(self, graph):
+    super()._restore(graph)
+    self.train_blr  = graph.get_operation_by_name("train_blr")
+    self.reset_blr  = graph.get_operation_by_name("reset_blr")
+
+
+
+class BDQN_TS(BDQN):
+
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau):
+
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="ts")
+
+    # Custom TF Tensors and Ops
+    self.reset_ts   = None    # Op that resamples the parameters for TS
+
+
+  def build(self):
+    super().build()
+
+    agent_w   = [blr.w            for blr in self.agent_blr]
+    target_w  = [blr.resample_w() for blr in self.target_blr]
+
+    self.reset_ts = tf_utils.assign_vars(agent_w, target_w, name="reset_ts")
+
+
   def reset(self, sess):
     sess.run(self.reset_ts)
 
 
   def _restore(self, graph):
     super()._restore(graph)
-    self.train_blr  = graph.get_operation_by_name("train_blr")
     self.reset_ts   = graph.get_operation_by_name("reset_ts")
-    self.reset_blr  = graph.get_operation_by_name("reset_blr")
+
 
 
 
@@ -134,10 +154,6 @@ class BDQN_UCB(BDQN):
     """
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean")
     self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
-
-
-  def reset(self, sess):
-    pass
 
 
   def _act_train(self, agent_net, name):
@@ -153,16 +169,16 @@ class BDQN_UCB(BDQN):
 
 
 
-class BDQN_IDS(BDQN_UCB):
+class BDQN_IDS(BDQN):
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, n_stds=0.1):
     """
     Args:
       n_stds: float. Scale constant for the uncertainty
     """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau)
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean")
     self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
-    self.rho    = sigma_e
+    self.rho    = 1.0
 
 
   def _act_train(self, agent_net, name):
