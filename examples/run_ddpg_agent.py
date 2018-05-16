@@ -92,8 +92,8 @@ def make_agent():
 
 
   # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
-  env = wrap_deepmind_ddpg(env, rew_scale=args.reward_scale, max_ep_len=args.max_ep_steps)
+  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq, max_ep_steps=args.max_ep_steps)
+  env = wrap_deepmind_ddpg(env, rew_scale=args.reward_scale)
 
   # Set additional arguments
   if args.batch_size is None:
@@ -104,8 +104,8 @@ def make_agent():
   critic_opt_conf = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.critic_lr))
 
   # Create the exploration noise
-  mu            = np.zeros(env.action_space.shape, dtype=np.float32)
-  sigma         = np.ones(env.action_space.shape,  dtype=np.float32) * args.sigma
+  mu    = np.zeros(env.action_space.shape, dtype=np.float32)
+  sigma = np.ones(env.action_space.shape,  dtype=np.float32) * args.sigma
   if args.noise_type == "OU":
     action_noise = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
   elif args.noise_type == "Gaussian":

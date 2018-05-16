@@ -49,22 +49,22 @@ class ClipAction(gym.ActionWrapper):
     return action
 
 
-class MaxEpisodeLen(gym.Wrapper):
-  def __init__(self, env, max_steps):
-    """Limit episode length to max_steps"""
-    super().__init__(env)
-    self.max_steps  = max_steps
-    self.steps      = None
+# class MaxEpisodeLen(gym.Wrapper):
+#   def __init__(self, env, max_steps):
+#     """Limit episode length to max_steps"""
+#     super().__init__(env)
+#     self.max_steps  = max_steps
+#     self.steps      = None
 
-  def step(self, action):
-    self.steps += 1
-    obs, reward, done, info = self.env.step(action)
-    done = done or (self.steps >= self.max_steps)
-    return obs, reward, done, info
+#   def step(self, action):
+#     self.steps += 1
+#     obs, reward, done, info = self.env.step(action)
+#     done = done or (self.steps >= self.max_steps)
+#     return obs, reward, done, info
 
-  def reset(self, **kwargs):
-    self.steps = 0
-    return self.env.reset(**kwargs)
+#   def reset(self, **kwargs):
+#     self.steps = 0
+#     return self.env.reset(**kwargs)
 
 
 # class RepeatAndStackLowDim(gym.Wrapper):
