@@ -23,14 +23,12 @@
 # THE SOFTWARE.
 #
 
-import json
 import logging
 import os
 
 from gym          import Wrapper
 from gym.wrappers import TimeLimit
 from gym.utils    import closer
-from gym.utils    import atomic_write
 from gym          import error
 from gym          import __version__ as GYM_VERSION
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
@@ -154,16 +152,6 @@ class Monitor(Wrapper):
   def save(self):
     # Save the stats
     self.stats_recorder.save()
-
-    # manifest = os.path.join(self.log_dir, 'rltf.monitor.manifest.json')
-    # # We need to write relative paths in the manifest since parent directory might be moved by the user
-    # data = {
-    #   'stats': "./" + os.path.basename(self.stats_recorder.log_dir) + "/",
-    #   'videos': [(os.path.basename(v), os.path.basename(m)) for v, m in self.videos],
-    #   'env_info': self._env_info(),
-    # }
-    # with atomic_write.atomic_write(manifest) as f:
-    #   json.dump(data, f, indent=4, sort_keys=True)
 
 
   def close(self):
