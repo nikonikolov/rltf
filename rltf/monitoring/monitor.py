@@ -54,7 +54,7 @@ class Monitor(Wrapper):
   Based on `gym/gym/wrappers/monitor.py`
   """
 
-  def __init__(self, env, log_dir, video_callable=None, mode='t'):
+  def __init__(self, env, log_dir, video_callable=None, mode='t', dual_mode=True):
     """
     Args:
       log_dir: str. The directory where to save the monitor videos and stats
@@ -62,6 +62,7 @@ class Monitor(Wrapper):
         has to take the number of the episode and return True/False if a video should be recorded.
         If `None`, every 1000th episode is recorded
       mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor
+      dual_mode: bool. If True, allow switching between train and eval modes
     """
 
     self._detect_wrapped_env(env)
@@ -80,7 +81,7 @@ class Monitor(Wrapper):
     self.env_id         = self._get_env_id()
     self.video_callable = self._get_video_callable(video_callable)
 
-    self.stats_recorder = StatsRecorder(os.path.join(self.log_dir, "data"), mode)
+    self.stats_recorder = StatsRecorder(os.path.join(self.log_dir, "data"), mode, dual_mode)
     self.video_recorder = None
 
     # Create the monitor directory
@@ -144,28 +145,25 @@ class Monitor(Wrapper):
   def mode(self):
     return self.stats_recorder.mode
 
+
   @mode.setter
   def mode(self, mode):
-    if mode not in ['t', 'e']:
-      raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
-
     self.stats_recorder.mode = mode
-    # logger.info("Monitor mode set to %s", "TRAIN" if mode == 't' else "EVAL")
 
 
   def save(self):
     # Save the stats
     self.stats_recorder.save()
 
-    manifest = os.path.join(self.log_dir, 'rltf.monitor.manifest.json')
-    # We need to write relative paths in the manifest since parent directory might be moved by the user
-    data = {
-      'stats': "./" + os.path.basename(self.stats_recorder.log_dir) + "/",
-      'videos': [(os.path.basename(v), os.path.basename(m)) for v, m in self.videos],
-      'env_info': self._env_info(),
-    }
-    with atomic_write.atomic_write(manifest) as f:
-      json.dump(data, f, indent=4, sort_keys=True)
+    # manifest = os.path.join(self.log_dir, 'rltf.monitor.manifest.json')
+    # # We need to write relative paths in the manifest since parent directory might be moved by the user
+    # data = {
+    #   'stats': "./" + os.path.basename(self.stats_recorder.log_dir) + "/",
+    #   'videos': [(os.path.basename(v), os.path.basename(m)) for v, m in self.videos],
+    #   'env_info': self._env_info(),
+    # }
+    # with atomic_write.atomic_write(manifest) as f:
+    #   json.dump(data, f, indent=4, sort_keys=True)
 
 
   def close(self):
@@ -293,6 +291,11 @@ class Monitor(Wrapper):
 
   def conf_video_plots(self, **kwargs):
     self.env.conf_plots(**kwargs)
+
+
+  @property
+  def dual_mode(self):
+    return self.stats_recorder.dual_mode
 
 
   @property

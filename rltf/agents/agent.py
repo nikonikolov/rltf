@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -14,7 +15,8 @@ class Agent:
   """Base class for a Reinforcement Learning agent"""
 
   def __init__(self,
-               env,
+               env_train,
+               env_eval,
                train_freq,
                warm_up,
                stop_step,
@@ -51,8 +53,10 @@ class Agent:
         If None, all model variables are reused
     """
 
-    self.env            = env
-    self.env_monitor    = get_env_monitor(env)
+    self.env_train      = env_train
+    self.env_train_mon  = get_env_monitor(env_train)
+    self.env_eval       = env_eval
+    self.env_eval_mon   = get_env_monitor(env_eval)
 
     self.batch_size     = batch_size
     self.model_dir      = model_dir
@@ -63,14 +67,15 @@ class Agent:
     self.confirm_kill   = confirm_kill
     self.reuse_regex    = reuse_regex
 
-    self.start_step     = None          # Step from which the agent starts
     self.warm_up        = warm_up       # Step from which training starts
     self.stop_step      = stop_step     # Step at which training stops
     self.learn_started  = False         # Bool: Indicates if learning has started or not
     self.train_freq     = train_freq    # How often to run a training step
+    self.train_step     = 1             # Current agent train step
 
     self.eval_freq      = eval_freq     # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
+    self.eval_step      = 1             # Current agent eval step
 
     self.layout         = plots_layout
     self.built          = False
@@ -79,10 +84,6 @@ class Agent:
     self.model            = None
     self.summary          = None
 
-    self.t_train          = None
-    self.t_train_inc      = None
-    self.t_eval           = None
-    self.t_eval_inc       = None
     self.summary_op       = None
 
     self.sess             = None
@@ -116,8 +117,9 @@ class Agent:
     # NOTE: Create the tf.train.Saver **after** building the whole graph
     self.saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
     # Create TensorBoard summary writers
-    self.tb_train_writer  = tf.summary.FileWriter(self.model_dir + "tf/tb/", self.sess.graph)
-    self.tb_eval_writer   = tf.summary.FileWriter(self.model_dir + "tf/tb/")
+    tb_dir = os.path.join(self.model_dir, "tf/tb/")
+    self.tb_train_writer  = tf.summary.FileWriter(tb_dir, self.sess.graph)
+    self.tb_eval_writer   = tf.summary.FileWriter(tb_dir)
 
     self.built = True
     if self.layout:
@@ -126,7 +128,9 @@ class Agent:
 
   def plots_layout(self, layout):
     assert self.built
-    self.env_monitor.conf_video_plots(layout=layout, train_tensors=self.model.plot_train,
+    self.env_train_mon.conf_video_plots(layout=layout, train_tensors=self.model.plot_train,
+      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
+    self.env_eval_mon.conf_video_plots(layout=layout, train_tensors=self.model.plot_train,
       eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
 
 
@@ -138,16 +142,31 @@ class Agent:
     raise NotImplementedError()
 
 
-  def reset(self):
+  def reset(self, t, mode):
     """This method must be called at the end of every episode. Allows for
     executing changes that stay the same for the duration of the whole episode.
     Note that it gets called both in train and eval mode
+    Args:
+      t: int. Current time step of the mode. Used to keep self.train_step and self.eval_step
+        correct if program is killed mid-episode
+      mode: str. Either 't' (train) or 'e' (eval)
     Returns:
-      obs: np.array. The result of self.env.reset()
+      obs: np.array. The result of env.reset() for the corresponding mode
     """
     self.model.reset(self.sess)
-    self._reset()
-    return self.env.reset()
+    self._reset(mode)
+    if mode == 't':
+      # Update self.train_step only if NOT the first reset. Otherwise might incorrectly overwrite
+      # the start step on restore. Same is applicable to self.eval_step
+      if t != 1:
+        self.train_step = t
+      return self.env_train.reset()
+    elif mode == 'e':
+      if t != 1:
+        self.eval_step = t
+      return self.env_eval.reset()
+    else:
+      raise ValueError("Incorrect agent mode")
 
 
   def close(self):
@@ -158,7 +177,8 @@ class Agent:
     self.tb_train_writer.close()
     self.tb_eval_writer.close()
     self.sess.close()
-    self.env.close()
+    self.env_train.close()
+    self.env_eval.close()
 
 
   def _build_base(self):
@@ -170,18 +190,8 @@ class Agent:
     # Build the model
     self.model.build()
 
-    # Create timestep variable
-    with tf.device('/cpu:0'):
-      self.t_train     = tf.Variable(0, dtype=tf.int32, trainable=False, name="t_train")
-      self.t_eval      = tf.Variable(0, dtype=tf.int32, trainable=False, name="t_eval")
-      self.t_train_inc = tf.assign_add(self.t_train, 1, name="t_train_inc")
-      self.t_eval_inc  = tf.assign_add(self.t_eval,  1, name="t_eval_inc")
-
-      # Create an Op for all summaries
-      self.summary_op = tf.summary.merge_all()
-
-    # Set control variables
-    self.start_step = 1
+    # Create an Op for all summaries
+    self.summary_op = tf.summary.merge_all()
 
     # Create a session and initialize the model
     self.sess = self._get_sess()
@@ -202,13 +212,6 @@ class Agent:
     saver = tf.train.import_meta_graph(ckpt_path + '.meta')
     graph = tf.get_default_graph()
 
-    # Recover the train and eval step variables
-    global_vars       = graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-    self.t_train      = [v for v in global_vars if v.name == "t_train:0"][0]
-    self.t_eval       = [v for v in global_vars if v.name == "t_eval:0"][0]
-    self.t_train_inc  = graph.get_operation_by_name("t_train_inc")
-    self.t_eval_inc   = graph.get_operation_by_name("t_eval_inc")
-
     # Recover the model variables
     self.model.restore(graph)
 
@@ -222,13 +225,18 @@ class Agent:
     # Get the summary Op
     self.summary_op = graph.get_tensor_by_name("Merge/MergeSummary:0")
 
-    # Set control variables
-    self.start_step = self.sess.run(self.t_train)
-    self.learn_started = self.start_step >= self.warm_up
+    # Recover the agent state
+    state_file = os.path.join(self.model_dir, "agent_state.json")
+    with open(state_file, 'r') as f:
+      data = json.load(f)
+
+    self.train_step = data["train_step"]
+    self.eval_step  = data["eval_step"]
+    self.learn_started = self.train_step >= self.warm_up
 
     if not self.learn_started:
       logger.warning("Training the restored model will not start immediately")
-      logger.warning("Random policy will be run for %d steps", self.warm_up-self.start_step)
+      logger.warning("Random policy will be run for %d steps", self.warm_up-self.train_step)
 
 
   def _reuse_base(self):
@@ -268,7 +276,7 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _reset(self):
+  def _reset(self, mode):
     """Reset method to be implemented by the inheriting class"""
     raise NotImplementedError()
 
@@ -303,7 +311,8 @@ class Agent:
 
   def _define_log_info(self):
     custom_log_info = self._append_log_info()
-    self.env_monitor.define_log_info(custom_log_info)
+    self.env_train_mon.define_log_info(custom_log_info)
+    self.env_eval_mon.define_log_info(custom_log_info)
 
 
   def _append_log_info(self):
@@ -328,27 +337,40 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _log_stats(self, t):
+  def _log_stats(self, t, mode):
     """Log the training progress and append the TensorBoard summary.
     Note that the TensorBoard summary might be 1 step old.
     Args:
       t: int. Current timestep
+      mode: str, either 't' (train) or 'e' (eval). The mode for which to log the statistics
     """
+    if t % self.log_freq != 0:
+      return
+    assert mode in ['t', 'e']
 
-    # Log the statistics from the environment Monitor
-    if t % self.log_freq == 0 and self.learn_started:
-      self.env_monitor.log_stats(t)
+    if mode == 't' and self.learn_started:
+      # Log the statistics from the environment Monitor
+      self.env_train_mon.log_stats(t)
 
       if self.summary:
         # Append the summary with custom data
         byte_summary = self.summary
         summary = tf.Summary()
         summary.ParseFromString(byte_summary)
-        summary.value.add(tag="train/mean_ep_rew", simple_value=self.env_monitor.mean_ep_rew)
+        summary.value.add(tag="train/mean_ep_rew", simple_value=self.env_train_mon.mean_ep_rew)
         self._append_summary(summary, t)
 
         # Log with TensorBoard
         self.tb_train_writer.add_summary(summary, global_step=t)
+
+    elif mode == 'e':
+      # Log the statistics from the environment Monitor
+      self.env_eval_mon.log_stats(t)
+
+      # Add a TB summary
+      summary = tf.Summary()
+      summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_eval_mon.mean_ep_rew)
+      self.tb_eval_writer.add_summary(summary, t)
 
 
   def save(self):
@@ -356,13 +378,23 @@ class Agent:
       logger.info("Saving the TF model and stats to %s", self.model_dir)
 
       # Save the monitor statistics
-      self.env_monitor.save()
+      self.env_train_mon.save()
+      self.env_eval_mon.save()
 
       # Save the model
       model_dir = os.path.join(self.model_dir, "tf/")
-      self.saver.save(self.sess, model_dir, global_step=self.t_train)
+      self.saver.save(self.sess, model_dir, global_step=self.train_step)
 
       self._save()
+
+      # Save the agent state
+      state_file = os.path.join(self.model_dir, "agent_state.json")
+      data = {
+        "train_step": self.train_step,
+        "eval_step":  self.eval_step,
+      }
+      with open(state_file, 'w') as f:
+        json.dump(data, f, indent=4, sort_keys=True)
 
       # Flush the TB writers
       self.tb_train_writer.flush()

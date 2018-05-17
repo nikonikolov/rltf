@@ -35,8 +35,8 @@ class AgentDQN(ParallelOffPolicyAgent):
 
     super().__init__(**agent_kwargs)
 
-    assert isinstance(self.env.observation_space, gym.spaces.Box)
-    assert isinstance(self.env.action_space,      gym.spaces.Discrete)
+    assert isinstance(self.env_train.observation_space, gym.spaces.Box)
+    assert isinstance(self.env_train.action_space,      gym.spaces.Discrete)
 
     self.opt_conf = opt_conf
     self.exploration = exploration
@@ -44,8 +44,8 @@ class AgentDQN(ParallelOffPolicyAgent):
     self.update_target_freq = update_target_freq * self.train_freq
 
     # Get environment specs
-    n_actions = self.env.action_space.n
-    obs_shape = self.env.observation_space.shape
+    n_actions = self.env_train.action_space.n
+    obs_shape = self.env_train.observation_space.shape
     obs_shape = list(obs_shape)
     obs_len   = obs_len if len(obs_shape) == 3 else 1
 
@@ -108,7 +108,7 @@ class AgentDQN(ParallelOffPolicyAgent):
     # Run epsilon greedy policy
     epsilon = self.exploration.value(t)
     if self.prng.uniform(0,1) < epsilon:
-      action = self.env.action_space.sample()
+      action = self.env_train.action_space.sample()
     else:
       # Run the network to select an action
       action = self.model.action_train(self.sess, state)
@@ -118,12 +118,12 @@ class AgentDQN(ParallelOffPolicyAgent):
   def _action_eval(self, state, t):
     # Run epsilon greedy policy
     if self.prng.uniform(0,1) < self.epsilon_eval:
-      action = self.env.action_space.sample()
+      action = self.env_eval.action_space.sample()
     else:
       # Run the network to select an action
       action = self.model.action_eval(self.sess, state)
     return action
 
 
-  def _reset(self):
+  def _reset(self, mode):
     pass
