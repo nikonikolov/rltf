@@ -180,5 +180,6 @@ qrids_layout = {
 
 layouts = {
   "BstrapDQN_IDS": ids_layout,
+  "BDQN_IDS": ids_layout,
   "BstrapQRDQN_IDS": qrids_layout,
 }

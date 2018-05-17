@@ -171,14 +171,17 @@ class BDQN_UCB(BDQN):
 
 class BDQN_IDS(BDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, n_stds=0.1):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, policy, n_stds=0.1):
     """
     Args:
       n_stds: float. Scale constant for the uncertainty
     """
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean")
+
+    assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
     self.rho    = 1.0
+    self.policy = policy
 
 
   def _act_train(self, agent_net, name):
@@ -191,24 +194,83 @@ class BDQN_IDS(BDQN):
     info_gain = tf.log(1 + var / self.rho**2) + 1e-5
     ids_score = tf.div(regret_sq, info_gain)
     ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
-    action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+
+    if self.policy == "deterministic":
+      action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+      a_ucb     = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
+    else:
+      scores  = -ids_score    # NOTE: Take -ids_score to make the min have highest probability
+      sample  = tf.random_uniform([tf.shape(ids_score)[0], 1], 0.0, 1.0)
+      pdf     = scores - tf.expand_dims(tf.reduce_max(scores, axis=-1), axis=-1)
+      pdf     = tf.nn.softmax(pdf, axis=-1)
+      cdf     = tf.cumsum(pdf, axis=-1, exclusive=True)
+      offset  = tf.where(cdf <= sample, tf.zeros_like(cdf), -2*tf.ones_like(cdf))
+      sample  = cdf + offset
+      action  = tf.argmax(sample, axis=-1, output_type=tf.int32, name=name)
+      a_ucb   = None
+
+
+      a_det   = tf.argmin(ids_score, axis=-1, output_type=tf.int32)
+      a_diff  = tf.reduce_mean(tf.cast(tf.equal(a_det, action), tf.float32))
+      tf.summary.scalar("debug/a_det_vs_stoch", a_diff)
 
     # Add debug histograms
-    a_ucb     = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
-    a_diff    = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
-
     tf.summary.histogram("debug/a_mean",    mean)
     tf.summary.histogram("debug/a_std",     std)
     tf.summary.histogram("debug/a_regret",  regret)
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
-    tf.summary.scalar("debug/a_ucb_vs_ids", a_diff)
+
+    if a_ucb is not None:
+      a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
+      tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
 
     # Set the plottable tensors for video. Use only the first action in the batch
-    # self.plot_train["train_actions"] = {
-    #   "a_mean": dict(height=tf.identity(mean[0], name="plot_mean")),
-    #   "a_std":  dict(height=tf.identity(std[0], name="plot_std")),
-    #   "a_ids":  dict(height=tf.identity(ids_score[0], name="plot_ids_score")),
-    # }
+    p_a     = tf.identity(action[0],    name="plot/train/a")
+    p_mean  = tf.identity(mean[0],      name="plot/train/mean")
+    p_std   = tf.identity(std[0],       name="plot/train/std")
+    p_ids   = tf.identity(ids_score[0], name="plot/train/ids")
+
+    self.plot_train["train_actions"] = {
+      "a_mean": dict(height=p_mean, a=p_a),
+      "a_std":  dict(height=p_std,  a=p_a),
+      "a_ids":  dict(height=p_ids,  a=p_a),
+    }
 
     return action
+
+
+  def _act_eval(self, agent_net, name):
+    action = super()._act_eval(agent_net, name)
+    # Set the plottable tensors for video. Use only the first action in the batch
+    p_a     = tf.identity(action[0],    name="plot/eval/a")
+    p_mean  = tf.identity(agent_net[0], name="plot/eval/mean")
+
+    self.plot_eval["eval_actions"] = {
+      "a_mean": dict(height=p_mean, a=p_a),
+    }
+
+    return action
+
+
+  def _restore(self, graph):
+    super()._restore(graph)
+
+    # Restore plot_train
+    mean  = graph.get_tensor_by_name("plot/train/mean:0")
+    std   = graph.get_tensor_by_name("plot/train/std:0")
+    ids   = graph.get_tensor_by_name("plot/train/ids:0")
+    a     = graph.get_tensor_by_name("plot/train/a:0")
+
+    self.plot_train["train_actions"] = {
+      "a_mean": dict(height=mean, a=a),
+      "a_std":  dict(height=std,  a=a),
+      "a_ids":  dict(height=ids,  a=a),
+    }
+
+    mean  = graph.get_tensor_by_name("plot/eval/mean:0")
+    a     = graph.get_tensor_by_name("plot/eval/a:0")
+
+    self.plot_eval["eval_actions"] = {
+      "a_mean": dict(height=mean, a=a),
+    }
