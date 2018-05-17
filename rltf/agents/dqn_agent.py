@@ -151,11 +151,8 @@ class AgentBDQN(AgentDQN):
       #   feed_dict = self._get_feed_dict(batch, t)
       #   self.sess.run(self.model.train_blr, feed_dict=feed_dict)
 
-      # Reset BLR
-      # self.sess.run(self.model.reset_blr)
-
       # Train BLR
-      n = int(self.blr_batch_size / self.batch_size)
+      n = int(self.blr_batch_size / (self.batch_size * 4))
       for _ in range(n):
         batch = self.replay_buf.sample(self.batch_size)
         feed_dict = self._get_feed_dict(batch, t)
