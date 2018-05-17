@@ -109,15 +109,16 @@ class StatsRecorder:
   def before_reset(self):
     assert not self.disabled
 
+    # Mode should be changed before episode_id is incremented!
+    # It also must be changed before the video plotter is reset in order to feed the correct mode
+    if self._mode != self._new_mode:
+      self._mode = self._new_mode
+      logger.info("Monitor mode set to %s", "TRAIN" if self._mode == 't' else "EVAL")
+
 
   def after_reset(self, obs):
     self.ep_steps   = 0
     self.ep_reward  = 0
-
-    # Mode should be changed before episode_id is incremented!
-    if self._mode != self._new_mode:
-      self._mode = self._new_mode
-      logger.info("Monitor mode set to %s", "TRAIN" if self._mode == 't' else "EVAL")
 
     if self._mode == 't':
       self.train_ep_id += 1

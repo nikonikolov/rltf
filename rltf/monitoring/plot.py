@@ -19,7 +19,9 @@ class VideoPlotter(gym.Wrapper):
     self.enabled  = False       # True if enabled for the episode
     self.allowed  = False       # True if layout is configured. If False, no rendering
     self.changed  = True
-    # self.rendered = False
+    self.mode     = None        # Track the mode of the last episode
+    self.first_t  = True        # Track if the first train episode
+    self.first_e  = True        # Track if the first eval episode
 
     self.width    = None
     self.height   = None
@@ -80,30 +82,44 @@ class VideoPlotter(gym.Wrapper):
 
 
   def reset(self, enabled, mode, **kwargs):
-    if self.allowed:
-      if enabled:
-        if mode == 't':
-          self.run_t_tensors.data = self.train_tensors
-          self.run_e_tensors.data = {}
-        else:
-          self.run_t_tensors.data = {}
-          self.run_e_tensors.data = self.eval_tensors
+    if not self.allowed:
+      return self.env.reset(**kwargs)
 
-        # Create a new image and set the current data id
-        self.image = np.ones(shape=[self.height, self.width, 3], dtype=np.uint8) * 255
-        self.plot_data_id = id(self.plot_data.data)
+    # If this is the first episode, clear the plottable tensors for the current mode
+    if self.first_t and mode == 't':
+      self.first_t = False
+      self.run_t_tensors.data = {}
+    elif self.first_e and mode == 'e':
+      self.first_e = False
+      self.run_e_tensors.data = {}
 
-      else:
+    # If the last episode was enabled, clear the old data
+    if self.enabled:
+      for name in self.figs:
+        self.figs[name]["image"] = None
+
+      # NOTE: Clear the runnable tensors only for the mode that was run last time. This allows
+      # for one agent to interact simulatenously with 2 environments - eval and train
+      if self.mode == 't':
         self.run_t_tensors.data = {}
+      else:
         self.run_e_tensors.data = {}
-        self.image = None
 
-      # Clear old episode data if the last episode was recorded
-      if self.enabled:
-        for name in self.figs:
-          self.figs[name]["image"] = None
-        # self.rendered = False
-      self.enabled = enabled
+      self.image = None
+
+    # If enabled for this episode, set the plottable tensors to run for the specific mode
+    if enabled:
+      if mode == 't':
+        self.run_t_tensors.data = self.train_tensors
+      else:
+        self.run_e_tensors.data = self.eval_tensors
+
+      # Create a new image and set the current data id
+      self.image = np.ones(shape=[self.height, self.width, 3], dtype=np.uint8) * 255
+      self.plot_data_id = id(self.plot_data.data)
+
+    self.mode = mode
+    self.enabled = enabled
     return self.env.reset(**kwargs)
 
 
@@ -250,6 +266,8 @@ class VideoPlotter(gym.Wrapper):
       # Create a list when a single subplot
       if not isinstance(axes, np.ndarray):
         axes = [axes]
+
+      assert len(axes) == len(fconf["subplots_conf"])
 
       # Configure all subplots
       axes_dict = collections.OrderedDict()
