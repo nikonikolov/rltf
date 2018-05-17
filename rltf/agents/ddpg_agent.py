@@ -40,8 +40,8 @@ class AgentDDPG(ParallelOffPolicyAgent):
 
     super().__init__(**agent_kwargs)
 
-    assert isinstance(self.env.observation_space, gym.spaces.Box)
-    assert isinstance(self.env.action_space,      gym.spaces.Box)
+    assert isinstance(self.env_train.observation_space, gym.spaces.Box)
+    assert isinstance(self.env_train.action_space,      gym.spaces.Box)
 
     self.action_noise = action_noise
 
@@ -50,8 +50,8 @@ class AgentDDPG(ParallelOffPolicyAgent):
     self.update_target_freq = update_target_freq * self.train_freq
 
     # Get environment specs
-    act_shape = list(self.env.action_space.shape)
-    obs_shape = list(self.env.observation_space.shape)
+    act_shape = list(self.env_train.action_space.shape)
+    obs_shape = list(self.env_train.observation_space.shape)
 
     # Image observation
     if len(obs_shape) == 3:
@@ -115,8 +115,9 @@ class AgentDDPG(ParallelOffPolicyAgent):
     summary.value.add(tag="train/act_noise_std",  simple_value=self._stats_act_noise_std())
 
 
-  def _reset(self):
-    self.action_noise.reset()
+  def _reset(self, mode):
+    if mode == 't':
+      self.action_noise.reset()
 
 
   def _stats_act_noise_mean(self, *_):

@@ -91,9 +91,10 @@ def make_agent():
     model_kwargs["N"] = args.N
 
 
-  # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq, max_ep_steps=args.max_ep_steps)
-  env = wrap_deepmind_ddpg(env, rew_scale=args.reward_scale)
+  # Create the environments
+  wrap = lambda env: wrap_deepmind_ddpg(env, rew_scale=args.reward_scale)
+  envs = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq, wrap, args.max_ep_steps)
+  env_train, env_eval = envs
 
   # Set additional arguments
   if args.batch_size is None:
@@ -118,7 +119,8 @@ def make_agent():
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(
-    env=env,
+    env_train=env_train,
+    env_eval=env_eval,
     train_freq=args.train_freq,
     warm_up=args.warm_up,
     stop_step=args.stop_step,

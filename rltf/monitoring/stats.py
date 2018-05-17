@@ -16,11 +16,12 @@ stats_logger  = logging.getLogger(rltf.conf.STATS_LOGGER_NAME)
 
 class StatsRecorder:
 
-  def __init__(self, log_dir, mode='t', n_ep_stats=100):
+  def __init__(self, log_dir, mode='t', dual_mode=True, n_ep_stats=100):
     """
     Args:
       log_dir: str. The path for the directory where the videos are saved
       n_ep_stats: int. Number of episodes over which to report the runtime statistitcs
+      dual_mode: bool. If True, allow switching between train and eval modes
     """
 
     # Member data
@@ -55,13 +56,15 @@ class StatsRecorder:
     self.disabled   = False
     self._mode      = mode      # Running mode: either 't' (train) or 'e' (eval)
     self._new_mode  = mode      # Used to synchronize changes when mode is changed mid-episode
+    self.dual_mode  = dual_mode
 
     if not os.path.exists(self.log_dir):
       logger.info('Creating stats directory %s', self.log_dir)
       os.makedirs(self.log_dir)
     else:
-      logger.info('Resuming with stats data from %s', self.log_dir)
-      self._resume()
+      if len(os.listdir(self.log_dir)) != 0:
+        logger.info('Resuming with stats data from %s', self.log_dir)
+        self._resume()
 
 
   @property
@@ -71,6 +74,8 @@ class StatsRecorder:
 
   @mode.setter
   def mode(self, mode):
+    if not self.dual_mode:
+      raise ValueError("Switching the mode of StatsRecorder, which is not in dual more, is forbidden")
     if mode not in ['t', 'e']:
       raise error.Error('Invalid mode {}: must be t for training or e for evaluation', mode)
     self._new_mode = mode
@@ -207,26 +212,27 @@ class StatsRecorder:
         return np.max(data[i:])
       return -float("inf")
 
-    self.train_stats["mean_ep_rew"] = self._stats_mean(self.train_ep_rews)
-    self.train_stats["std_ep_rew"]  = self._stats_std(self.train_ep_rews)
-    self.train_stats["ep_len_mean"] = self._stats_mean(self.train_ep_lens)
-    self.train_stats["ep_len_std"]  = self._stats_std(self.train_ep_lens)
-    self.train_stats["best_mean_rew"] = max(self.train_stats["best_mean_rew"],
-                                            self.train_stats["mean_ep_rew"])
-    best_ep_rew = _stats_max(self.train_ep_rews, self.train_stats["ep_last_stats"])
-    self.train_stats["best_ep_rew"] = max(self.train_stats["best_ep_rew"], best_ep_rew)
-    self.train_stats["ep_last_stats"] = len(self.train_ep_rews)
+    if self._mode == 't':
+      self.train_stats["mean_ep_rew"] = self._stats_mean(self.train_ep_rews)
+      self.train_stats["std_ep_rew"]  = self._stats_std(self.train_ep_rews)
+      self.train_stats["ep_len_mean"] = self._stats_mean(self.train_ep_lens)
+      self.train_stats["ep_len_std"]  = self._stats_std(self.train_ep_lens)
+      self.train_stats["best_mean_rew"] = max(self.train_stats["best_mean_rew"],
+                                              self.train_stats["mean_ep_rew"])
+      best_ep_rew = _stats_max(self.train_ep_rews, self.train_stats["ep_last_stats"])
+      self.train_stats["best_ep_rew"] = max(self.train_stats["best_ep_rew"], best_ep_rew)
+      self.train_stats["ep_last_stats"] = len(self.train_ep_rews)
 
-
-    self.eval_stats["mean_ep_rew"] = self._stats_mean(self.eval_ep_rews)
-    self.eval_stats["std_ep_rew"]  = self._stats_std(self.eval_ep_rews)
-    self.eval_stats["ep_len_mean"] = self._stats_mean(self.eval_ep_lens)
-    self.eval_stats["ep_len_std"]  = self._stats_std(self.eval_ep_lens)
-    self.eval_stats["best_mean_rew"] = max(self.eval_stats["best_mean_rew"],
-                                           self.eval_stats["mean_ep_rew"])
-    best_ep_rew = _stats_max(self.eval_ep_rews, self.eval_stats["ep_last_stats"])
-    self.eval_stats["best_ep_rew"] = max(self.eval_stats["best_ep_rew"], best_ep_rew)
-    self.eval_stats["ep_last_stats"] = len(self.eval_ep_rews)
+    else:
+      self.eval_stats["mean_ep_rew"] = self._stats_mean(self.eval_ep_rews)
+      self.eval_stats["std_ep_rew"]  = self._stats_std(self.eval_ep_rews)
+      self.eval_stats["ep_len_mean"] = self._stats_mean(self.eval_ep_lens)
+      self.eval_stats["ep_len_std"]  = self._stats_std(self.eval_ep_lens)
+      self.eval_stats["best_mean_rew"] = max(self.eval_stats["best_mean_rew"],
+                                             self.eval_stats["mean_ep_rew"])
+      best_ep_rew = _stats_max(self.eval_ep_rews, self.eval_stats["ep_last_stats"])
+      self.eval_stats["best_ep_rew"] = max(self.eval_stats["best_ep_rew"], best_ep_rew)
+      self.eval_stats["ep_last_stats"] = len(self.eval_ep_rews)
 
     t_now  = time.time()
     if self._mode == 't':
@@ -260,18 +266,6 @@ class StatsRecorder:
     if self.disabled:
       return
 
-    summary_file = os.path.join(self.log_dir, "stats_summary.json")
-    data = {
-      "total_env_steps":  self.env_steps,
-      "train_steps":      self.train_steps,
-      "train_episodes":   self.train_ep_id,
-      "eval_steps":       self.eval_steps,
-      "eval_episodes":    self.eval_ep_id,
-    }
-
-    with atomic_write.atomic_write(summary_file) as f:
-      json.dump(data, f, indent=4, sort_keys=True)
-
     if self.train_ep_rews:
       train_rew_file = os.path.join(self.log_dir, "train_ep_rews.npy")
       with atomic_write.atomic_write(train_rew_file, True) as f:
@@ -280,6 +274,15 @@ class StatsRecorder:
       train_ep_len_file = os.path.join(self.log_dir, "train_ep_lens.npy")
       with atomic_write.atomic_write(train_ep_len_file, True) as f:
         np.save(f, np.asarray(self.train_ep_lens, dtype=np.int32))
+
+      summary_file = os.path.join(self.log_dir, "train_stats_summary.json")
+      data = {
+        "total_env_steps":  self.env_steps,
+        "train_steps":      self.train_steps,
+        "train_episodes":   self.train_ep_id,
+      }
+      with atomic_write.atomic_write(summary_file) as f:
+        json.dump(data, f, indent=4, sort_keys=True)
 
     if self.eval_ep_rews:
       eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
@@ -290,32 +293,52 @@ class StatsRecorder:
       with atomic_write.atomic_write(eval_ep_len_file, True) as f:
         np.save(f, np.asarray(self.eval_ep_lens, dtype=np.int32))
 
+      summary_file = os.path.join(self.log_dir, "eval_stats_summary.json")
+      data = {
+        "total_env_steps":  self.env_steps,
+        "eval_steps":       self.eval_steps,
+        "eval_episodes":    self.eval_ep_id,
+      }
+      with atomic_write.atomic_write(summary_file) as f:
+        json.dump(data, f, indent=4, sort_keys=True)
+
 
   def _resume(self):
-    train_rew_file = os.path.join(self.log_dir, "train_ep_rews.npy")
-    if os.path.exists(train_rew_file):
-      self.train_ep_rews = list(np.load(train_rew_file))
 
-    eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
-    if os.path.exists(eval_rew_file):
-      self.eval_ep_rews = list(np.load(eval_rew_file))
+    if self.dual_mode or (not self.dual_mode and self._mode == 't'):
 
-    train_ep_len_file = os.path.join(self.log_dir, "train_ep_lens.npy")
-    if os.path.exists(train_ep_len_file):
-      self.train_ep_lens = list(np.load(train_ep_len_file))
+      train_rew_file = os.path.join(self.log_dir, "train_ep_rews.npy")
+      if os.path.exists(train_rew_file):
+        self.train_ep_rews = list(np.load(train_rew_file))
 
-    eval_ep_len_file = os.path.join(self.log_dir, "eval_ep_lens.npy")
-    if os.path.exists(eval_ep_len_file):
-      self.eval_ep_lens = list(np.load(eval_ep_len_file))
+      train_ep_len_file = os.path.join(self.log_dir, "train_ep_lens.npy")
+      if os.path.exists(train_ep_len_file):
+        self.train_ep_lens = list(np.load(train_ep_len_file))
 
-    with open(os.path.join(self.log_dir, "stats_summary.json"), 'r') as f:
-      data = json.load(f)
+      with open(os.path.join(self.log_dir, "train_stats_summary.json"), 'r') as f:
+        data = json.load(f)
 
-    self.train_ep_id  = data["train_episodes"]
-    self.eval_ep_id   = data["eval_episodes"]
-    self.train_steps  = data["train_steps"]
-    self.eval_steps   = data["eval_steps"]
-    self.env_steps    = data["total_env_steps"]
+      self.train_ep_id  = data["train_episodes"]
+      self.train_steps  = data["train_steps"]
+      self.env_steps    = data["total_env_steps"]
+
+
+    if self.dual_mode or (not self.dual_mode and self._mode == 'e'):
+
+      eval_rew_file = os.path.join(self.log_dir, "eval_ep_rews.npy")
+      if os.path.exists(eval_rew_file):
+        self.eval_ep_rews = list(np.load(eval_rew_file))
+
+      eval_ep_len_file = os.path.join(self.log_dir, "eval_ep_lens.npy")
+      if os.path.exists(eval_ep_len_file):
+        self.eval_ep_lens = list(np.load(eval_ep_len_file))
+
+      with open(os.path.join(self.log_dir, "eval_stats_summary.json"), 'r') as f:
+        data = json.load(f)
+
+      self.eval_ep_id   = data["eval_episodes"]
+      self.eval_steps   = data["eval_steps"]
+      self.env_steps    = data["total_env_steps"]
 
 
   @property

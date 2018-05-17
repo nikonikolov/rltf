@@ -43,8 +43,9 @@ def parse_args():
     ('--memory-size',   dict(default=10**6,  type=int,   help='size of the replay buffer',)),
     ('--adam-epsilon',  dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
     ('--n-heads',       dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
-    ('--explore-decay', dict(default=10**6,  type=int,   help='# steps to decay e-greedy; if <=0, epsilon=0')),
     ('--epsilon-eval',  dict(default=0.001,  type=float, help='epsilon value during evaluation')),
+    ('--explore-decay', dict(default=250000, type=int,   help='# *agent* steps to decay epsilon to 0.01; \
+      if <=0, epsilon=0 for the whole run')),
 
     ('--warm-up',       dict(default=50000,  type=int,   help='# *agent* steps before training starts')),
     ('--train-freq',    dict(default=4,      type=int,   help='train frequency in # *agent* steps')),
@@ -107,9 +108,8 @@ def make_agent():
   model_kwargs["gamma"] = args.gamma
 
 
-  # Create the environment
-  env = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq)
-  env = wrap_dqn(env)
+  # Create the environments
+  env_train, env_eval = maker.make_envs(args.env_id, args.seed, model_dir, args.video_freq, wrap_dqn)
 
   # Set the learning rate schedule
   learn_rate = ConstSchedule(args.learn_rate)
@@ -126,7 +126,8 @@ def make_agent():
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(
-    env=env,
+    env_train=env_train,
+    env_eval=env_eval,
     train_freq=args.train_freq,
     warm_up=args.warm_up,
     stop_step=args.stop_step,

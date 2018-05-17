@@ -1,6 +1,5 @@
 import logging
 import threading
-import tensorflow as tf
 
 from rltf.agents.agent import Agent
 
@@ -16,11 +15,18 @@ class OffPolicyAgent(Agent):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
-    self.replay_buf = None
     self.update_target_freq = None
+    self.replay_buf = None
     self._terminate = False
     self._save_buf  = False
-    self.threads = None
+    # NOTE: Keep the eval thread always as the first entry. Used in self.eval()
+    self.threads    = [threading.Thread(name='eval_thread', target=self._eval)]
+
+    self._eval_start = threading.Event()
+    self._eval_done  = threading.Event()
+
+    self._eval_start.clear()
+    self._eval_done.clear()
 
 
   def train(self):
@@ -48,8 +54,11 @@ class OffPolicyAgent(Agent):
 
 
   def eval(self):
+    # Overwrite stop step in order to have correct running length
+    self.stop_step = self.eval_freq
+
     # Use a thread to avoid accidental KeyboardInterrupt
-    eval_thread = threading.Thread(name='eval_thread', target=self._eval)
+    eval_thread = self.threads[0]
 
     eval_thread.start()
 
@@ -120,45 +129,67 @@ class OffPolicyAgent(Agent):
 
   def _eval(self):
 
-    logger.info("Starting evaluation")
+    start_step  = self.eval_step
+    eval_runs   = int(self.stop_step / self.eval_freq)
+    stop_step   = eval_runs * self.eval_len
 
-    # Set the monitor in evaluation mode
-    self.env_monitor.mode = 'e'
+    if start_step >= stop_step:
+      logger.warning("Evaluation frequency too big or evaluation length too small")
+      logger.warning("Evaluation will not be run")
+      return
 
-    start_step  = self.sess.run(self.t_eval) + 1
-    stop_step   = start_step + self.eval_len
-    stop_step   = stop_step - stop_step % self.eval_len + 1   # Restore point might be the middle of eval
+    # Wait for eval to start
+    self._wait_eval_start()
 
-    obs = self.reset()
+    obs = self.reset(1, 'e')
 
-    for t in range(start_step, stop_step):
+    for t in range(start_step, stop_step+1):
       if self._terminate:
+        self._signal_eval_done()
         break
 
-      # Increment the current eval step
-      self.sess.run(self.t_eval_inc)
-
       action = self._action_eval(obs, t)
-      next_obs, _, done, _ = self.env.step(action)
+      next_obs, _, done, _ = self.env_eval.step(action)
 
       # Reset the environment if end of episode
       if done:
-        next_obs = self.reset()
+        next_obs = self.reset(t, 'e')
       obs = next_obs
 
-      if t % self.log_freq == 0:
-        # Log the statistics
-        self.env_monitor.log_stats(t)
+      self._log_stats(t, 'e')
 
-        # Add a TB summary
-        summary = tf.Summary()
-        summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_monitor.mean_ep_rew)
-        self.tb_eval_writer.add_summary(summary, t)
+      if t % self.eval_len == 0:
+        self._signal_eval_done()
+        if t < stop_step:
+          self._wait_eval_start()
 
-    # Set the monitor back to train mode
-    self.env_monitor.mode = 't'
 
-    logger.info("Evaluation finished")
+  def _signal_eval_start(self):
+    # Signal that evaluation run should start
+    self._eval_start.set()
+
+
+  def _wait_eval_done(self):
+    # Wait until evaluation run finishes
+    while not self._eval_done.is_set():
+      self._eval_done.wait()
+    self._eval_done.clear()
+
+
+  def _wait_eval_start(self):
+    # Wait until a signal that evaluation run should start
+    while not self._eval_start.is_set():
+      self._eval_start.wait()
+    self._eval_start.clear()
+    if not self._terminate:
+      logger.info("Starting evaluation run")
+
+
+  def _signal_eval_done(self):
+    # Signal that the evaluation run has finished
+    if not self._terminate:
+      logger.info("Evaluation run finished")
+    self._eval_done.set()
 
 
   def _wait_act_chosen(self):
@@ -201,7 +232,7 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 
     env_thread    = threading.Thread(name='env_thread', target=self._run_env)
     nn_thread     = threading.Thread(name='net_thread', target=self._train_model)
-    self.threads  = [nn_thread, env_thread]
+    self.threads  = self.threads + [nn_thread, env_thread]
 
 
   def _run_env(self):
@@ -212,11 +243,12 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     `self._train_model()` thread to start a new training step
     """
 
-    obs = self.reset()
+    obs = self.reset(1, 't')
 
-    for t in range (self.start_step, self.stop_step+1):
+    for t in range(self.train_step, self.stop_step+1):
       if self._terminate:
         self._signal_act_chosen()
+        self._signal_eval_start()
         break
 
       # Get an action to run
@@ -231,35 +263,31 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 
       # Choose random action if learning has not started
       else:
-        action = self.env.action_space.sample()
+        action = self.env_train.action_space.sample()
 
       # Signal to net_thread that action is chosen
       self._signal_act_chosen()
 
-      # Increment the TF timestep variable
-      self.sess.run(self.t_train_inc)
-
       # Run action
-      next_obs, reward, done, _ = self.env.step(action)
+      next_obs, reward, done, _ = self.env_train.step(action)
 
       # Store the effect of the action taken upon obs
       self.replay_buf.store(obs, action, reward, done)
 
-      self._log_stats(t)
+      self._log_stats(t, 't')
 
       # Wait until net_thread is done
       self._wait_train_done()
 
       # Reset the environment if end of episode
       if done:
-        next_obs = self.reset()
+        next_obs = self.reset(t, 't')
       obs = next_obs
 
       # Stop and run evaluation procedure
       if self.eval_len > 0 and t % self.eval_freq == 0:
-        self.eval()
-        # Reset the environment on return
-        obs = self.reset()
+        self._signal_eval_start()
+        self._wait_eval_done()
 
 
   def _train_model(self):
@@ -270,7 +298,7 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     `self._run_env()` thread to select a new action
     """
 
-    for t in range (self.start_step, self.stop_step+1):
+    for t in range(self.train_step, self.stop_step+1):
       if self._terminate:
         self._signal_train_done()
         break
@@ -325,15 +353,16 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
     # Use a thread in order to exit cleanly on KeyboardInterrupt
     train_thread  = threading.Thread(name='train_thread', target=self._train)
-    self.threads  = [train_thread]
+    self.threads  = self.threads + [train_thread]
 
 
   def _train(self):
 
-    obs = self.reset()
+    obs = self.reset(1, 't')
 
-    for t in range (self.start_step, self.stop_step+1):
+    for t in range(self.train_step, self.stop_step+1):
       if self._terminate:
+        self._signal_eval_start()
         break
 
       # Get an action to run
@@ -342,20 +371,17 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
       # Choose random action if learning has not started
       else:
-        action = self.env.action_space.sample()
-
-      # Increment the TF timestep variable
-      self.sess.run(self.t_train_inc)
+        action = self.env_train.action_space.sample()
 
       # Run action
-      next_obs, reward, done, _ = self.env.step(action)
+      next_obs, reward, done, _ = self.env_train.step(action)
 
       # Store the effect of the action taken upon obs
       self.replay_buf.store(obs, action, reward, done)
 
       # Reset the environment if end of episode
       if done:
-        next_obs = self.reset()
+        next_obs = self.reset(t, 't')
       obs = next_obs
 
       # Train the model
@@ -372,13 +398,12 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
         self.save()
 
       # Log data
-      self._log_stats(t)
+      self._log_stats(t, 't')
 
       # Stop and run evaluation procedure
       if self.eval_len > 0 and t % self.eval_freq == 0:
-        self.eval()
-        # Reset the environment on return
-        obs = self.reset()
+        self._signal_eval_start()
+        self._wait_eval_done()
 
 
   def _wait_act_chosen(self):
