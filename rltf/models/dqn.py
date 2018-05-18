@@ -53,7 +53,7 @@ class BaseDQN(Model):
     # Compute the loss
     loss          = self._compute_loss(estimate, target)
 
-    train_vars    = tf.trainable_variables(scope="agent_net")
+    train_vars    = self._trainable_variables(scope="agent_net")
     agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
     target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
