@@ -33,18 +33,15 @@ class BDQN(DDQN):
     self.a_var      = None    # Tensor with BLR stds
 
 
-  def build(self):
-    super().build()
-    # reset_ops = [blr.reset_op for blr in self.agent_blr]
-    # self.reset_blr = tf.group(*reset_ops, name="reset_blr")
-    self.reset_blr = tf.group(*[blr.reset_op for blr in self.agent_blr], name="reset_blr")
+  # def build(self):
+  #   super().build()
+  #   self.reset_blr = tf.group(*[blr.reset_op for blr in self.agent_blr], name="reset_blr")
 
 
   def _conv_nn(self, x):
     """ Build the DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
-      scope: str. Scope in which all the model related variables should be created
     Returns:
       `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
     """
@@ -82,9 +79,10 @@ class BDQN(DDQN):
     Returns:
       tf.Op: The train Op for BLR
     """
-    target  = tf.expand_dims(target, axis=-1)
+    target = tf.expand_dims(target, axis=-1)
 
     def train_blr(blr, a):
+      """Given a BLR instance, select only the examples for the corresponding action"""
       mask = tf.expand_dims(tf.equal(self._act_t_ph, a), axis=-1)
       mask = tf.cast(mask, tf.float32)  # out shape: [None]
       X = phi * mask                    # out shape: [None, dim_phi]

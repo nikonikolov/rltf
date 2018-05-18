@@ -29,7 +29,6 @@ class BaseBstrapDQN(BaseDQN):
     """ Build the Bootstrapped DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
-      scope: str. Scope in which all the model related variables should be created
     Returns:
       `tf.Tensor` of shape `[batch_size, n_heads, n_actions]`. Contains the Q-function for each action
     """
