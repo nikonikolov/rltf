@@ -65,7 +65,7 @@ class Agent:
     self.restore_dir    = restore_dir
     self.prng           = seeding.get_prng()
     self.confirm_kill   = confirm_kill
-    self.reuse_regex    = reuse_regex
+    self.reuse_regex    = None if reuse_regex is None else re.compile(reuse_regex)
 
     self.warm_up        = warm_up       # Step from which training starts
     self.stop_step      = stop_step     # Step at which training stops
@@ -105,11 +105,17 @@ class Agent:
     reuse   = self.restore_dir is not None and self.restore_dir != self.model_dir
 
     if not restore:
-      # Build the model from scratch
-      self._build_base()
       if reuse:
+        # Set regex to match variables which should not be trained. Must be done before building the graph
+        if self.reuse_regex is not None:
+          self.model.exclude_train_vars(self.reuse_regex)
+        # Build the model from scratch
+        self._build_base()
         # Reuse variables
         self._reuse_base()
+      else:
+        # Build the model from scratch
+        self._build_base()
     else:
       # Restore an existing model
       self._restore_base()
@@ -244,12 +250,9 @@ class Agent:
 
     # Get the list of variables to restore
     if self.reuse_regex is not None:
-      # pattern   = self.reuse_regex.encode('unicode-escape')
-      pattern   = self.reuse_regex
-      regex     = re.compile(pattern, flags=0)
-      var_list  = [v for v in self.model.variables if regex.search(v.name)]
+      var_list = [v for v in self.model.variables if self.reuse_regex.search(v.name)]
     else:
-      var_list  = self.model.variables
+      var_list = self.model.variables
 
     # Log the variables being restored
     for v in var_list:

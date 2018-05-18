@@ -1,6 +1,9 @@
-from collections import UserDict
-
+import collections
+import logging
 import tensorflow as tf
+
+
+logger = logging.getLogger(__name__)
 
 
 class Model:
@@ -28,9 +31,13 @@ class Model:
     # the tensors and transfer data between CPU and GPU. `plot_data.data` should be set to the result
     # of `sess.run(plot_train)` after every step, no matter the value of `plot_train.data`.
     # `plot_data` will be accessed from the outside to fetch the data when needed
-    self.plot_train = UserDict()
-    self.plot_eval  = UserDict()
-    self.plot_data  = UserDict()
+    self.plot_train = collections.UserDict()
+    self.plot_eval  = collections.UserDict()
+    self.plot_data  = collections.UserDict()
+
+    # Regex that matches variables that should not be trained. Used when variable values are
+    # restored and reused from an already trained model
+    self.notrain_re = None
 
     # TF Ops that should be set
     self._train_op      = None
@@ -137,6 +144,34 @@ class Model:
 
   def _restore(self, graph):
     raise NotImplementedError()
+
+
+  def exlcude_train_vars(self, regex):
+    """Set a regex to match and exclude model variables which should not be trained
+    Args:
+      regex: A compiled Regular Expression Object from the `re` module. Must support `regex.search()`
+    """
+    self.notrain_re = regex
+
+
+  def _trainable_variables(self, scope):
+    """Get the trainable variables in the given scope and remove any which match `self.notrain_re`
+    Args:
+      scope: str. TensorFlow variable scope
+    Returns:
+      list of `tf.Variable`s that should be trained
+    """
+    train_vars = tf.trainable_variables(scope=scope)
+    if self.notrain_re is not None:
+      exlcude = [v for v in train_vars if self.notrain_re.search(v.name)]
+      if len(exlcude) > 0:
+        logger.info("Excluding model variables in '%s' scope from training:", scope)
+        for v in exlcude:
+          logger.info(v.name)
+        train_vars = [v for v in train_vars if v not in exlcude]
+      else:
+        logger.info("No variables in scope '%s' will be excluded from training:", scope)
+    return train_vars
 
 
   @property
