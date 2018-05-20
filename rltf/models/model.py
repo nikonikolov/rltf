@@ -146,7 +146,7 @@ class Model:
     raise NotImplementedError()
 
 
-  def exlcude_train_vars(self, regex):
+  def exclude_train_vars(self, regex):
     """Set a regex to match and exclude model variables which should not be trained
     Args:
       regex: A compiled Regular Expression Object from the `re` module. Must support `regex.search()`
