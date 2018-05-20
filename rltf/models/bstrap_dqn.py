@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 from rltf.models.dqn  import BaseDQN
+from rltf.models      import tf_utils
 
 
 class BaseBstrapDQN(BaseDQN):
@@ -118,8 +119,8 @@ class BaseBstrapDQN(BaseDQN):
     x_heads = self._conv_out
 
     # Get the conv net and the heads variables
-    head_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/action_value')
-    conv_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_net/conv_net')
+    head_vars   = tf_utils.scope_vars(agent_vars, scope='agent_net/action_value')
+    conv_vars   = tf_utils.scope_vars(agent_vars, scope='agent_net/conv_net')
 
     # Compute the gradients of the variables in all heads as well as
     # the sum of gradients backpropagated from each head into the conv net
@@ -130,7 +131,10 @@ class BaseBstrapDQN(BaseDQN):
     x_heads_g   = x_heads_g / float(self.n_heads)
 
     # Compute the conv net gradients using chain rule
-    conv_grads  = optimizer.compute_gradients(x_heads, conv_vars, grad_loss=x_heads_g)
+    if conv_vars:
+      conv_grads = optimizer.compute_gradients(x_heads, conv_vars, grad_loss=x_heads_g)
+    else:
+      conv_grads = []
 
     # Group grads and apply them
     head_grads  = list(zip(head_grads, head_vars))
