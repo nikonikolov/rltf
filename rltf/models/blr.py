@@ -72,10 +72,10 @@ class BLR(tf.layers.Layer):
     self.reset_op = self._tf_update_params(mu_init, Sigma_init, Lambda_init)
 
     # Add debug histogrrams
-    tf.summary.histogram("debug/BLR/w_mu",      self.w_mu)
-    tf.summary.histogram("debug/BLR/w_Sigma",   self.w_Sigma)
-    tf.summary.histogram("debug/BLR/w_Lambda",  self.w_Lambda)
-    tf.summary.histogram("debug/BLR/w_ts",      self.w)
+    # tf.summary.histogram("debug/BLR/w_mu",      self.w_mu)
+    # tf.summary.histogram("debug/BLR/w_Sigma",   self.w_Sigma)
+    # tf.summary.histogram("debug/BLR/w_Lambda",  self.w_Lambda)
+    # tf.summary.histogram("debug/BLR/w_ts",      self.w)
 
     self.built = True
 
