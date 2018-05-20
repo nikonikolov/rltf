@@ -41,6 +41,14 @@ def assign_vars(dest_vars, source_vars, weight=1.0, name=None):
   return tf.group(*update_ops, name=name)
 
 
+def scope_vars(var_list, scope):
+  """
+  Args:
+    var_list: list of `tf.Variable`s. Contains all variables that should be searched
+    scope: str. Scope of the variables that should be selected
+  """
+  return [v for v in var_list if v.name.startswith(scope)]
+
 
 def huber_loss(x, delta=1.0):
   """Apply the function:
