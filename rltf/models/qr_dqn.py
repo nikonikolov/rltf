@@ -144,6 +144,12 @@ class QRDQN(BaseDQN):
     """
     q       = tf.reduce_mean(agent_net, axis=-1)
     action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
+
+    # Add debugging plot for the variance of the return
+    center  = agent_net - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
+    z_var   = tf.reduce_mean(tf.square(center), axis=-1)  # out: [None, n_actions]
+    tf.summary.scalar("debug/rho2", tf.reduce_mean(z_var))
+
     return action
 
 
