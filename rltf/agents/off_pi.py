@@ -253,10 +253,10 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     obs = self.reset(1, 't')
 
     for t in range(self.train_step, self.stop_step+1):
+      self.train_step = t
       if self._terminate:
         self._signal_act_chosen()
         self._signal_eval_start()
-        self.train_step = t
         break
 
       # Get an action to run
@@ -291,8 +291,6 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
         self._signal_eval_start()
         self._wait_eval_done()
 
-    # Update train step so it reflects the real number of training steps
-    self.train_step = t
 
 
   def _train_model(self):
@@ -366,9 +364,9 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
     obs = self.reset(1, 't')
 
     for t in range(self.train_step, self.stop_step+1):
+      self.train_step = t
       if self._terminate:
         self._signal_eval_start()
-        self.train_step = t
         break
 
       # Get an action to run
@@ -410,9 +408,6 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
       if self.eval_len > 0 and t % self.eval_freq == 0:
         self._signal_eval_start()
         self._wait_eval_done()
-
-    # Update train step so it reflects the real number of training steps
-    self.train_step = t
 
 
   def _wait_act_chosen(self):
