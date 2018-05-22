@@ -61,6 +61,7 @@ class OffPolicyAgent(Agent):
     eval_thread = self.threads[0]
 
     eval_thread.start()
+    self._signal_eval_start()
 
     # Wait for eval thread
     stop = False
