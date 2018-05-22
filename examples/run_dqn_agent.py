@@ -58,7 +58,7 @@ def parse_args():
     ('--eval-len',      dict(default=125000,  type=int,   help='# *agent* steps to run eval each time')),
 
     ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB and IDS')),
-    ('--tau',           dict(default=0.001,  type=float, help='BLR prior covariance')),
+    ('--tau',           dict(default=0.01,   type=float, help='BLR prior covariance')),
     ('--sigma-e',       dict(default=1.0,    type=float, help='BLR observation noise')),
     ('--policy',        dict(default="deterministic", type=str, choices=["stochastic", "deterministic"])),
   ]

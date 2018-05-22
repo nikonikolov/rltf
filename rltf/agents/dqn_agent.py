@@ -139,8 +139,8 @@ class AgentBDQN(AgentDQN):
     """
     super().__init__(**kwargs)
 
-    self.blr_train_freq = blr_train_freq or self.update_target_freq * 10
-    self.blr_batch_size = blr_batch_size or self.update_target_freq * 10
+    self.blr_train_freq = blr_train_freq or self.update_target_freq
+    self.blr_batch_size = blr_batch_size or self.update_target_freq
 
 
   def _run_train_step(self, t, run_summary):
