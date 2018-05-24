@@ -41,7 +41,7 @@ class AgentDQN(ParallelOffPolicyAgent):
     self.opt_conf = opt_conf
     self.exploration = exploration
     self.epsilon_eval = epsilon_eval
-    self.update_target_freq = update_target_freq * self.train_freq
+    self.update_target_freq = update_target_freq
 
     # Get environment specs
     n_actions = self.env_train.action_space.n
