@@ -44,7 +44,7 @@ def parse_args():
     ('--adam-epsilon',  dict(default=.01/32, type=float, help='epsilon for Adam optimizer')),
     ('--n-heads',       dict(default=10,     type=int,   help='number of heads for BstrapDQN')),
     ('--epsilon-eval',  dict(default=0.001,  type=float, help='epsilon value during evaluation')),
-    ('--explore-decay', dict(default=250000, type=int,   help='# *agent* steps to decay epsilon to 0.01; \
+    ('--explore-decay', dict(default=10**6,  type=int,   help='# *agent* steps to decay epsilon to 0.01; \
       if <=0, epsilon=0 for the whole run')),
 
     ('--warm-up',       dict(default=50000,  type=int,   help='# *agent* steps before training starts')),

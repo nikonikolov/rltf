@@ -148,7 +148,7 @@ class QRDQN(BaseDQN):
     # Add debugging plot for the variance of the return
     center  = agent_net - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
     z_var   = tf.reduce_mean(tf.square(center), axis=-1)  # out: [None, n_actions]
-    tf.summary.scalar("debug/rho2", tf.reduce_mean(z_var))
+    tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
 
     return action
 
