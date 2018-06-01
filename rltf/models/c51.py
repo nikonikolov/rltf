@@ -140,6 +140,13 @@ class C51(BaseDQN):
     # Compute the Q-function as expectation of Z; output shape [None, n_actions]
     q       = tf.reduce_sum(agent_net * self.bins, axis=-1)
     action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
+
+    # Add debugging plot for the variance of the return
+    center  = self.bins - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
+    z_var   = tf.square(center) * agent_net               # out: [None, n_actions, N]
+    z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
+    tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
+
     return action
 
 
