@@ -42,7 +42,7 @@ def parse_args():
 
     ('--eval-freq',     dict(default=250000,  type=int,   help='freq in # *agent* steps to run eval')),
     ('--eval-len',      dict(default=125000,  type=int,   help='# *agent* steps to run eval each time')),
-    ('--eval-ep-steps', dict(default=108000,  type=int,   help='max episode *env* steps in eval mode')),
+    ('--eval-ep-steps', dict(default=None,    type=int,   help='max episode *env* steps in eval mode')),
   ]
 
   return cmdargs.parse_args(args)
