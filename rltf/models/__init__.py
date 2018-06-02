@@ -3,6 +3,8 @@ from rltf.models.bdqn         import BDQN
 from rltf.models.bdqn         import BDQN_IDS
 from rltf.models.bdqn         import BDQN_TS
 from rltf.models.bdqn         import BDQN_UCB
+from rltf.models.bstrap_c51   import BstrapC51
+from rltf.models.bstrap_c51   import BstrapC51_IDS
 from rltf.models.bstrap_dqn   import BstrapDQN
 from rltf.models.bstrap_dqn   import BstrapDQN_IDS
 from rltf.models.bstrap_dqn   import BstrapDQN_UCB

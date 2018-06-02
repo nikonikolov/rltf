@@ -12,6 +12,8 @@ from rltf.models        import BstrapDQN_UCB
 from rltf.models        import BstrapDQN_Ensemble
 from rltf.models        import BstrapQRDQN
 from rltf.models        import BstrapQRDQN_IDS
+from rltf.models        import BstrapC51
+from rltf.models        import BstrapC51_IDS
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
@@ -31,7 +33,7 @@ def parse_args():
 
   model_types = ["DQN", "DDQN", "C51", "QRDQN", "QRDQNTS", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_IDS",
                  "BstrapDQN_Ensemble", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS",
-                 "BDQN_TS", "C51TS"]
+                 "BDQN_TS", "C51TS", "BstrapC51", "BstrapC51_IDS"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -97,6 +99,11 @@ def make_agent():
     if args.model in ["BDQN_IDS", "BDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
     if args.model == "BDQN_IDS": model_kwargs["policy"] = args.policy
     agent = AgentBDQN
+  elif args.model in ["BstrapC51", "BstrapC51_IDS"]:
+    model_kwargs  = dict(n_heads=args.n_heads, V_min=-10, V_max=10, N=51)
+    if args.model == "BstrapC51_IDS":
+      model_kwargs["n_stds"] = args.n_stds
+      model_kwargs["policy"] = args.policy
   elif args.model in ["BstrapQRDQN", "BstrapQRDQN_IDS"]:
     model_kwargs  = dict(n_heads=args.n_heads, N=200, k=int(args.huber_loss))
     if args.model == "BstrapQRDQN_IDS":
