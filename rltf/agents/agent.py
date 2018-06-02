@@ -87,7 +87,8 @@ class Agent:
     self.summary_op       = None
 
     self.sess             = None
-    self.saver            = None
+    self.train_saver      = None
+    self.eval_saver       = None
     self.tb_train_writer  = None
     self.tb_eval_writer   = None
 
@@ -120,8 +121,13 @@ class Agent:
       # Restore an existing model
       self._restore_base()
 
-    # NOTE: Create the tf.train.Saver **after** building the whole graph
-    self.saver = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
+    # NOTE: Create tf.train.Saver **after** building the whole graph
+    self.train_saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
+
+    # Create a separate saver for the best agent
+    var_list = [v for v in self.model.variables if "agent_net" in v.name]
+    self.eval_saver = tf.train.Saver(var_list, max_to_keep=1, save_relative_paths=True)
+
     # Create TensorBoard summary writers
     tb_dir = os.path.join(self.model_dir, "tf/tb/")
     self.tb_train_writer  = tf.summary.FileWriter(tb_dir, self.sess.graph)
@@ -148,31 +154,15 @@ class Agent:
     raise NotImplementedError()
 
 
-  def reset(self, t, mode):
-    """This method must be called at the end of every episode. Allows for
+  def reset(self):
+    """This method must be called at the end of every TRAINING episode. Allows for
     executing changes that stay the same for the duration of the whole episode.
-    Note that it gets called both in train and eval mode
-    Args:
-      t: int. Current time step of the mode. Used to keep self.train_step and self.eval_step
-        correct if program is killed mid-episode
-      mode: str. Either 't' (train) or 'e' (eval)
     Returns:
-      obs: np.array. The result of env.reset() for the corresponding mode
+      obs: np.array. The result of env_train.reset()
     """
+    self._reset()
     self.model.reset(self.sess)
-    self._reset(mode)
-    if mode == 't':
-      # Update self.train_step only if NOT the first reset. Otherwise might incorrectly overwrite
-      # the start step on restore. Same is applicable to self.eval_step
-      if t != 1:
-        self.train_step = t
-      return self.env_train.reset()
-    elif mode == 'e':
-      if t != 1:
-        self.eval_step = t
-      return self.env_eval.reset()
-    else:
-      raise ValueError("Incorrect agent mode")
+    return self.env_train.reset()
 
 
   def close(self):
@@ -279,7 +269,7 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _reset(self, mode):
+  def _reset(self):
     """Reset method to be implemented by the inheriting class"""
     raise NotImplementedError()
 
@@ -373,6 +363,7 @@ class Agent:
       # Add a TB summary
       summary = tf.Summary()
       summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_eval_mon.mean_ep_rew)
+      summary.value.add(tag="eval/score",       simple_value=self.env_eval_mon.eval_score)
       self.tb_eval_writer.add_summary(summary, t)
 
 
@@ -386,7 +377,7 @@ class Agent:
 
       # Save the model
       model_dir = os.path.join(self.model_dir, "tf/")
-      self.saver.save(self.sess, model_dir, global_step=self.train_step)
+      self.train_saver.save(self.sess, model_dir, global_step=self.train_step)
 
       self._save()
 
@@ -409,6 +400,20 @@ class Agent:
   def _save(self):
     """Use by implementing class for custom save procedures"""
     return
+
+
+  def _save_best(self, best_agent):
+    """Save the best-performing agent.
+    best_agent: bool. If True, the agent is the best so far. If False, do not save.
+    """
+    if not best_agent:
+      return
+    model_dir = os.path.join(self.model_dir, "tf/best_agent/")
+
+    logger.info("Saving best agent so far to %s", model_dir)
+    # Save the model
+    self.eval_saver.save(self.sess, model_dir, global_step=self.train_step+1)
+    logger.info("Save finished successfully")
 
 
   def _get_sess(self):

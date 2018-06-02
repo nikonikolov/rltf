@@ -56,6 +56,7 @@ def parse_args():
 
     ('--eval-freq',     dict(default=250000,  type=int,   help='freq in # *agent* steps to run eval')),
     ('--eval-len',      dict(default=125000,  type=int,   help='# *agent* steps to run eval each time')),
+    ('--eval-ep-steps', dict(default=None,    type=int,   help='max episode *env* steps in eval mode')),
 
     ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB and IDS')),
     ('--tau',           dict(default=0.01,   type=float, help='BLR prior covariance')),
@@ -110,7 +111,17 @@ def make_agent():
 
 
   # Create the environments
-  env_train, env_eval = maker.make_envs(args.env_id, args.seed, model_dir, args.video_freq, wrap_dqn)
+  env_kwargs = dict(
+    env_id=args.env_id,
+    seed=args.seed,
+    model_dir=model_dir,
+    video_freq=args.video_freq,
+    wrap=wrap_dqn,
+    max_ep_steps_train=None,
+    max_ep_steps_eval=args.eval_ep_steps,
+  )
+  env_train, env_eval = maker.make_envs(**env_kwargs)
+
 
   # Set the learning rate schedule
   learn_rate = ConstSchedule(args.learn_rate)

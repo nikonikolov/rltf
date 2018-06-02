@@ -49,7 +49,7 @@ def parse_args():
     ('--obs-norm',     dict(default=False,  type=s2b,   help='normalize observations')),
     ('--huber-loss',   dict(default=False,  type=s2b,   help='use huber loss for critic')),
     ('--reward-scale', dict(default=1.0,    type=float, help='scale env reward')),
-    ('--max-ep-steps', dict(default=None,   type=int,   help='max # steps for an episode')),
+    ('--max-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in train mode')),
 
     ('--eval-freq',    dict(default=500000,  type=int,   help='freq in # *agent* steps to run eval')),
     ('--eval-len',     dict(default=50000,   type=int,   help='# *agent* steps to run eval each time')),
@@ -92,9 +92,17 @@ def make_agent():
 
 
   # Create the environments
-  wrap = lambda env: wrap_deepmind_ddpg(env, rew_scale=args.reward_scale)
-  envs = maker.make_env(args.env_id, args.seed, model_dir, args.video_freq, wrap, args.max_ep_steps)
-  env_train, env_eval = envs
+  env_kwargs = dict(
+    env_id=args.env_id,
+    seed=args.seed,
+    model_dir=model_dir,
+    video_freq=args.video_freq,
+    wrap=lambda env, mode: wrap_deepmind_ddpg(env, mode, rew_scale=args.reward_scale),
+    max_ep_steps_train=args.max_ep_steps,
+    max_ep_steps_eval=None,
+  )
+  env_train, env_eval = maker.make_envs(**env_kwargs)
+
 
   # Set additional arguments
   if args.batch_size is None:

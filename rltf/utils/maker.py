@@ -7,12 +7,13 @@ import gym
 import rltf.conf
 import rltf.utils.seeding
 import rltf.monitoring
+import rltf.envs
 
 
 logger = logging.getLogger(__name__)
 
 
-def _make_env(env_id, seed, model_dir, video_callable, mode, dual_mode, max_ep_steps):
+def _make_env(env_id, seed, model_dir, video_callable, mode, max_ep_steps):
   if ("Roboschool") in env_id:
     import roboschool
 
@@ -25,8 +26,9 @@ def _make_env(env_id, seed, model_dir, video_callable, mode, dual_mode, max_ep_s
   # NOTE: Episode steps limit wrapper must be set before the Monitor. Otherwise, statistics of
   # reported reward will be wrong
   if max_ep_steps is not None:
-    env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
-  env = rltf.monitoring.Monitor(env, monitor_dir, video_callable, mode, dual_mode)
+    # env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
+    env = rltf.envs.MaxEpisodeLen(env, max_episode_steps=max_ep_steps)
+  env = rltf.monitoring.Monitor(env, monitor_dir, video_callable, mode)
 
   return env
 
@@ -46,29 +48,8 @@ def _set_seeds(seed):
   rltf.utils.seeding.set_global_seeds()     # Set other module's seeds
 
 
-def make_env(env_id, seed, model_dir, video_freq=None, wrap=None, max_ep_steps=None):
-  """Create an instance of a gym environment, wrap it in a Monitor class and
-  set seeds for the environment and for other modules (tf, np, random). The
-  monitor of the environment is set in dual mode
-  Args:
-    env_id: str. Full name of the gym environment
-    seed: int. Seed for the environment and the modules
-    model_dir: std. Path where videos from the Monitor class will be saved
-    video_freq: int. Every `video_freq` episode will be recorded. If `None`,
-      then the monitor default is used. If `<=0`, then no videos are recorded
-    max_ep_steps: int. Set a bound on the max steps in an episode. If None, no limit
-  Returns:
-    The environment wrapped inside a Monitor class
-  """
-
-  _set_seeds(seed)
-  video_callable = _get_video_callable(video_freq)
-  env = _make_env(env_id, seed, model_dir, video_callable, 't', True, max_ep_steps)
-  env = wrap(env)
-  return env
-
-
-def make_envs(env_id, seed, model_dir, video_freq=None, wrap=None, max_ep_steps=None):
+def make_envs(env_id, seed, model_dir, video_freq=None, wrap=None,
+              max_ep_steps_train=None, max_ep_steps_eval=None):
   """Create two instances of a gym environment, wrap them in a Monitor class and
   set seeds for the environments and for other modules (tf, np, random). Both
   environments are not allowed to be in dual mode. One env is for train, one for eval
@@ -78,8 +59,9 @@ def make_envs(env_id, seed, model_dir, video_freq=None, wrap=None, max_ep_steps=
     model_dir: std. Path where videos from the Monitor class will be saved
     video_freq: int. Every `video_freq` episode will be recorded. If `None`,
       then the monitor default is used. If `<=0`, then no videos are recorded
-    max_ep_steps: int. Set a bound on the max steps in an episode. If None, no limit
-    wrap: function. Must take as argument the environment and wrap it.
+    wrap: function. Must take as arguments the environment and its mode and wrap it.
+    max_ep_steps_train: int. Set a bound on the max steps in a training episode. If None, no limit
+    max_ep_steps_eval: int. Set a bound on the max steps in an evaluation episode. If None, no limit
   Returns:
     Tuple of the environments, each wrapped inside a Monitor class
   """
@@ -87,11 +69,12 @@ def make_envs(env_id, seed, model_dir, video_freq=None, wrap=None, max_ep_steps=
   _set_seeds(seed)
   video_callable = _get_video_callable(video_freq)
 
-  env_train = _make_env(env_id, seed,   model_dir, video_callable, 't', False, max_ep_steps)
-  env_eval  = _make_env(env_id, seed+1, model_dir, video_callable, 'e', False, max_ep_steps)
+  env_train = _make_env(env_id, seed,   model_dir, video_callable, 't', max_ep_steps_train)
+  env_eval  = _make_env(env_id, seed+1, model_dir, video_callable, 'e', max_ep_steps_eval)
 
-  env_train = wrap(env_train)
-  env_eval  = wrap(env_eval)
+  if wrap is not None:
+    env_train = wrap(env_train, mode='t')
+    env_eval  = wrap(env_eval,  mode='e')
 
   return env_train, env_eval
 
