@@ -115,9 +115,8 @@ class AgentDDPG(ParallelOffPolicyAgent):
     summary.value.add(tag="train/act_noise_std",  simple_value=self._stats_act_noise_std())
 
 
-  def _reset(self, mode):
-    if mode == 't':
-      self.action_noise.reset()
+  def _reset(self):
+    self.action_noise.reset()
 
 
   def _stats_act_noise_mean(self, *_):

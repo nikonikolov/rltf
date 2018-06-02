@@ -146,10 +146,9 @@ class OffPolicyAgent(Agent):
         self._signal_eval_done()
       return
 
-    # Wait for eval to start
-    self._wait_eval_start()
-
-    obs = self.reset(1, 'e')
+    self._wait_eval_start()             # Wait for the eval run to start
+    obs = self.env_eval.reset()         # Reset the environment
+    self.env_eval_mon.start_eval_run()  # Start new eval run
 
     for t in range(start_step, stop_step+1):
       if self._terminate:
@@ -157,19 +156,23 @@ class OffPolicyAgent(Agent):
         break
 
       action = self._action_eval(obs, t)
-      next_obs, _, done, _ = self.env_eval.step(action)
+      next_obs, rew, done, _ = self.env_eval.step(action)
 
       # Reset the environment if end of episode
       if done:
-        next_obs = self.reset(t, 'e')
+        next_obs = self.env_eval.reset()
       obs = next_obs
 
-      self._log_stats(t, 'e')
-
       if t % self.eval_len == 0:
-        self._signal_eval_done()
+        best_agent = self.env_eval_mon.end_eval_run(t)
+        self._log_stats(t, 'e')               # Log stats only at the end of the run
+        self._save_best(best_agent)           # Save agent if the best so far
+        self.eval_step = t                    # Update the eval step
+        self._signal_eval_done()              # Signal end of eval run to training thread
         if t < stop_step:
-          self._wait_eval_start()
+          self._wait_eval_start()             # Wait for the next eval run
+          obs = self.env_eval.reset()         # Reset the environment
+          self.env_eval_mon.start_eval_run()  # Start new eval run
 
 
   def _signal_eval_start(self):
@@ -251,10 +254,9 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     `self._train_model()` thread to start a new training step
     """
 
-    obs = self.reset(1, 't')
+    obs = self.reset()
 
     for t in range(self.train_step, self.stop_step+1):
-      self.train_step = t
       if self._terminate:
         self._signal_act_chosen()
         self._signal_eval_start()
@@ -284,7 +286,7 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 
       # Reset the environment if end of episode
       if done:
-        next_obs = self.reset(t, 't')
+        next_obs = self.reset()
       obs = next_obs
 
       # Stop and run evaluation procedure
@@ -292,6 +294,8 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
         self._signal_eval_start()
         self._wait_eval_done()
 
+      # Update the train step
+      self.train_step = t
 
 
   def _train_model(self):
@@ -362,10 +366,9 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
   def _train(self):
 
-    obs = self.reset(1, 't')
+    obs = self.reset()
 
     for t in range(self.train_step, self.stop_step+1):
-      self.train_step = t
       if self._terminate:
         self._signal_eval_start()
         break
@@ -386,7 +389,7 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
       # Reset the environment if end of episode
       if done:
-        next_obs = self.reset(t, 't')
+        next_obs = self.reset()
       obs = next_obs
 
       # Train the model
@@ -409,6 +412,9 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
       if self.eval_len > 0 and t % self.eval_freq == 0:
         self._signal_eval_start()
         self._wait_eval_done()
+
+      # Update the train step
+      self.train_step = t
 
 
   def _wait_act_chosen(self):

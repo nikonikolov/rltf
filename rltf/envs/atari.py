@@ -23,6 +23,7 @@
 # THE SOFTWARE.
 #
 
+import logging
 from collections import deque
 
 import cv2
@@ -31,11 +32,13 @@ import numpy as np
 
 # from rltf.utils import seeding
 
+logger = logging.getLogger(__name__)
+
+
 class NoopResetEnv(gym.Wrapper):
+  """Execute a random number of no-ops on reset. No-op is assumed to be action 0."""
+
   def __init__(self, env, noop_max=30):
-    """Sample initial states by taking random number of no-ops on reset.
-    No-op is assumed to be action 0.
-    """
     super().__init__(env)
     self.noop_max = noop_max
     assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
@@ -52,13 +55,15 @@ class NoopResetEnv(gym.Wrapper):
     for _ in range(noops):
       obs, _, done, _ = self.env.step(0)
       if done:
+        logger.warning("Environment reset during initial NOOPs")
         obs = self.env.reset()
     return obs
 
 
 class FireResetEnv(gym.Wrapper):
+  """Take action on reset for environments that are fixed until firing."""
+
   def __init__(self, env):
-    """Take action on reset for environments that are fixed until firing."""
     super().__init__(env)
     assert env.unwrapped.get_action_meanings()[1] == 'FIRE'
     assert len(env.unwrapped.get_action_meanings()) >= 3
@@ -78,10 +83,12 @@ class FireResetEnv(gym.Wrapper):
 
 
 class EpisodicLifeEnv(gym.Wrapper):
+  """Make end-of-life == end-of-episode, but reset only on true game over.
+  Done by DeepMind for the DQN and co. since it helps value estimation.
+  NOTE: Must be applied only in TRAINING MODE. In evaluation mode end-of-life != end-of-episode
+  """
+
   def __init__(self, env):
-    """Make end-of-life == end-of-episode, but only reset on true game over.
-    Done by DeepMind for the DQN and co. since it helps value estimation.
-    """
     super().__init__(env)
     self.lives = 0
     self.was_real_done = True
@@ -115,8 +122,11 @@ class EpisodicLifeEnv(gym.Wrapper):
 
 
 class MaxAndSkipEnv(gym.Wrapper):
+  """Return only every `skip`-th frame. The returned observation is the element-wise max
+  over the last 2 frames - done by DeepMind due to flickering objects.
+  """
+
   def __init__(self, env, skip=4):
-    """Return only every `skip`-th frame"""
     super().__init__(env)
     # most recent raw observations (for max pooling across time steps)
     # self._obs_buffer = deque(maxlen=2)
@@ -145,8 +155,9 @@ class MaxAndSkipEnv(gym.Wrapper):
 
 
 class WarpFrame(gym.ObservationWrapper):
+  """Warp frames to 84x84 as done in the Nature paper and later work."""
+
   def __init__(self, env):
-    """Warp frames to 84x84 as done in the Nature paper and later work."""
     super().__init__(env)
     self.width = 84
     self.height = 84
@@ -162,14 +173,16 @@ class WarpFrame(gym.ObservationWrapper):
 
 
 class ClippedRewardsWrapper(gym.RewardWrapper):
+  """Clip rewards in [-1, 1] range. NOTE: apply only for TRAINING MODE."""
 
   def reward(self, reward):
     return np.sign(reward)
 
 
 class StackFrames(gym.Wrapper):
+  """Stack the last k frames - done by DeepMind to infer object velocities."""
+
   def __init__(self, env, k=4):
-    """Stack the last k observations"""
     super().__init__(env)
     self.k        = k
     self.obs_buf  = deque([], maxlen=k)
@@ -194,33 +207,27 @@ class StackFrames(gym.Wrapper):
     return np.concatenate(self.obs_buf, axis=-1)
 
 
-# def wrap_deepmind_ram(env):
-#   env = EpisodicLifeEnv(env)
-#   env = NoopResetEnv(env, noop_max=30)
-#   env = MaxAndSkipEnv(env, skip=4)
-#   if 'FIRE' in env.unwrapped.get_action_meanings():
-#     env = FireResetEnv(env)
-#   env = ClippedRewardsWrapper(env)
-#   return env
-
-
-def wrap_deepmind_atari(env):
+def wrap_deepmind_atari(env, mode):
   """Wraps an Atari environment to have the same settings as in the original DQN Nature paper by Deepmind.
   Args:
     env: gym.Env
+    mode: str, either 't' or 'e'. Mode in which the environment will be run - train or eval
   Returns:
     The wrapped environment
   """
   if not isinstance(env.unwrapped, gym.envs.atari.AtariEnv):
     raise ValueError("Applying atari wrappers to the non-atari env {} is not allowed".format(env.spec.id))
   assert 'NoFrameskip' in env.spec.id
+  assert mode in ['t', 'e']
 
-  env = EpisodicLifeEnv(env)
+  if mode == 't':
+    env = EpisodicLifeEnv(env)
   env = NoopResetEnv(env, noop_max=30)
   env = MaxAndSkipEnv(env, skip=4)
   if 'FIRE' in env.unwrapped.get_action_meanings():
     env = FireResetEnv(env)
   env = WarpFrame(env)
-  env = ClippedRewardsWrapper(env)
+  if mode == 't':
+    env = ClippedRewardsWrapper(env)
   env = StackFrames(env, k=4)
   return env

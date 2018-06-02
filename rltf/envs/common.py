@@ -6,10 +6,11 @@ from rltf.envs.wrappers import ScaleReward
 from rltf.envs.atari    import wrap_deepmind_atari
 from rltf.envs.atari    import ClippedRewardsWrapper
 
-def wrap_deepmind_ddpg(env, rew_scale=1.0):
+
+def wrap_deepmind_ddpg(env, mode, rew_scale=1.0):
   env = NormalizeAction(env)
   env = ClipAction(env)
-  if rew_scale != 1.0:
+  if mode == 't' and rew_scale != 1.0:
     env = ScaleReward(env, rew_scale)
   if len(env.observation_space.shape) == 3:
     # env = ResizeFrame(env)
@@ -18,9 +19,14 @@ def wrap_deepmind_ddpg(env, rew_scale=1.0):
   return env
 
 
-def wrap_dqn(env):
-  if len(env.observation_space.shape) == 3:
-    return wrap_deepmind_atari(env)
-  else:
+def _wrap_nonimg_dqn(env, mode):
+  if mode == 't':
     env = ClippedRewardsWrapper(env)
-    return env
+  return env
+
+
+def wrap_dqn(env, mode):
+  if len(env.observation_space.shape) == 3:
+    return wrap_deepmind_atari(env, mode)
+  else:
+    return _wrap_nonimg_dqn(env, mode)

@@ -52,7 +52,7 @@ class Monitor(Wrapper):
   Based on `gym/gym/wrappers/monitor.py`
   """
 
-  def __init__(self, env, log_dir, video_callable=None, mode='t', dual_mode=True):
+  def __init__(self, env, log_dir, video_callable=None, mode='t'):
     """
     Args:
       log_dir: str. The directory where to save the monitor videos and stats
@@ -60,7 +60,6 @@ class Monitor(Wrapper):
         has to take the number of the episode and return True/False if a video should be recorded.
         If `None`, every 1000th episode is recorded
       mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor
-      dual_mode: bool. If True, allow switching between train and eval modes
     """
 
     self._detect_wrapped_env(env)
@@ -79,7 +78,7 @@ class Monitor(Wrapper):
     self.env_id         = self._get_env_id()
     self.video_callable = self._get_video_callable(video_callable)
 
-    self.stats_recorder = StatsRecorder(os.path.join(self.log_dir, "data"), mode, dual_mode)
+    self.stats_recorder = StatsRecorder(os.path.join(self.log_dir, "data"), mode)
     self.video_recorder = None
 
     # Create the monitor directory
@@ -132,7 +131,6 @@ class Monitor(Wrapper):
 
 
   def reset(self, **kwargs):
-    self._before_reset()
     # obs = self.env.reset(**kwargs)
     obs = self.env.reset(enabled=self.video_callable(self.episode_id), mode=self.mode, **kwargs)
     self._after_reset(obs)
@@ -142,11 +140,6 @@ class Monitor(Wrapper):
   @property
   def mode(self):
     return self.stats_recorder.mode
-
-
-  @mode.setter
-  def mode(self, mode):
-    self.stats_recorder.mode = mode
 
 
   def save(self):
@@ -163,7 +156,7 @@ class Monitor(Wrapper):
     # self.save()
 
     # Close stats and video recorders
-    self.stats_recorder.close()
+    # self.stats_recorder.close()
     if self.video_recorder is not None:
       self._close_video_recorder()
 
@@ -189,8 +182,6 @@ class Monitor(Wrapper):
         "While the monitor is active for {}, you must call 'env.reset()'"
         "before taking an initial step.".format(self.env_id))
 
-    self.stats_recorder.before_step(action)
-
 
   def _after_step(self, obs, reward, done, info):
     if not self._enabled:
@@ -204,17 +195,11 @@ class Monitor(Wrapper):
     return done
 
 
-  def _before_reset(self):
-    if not self._enabled:
-      return
-    self.stats_recorder.before_reset()
-
-
   def _after_reset(self, obs):
     if not self._enabled:
       return
 
-    self.stats_recorder.after_reset(obs)
+    self.stats_recorder.reset()
 
     self.env_started = True
     self.done = False
@@ -281,9 +266,12 @@ class Monitor(Wrapper):
     self.env.conf_plots(**kwargs)
 
 
-  @property
-  def dual_mode(self):
-    return self.stats_recorder.dual_mode
+  def start_eval_run(self):
+    self.stats_recorder.start_eval_run()
+
+
+  def end_eval_run(self, t):
+    return self.stats_recorder.end_eval_run(t)
 
 
   @property
@@ -299,6 +287,11 @@ class Monitor(Wrapper):
   @property
   def mean_ep_rew(self):
     return self.stats_recorder.mean_ep_rew
+
+
+  @property
+  def eval_score(self):
+    return self.stats_recorder.eval_score
 
 
   @property

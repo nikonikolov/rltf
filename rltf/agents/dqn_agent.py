@@ -125,5 +125,5 @@ class AgentDQN(ParallelOffPolicyAgent):
     return action
 
 
-  def _reset(self, mode):
+  def _reset(self):
     pass
