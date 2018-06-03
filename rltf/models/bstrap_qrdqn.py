@@ -74,20 +74,20 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)    # out: [None, n_actions]
     a_mask  = tf.reshape(a_mask, [-1, 1, self.n_actions, 1])    # out: [None, 1,       n_actions]
     a_mask  = tf.tile(a_mask, [1, self.n_heads, 1, 1])          # out: [None, n_heads, n_actions, 1]
-    # a_mask  = tf.expand_dims(a_mask, axis=1)              # out: [None, 1,       n_actions]
-    # a_mask  = tf.tile(a_mask, [1, self.n_heads, 1])       # out: [None, n_heads, n_actions]
-    # a_mask  = tf.expand_dims(a_mask, axis=-1)             # out: [None, n_heads, n_actions, 1]
     z       = tf.reduce_sum(agent_net * a_mask, axis=-2)        # out: [None, n_heads, N]
     return z
 
 
-  def _compute_target(self, target_net):
-    """Compute the backup value
+  def _select_target(self, target_net):
+    """Select the C51 target distributions for each head - use the greedy action from E[Z]
     Args:
-      target_net: `tf.Tensor`. The tensor output from `self._nn_model()` for the target
+      target_net: `tf.Tensor`, shape `[None, n_heads, n_actions, N]. The tensor output from
+        `self._nn_model()` for the target
     Returns:
-      `tf.Tensor` of shape `[None, n_heads, N]`
+      `tf.Tensor` of shape `[None, N]`
     """
+    n_actions   = self.n_actions
+    target_z    = target_net
 
     # # Compute the Double Q-estimate tartget
     # agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")    # out: [None, n_heads, n_actions, N]
@@ -97,19 +97,27 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     target_z    = target_net
     target_q    = tf.reduce_mean(target_z, axis=-1)                   # out: [None, n_heads, n_actions]
     target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)  # out: [None, n_heads]
-    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)  # out: [None, n_heads, n_actions]
+    target_mask = tf.one_hot(target_act, n_actions, dtype=tf.float32) # out: [None, n_heads, n_actions]
     target_mask = tf.expand_dims(target_mask, axis=-1)                # out: [None, n_heads, n_actions, 1]
     target_z    = tf.reduce_sum(target_net * target_mask, axis=-2)    # out: [None, n_heads, N]
+    return target_z
 
+
+  def _compute_backup(self, target):
+    """Compute the C51 backup distributions
+    Args:
+      target: `tf.Tensor`, shape `[None, n_heads, N]. The output from `self._select_target()`
+    Returns:
+      `tf.Tensor` of shape `[None, n_heads, N]`
+    """
     # Compute the target
+    target_z    = target
     done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)  # out: [None]
     done_mask   = tf.reshape(done_mask, [-1, 1, 1])                   # out: [None, 1, 1]
     done_mask   = tf.tile(done_mask, [1, self.n_heads, 1])            # out: [None, n_heads, 1]
     rew_t       = tf.reshape(self.rew_t_ph, [-1, 1, 1])               # out: [None, 1, 1]
     rew_t       = tf.tile(rew_t, [1, self.n_heads, 1])                # out: [None, n_heads, 1]
     target_z    = rew_t + self.gamma * done_mask * target_z           # out: [None, n_heads, N]
-    target_z    = tf.stop_gradient(target_z)
-
     return target_z
 
 

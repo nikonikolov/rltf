@@ -51,7 +51,7 @@ class BaseBstrapC51(BaseBstrapDQN):
     N         = self.N
 
     def build_head(x):
-      """ Build the head of the QRDQN network
+      """ Build the head of the C51 network
       Args:
         x: tf.Tensor. Tensor for the input
       Returns:
@@ -96,17 +96,34 @@ class BaseBstrapC51(BaseBstrapDQN):
     return z
 
 
-  def _compute_target(self, target_net):
-    """Compute the backup value
+  def _select_target(self, target_net):
+    """Select the C51 target distributions for each head - use the greedy action from E[Z]
     Args:
-      target_net: `tf.Tensor`. The tensor output from `self._nn_model()` for the target
+      target_net: `tf.Tensor`, shape `[None, n_heads, n_actions, N]. The tensor output from
+        `self._nn_model()` for the target
+    Returns:
+      `tf.Tensor` of shape `[None, N]`
+    """
+    n_actions   = self.n_actions
+    target_z    = target_net
+
+    # Compute the target q function and the greedy action
+    bins        = tf.expand_dims(self.bins, axis=0)                     # out: [1, 1, 1, N]
+    target_q    = tf.reduce_sum(target_z * bins, axis=-1)               # out: [None, n_heads, n_actions]
+    target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)    # out: [None, n_heads]
+    target_mask = tf.one_hot(target_act, n_actions, dtype=tf.float32)   # out: [None, n_heads, n_actions]
+    target_mask = tf.expand_dims(target_mask, axis=-1)                  # out: [None, n_heads, n_actions, 1]
+    target_z    = tf.reduce_sum(target_net * target_mask, axis=-2)      # out: [None, n_heads, N]
+    return target_z
+
+
+  def _compute_backup(self, target):
+    """Compute the C51 backup distributions
+    Args:
+      target: `tf.Tensor`, shape `[None, n_heads, N]. The output from `self._select_target()`
     Returns:
       `tf.Tensor` of shape `[None, n_heads, N]`
     """
-
-    # # Compute the Double Q-estimate tartget
-    # agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")    # out: [None, n_heads, n_actions, N]
-    # target_q    = tf.reduce_mean(agent_net, axis=-1)                  # out: [None, n_heads, n_actions]
 
     def build_inds_tensors(bin_inds_lo, bin_inds_hi):
       batch       = tf.shape(self.done_ph)[0]
@@ -128,16 +145,7 @@ class BaseBstrapC51(BaseBstrapDQN):
 
       return bin_inds_lo, bin_inds_hi
 
-    n_actions   = self.n_actions
-
-    # Compute the target q function and the greedy action
-    target_z    = target_net
-    bins        = tf.expand_dims(self.bins, axis=0)                     # out: [1, 1, 1, N]
-    target_q    = tf.reduce_sum(target_z * bins, axis=-1)               # out: [None, n_heads, n_actions]
-    target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)    # out: [None, n_heads]
-    target_mask = tf.one_hot(target_act, n_actions, dtype=tf.float32)   # out: [None, n_heads, n_actions]
-    target_mask = tf.expand_dims(target_mask, axis=-1)                  # out: [None, n_heads, n_actions, 1]
-    target_z    = tf.reduce_sum(target_net * target_mask, axis=-2)      # out: [None, n_heads, N]
+    target_z    = target
 
     # Compute projected bin support
     done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)     # out: [None]
@@ -170,7 +178,6 @@ class BaseBstrapC51(BaseBstrapDQN):
     with tf.control_dependencies([target_z]):
       target_z  = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
       target_z  = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
-      target_z  = tf.stop_gradient(target_z)            # out: [None, n_heads, N]
 
     return target_z
 

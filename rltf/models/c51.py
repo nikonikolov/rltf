@@ -74,16 +74,36 @@ class C51(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
-    a_mask  = tf.expand_dims(tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32), axis=-1)
-    z       = tf.reduce_sum(agent_net * a_mask, axis=1)
+    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
+    z       = tf.reduce_sum(agent_net * a_mask, axis=1)                     # out: [None, N]
     return z
 
 
-  def _compute_target(self, target_net):
-    """Compute the C51 backup distributions - use the greedy action from E[Z]
+  def _select_target(self, target_net):
+    """Select the C51 target distributions - use the greedy action from E[Z]
     Args:
       target_net: `tf.Tensor`, shape `[None, n_actions, N]. The tensor output from `self._nn_model()`
         for the target
+    Returns:
+      `tf.Tensor` of shape `[None, N]`
+    """
+    n_actions   = self.n_actions
+    target_z    = target_net
+
+    # Get the target Q probabilities for the greedy action; output shape [None, N]
+    target_q    = tf.reduce_sum(target_z * self.bins, axis=-1)            # out: [None, n_actions]
+    target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)      # out: [None]
+    target_mask = tf.one_hot(target_act, n_actions, dtype=tf.float32)     # out: [None, n_actions]
+    target_mask = tf.expand_dims(target_mask, axis=-1)                    # out: [None, n_actions, 1]
+    target_z    = tf.reduce_sum(target_z * target_mask, axis=1)           # out: [None, N]
+    return target_z
+
+
+  def _compute_backup(self, target):
+    """Compute the C51 backup distributions
+    Args:
+      target: `tf.Tensor`, shape `[None, N]. The output from `self._select_target()`
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
@@ -103,13 +123,7 @@ class C51(BaseDQN):
 
       return bin_inds_lo, bin_inds_hi
 
-    # Get the target Q probabilities for the greedy action; output shape [None, N]
-    target_z    = target_net
-    target_q    = tf.reduce_sum(target_z * self.bins, axis=-1)
-    target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)
-    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)
-    target_mask = tf.expand_dims(target_mask, axis=-1)
-    target_z    = tf.reduce_sum(target_z * target_mask, axis=1)
+    target_z    = target
 
     # Compute projected bin support; output shape [None, N]
     done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)
@@ -140,7 +154,6 @@ class C51(BaseDQN):
     with tf.control_dependencies([target_z]):
       target_z  = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
       target_z  = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
-      target_z  = tf.stop_gradient(target_z)
 
     return target_z
 
@@ -203,53 +216,19 @@ class C51TS(C51):
     return action
 
 
-  def _compute_target(self, target_net):
-    # Double DQN target
-    target_z      = target_net
+  def _select_target(self, target_net):
+    # Compute the Double DQN target
+    target_z    = target_net                                                # out: [None, n_actions, N]
 
-    # Compute the Z and Q estimate swith the agent network variables
-    agent_z       = self._nn_model(self._obs_tp1, scope="agent_net")
-    agent_q       = tf.reduce_mean(agent_z * self.bins, axis=-1)
+    # Compute the Z and Q estimates with the agent network variables
+    agent_z     = self._nn_model(self._obs_tp1, scope="agent_net")          # out: [None, n_actions, N]
+    agent_q     = tf.reduce_mean(agent_z * self.bins, axis=-1)              # out: [None, n_actions]
 
-    # Get the target Q probabilities; output shape [None, N]
-    target_act    = tf.argmax(agent_q, axis=-1)
-    a_mask        = tf.expand_dims(tf.one_hot(target_act, self.n_actions, dtype=tf.float32), axis=-1)
-    target_z      = tf.reduce_sum(target_z * a_mask, axis=1)
-
-    # Compute projected bin support; output shape [None, N]
-    done_mask     = tf.cast(tf.logical_not(self.done_ph), tf.float32)
-    done_mask     = tf.expand_dims(done_mask, axis=-1)
-    rew_t         = tf.expand_dims(self.rew_t_ph, axis=-1)
-    bins          = tf.squeeze(self.bins, axis=0)
-    target_bins   = rew_t + self.gamma * done_mask * bins
-    target_bins   = tf.clip_by_value(target_bins, self.V_min, self.V_max)
-
-    # Projected bin indices; output shape [None, N], dtype=float
-    bin_inds      = (target_bins - self.V_min) / self.dz
-    bin_inds_lo   = tf.floor(bin_inds)
-    bin_inds_hi   = tf.ceil(bin_inds)
-
-    lo_add        = target_z * (bin_inds_hi - bin_inds)
-    hi_add        = target_z * (bin_inds - bin_inds_lo)
-
-    # Initialize the Variable holding the target distribution - gets reset to 0 every time
-    zeros         = tf.zeros_like(target_bins, dtype=tf.float32)
-    target_z      = tf.Variable(0, trainable=False, dtype=tf.float32, validate_shape=False)
-    target_z      = tf.assign(target_z, zeros, validate_shape=False)
-
-    # Compute indices for scatter_nd_add
-    batch         = tf.shape(self.done_ph)[0]
-    row_inds      = tf.range(0, limit=batch, delta=1, dtype=tf.int32)
-    row_inds      = tf.tile(tf.expand_dims(row_inds, axis=-1), [1, self.N])
-    row_inds      = tf.expand_dims(row_inds, axis=-1)
-    bin_inds_lo   = tf.concat([row_inds, tf.expand_dims(tf.to_int32(bin_inds_lo), axis=-1)], axis=-1)
-    bin_inds_hi   = tf.concat([row_inds, tf.expand_dims(tf.to_int32(bin_inds_hi), axis=-1)], axis=-1)
-
-    with tf.control_dependencies([target_z]):
-      target_z    = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
-      target_z    = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
-      target_z    = tf.stop_gradient(target_z)
-
+    # Get the target Q probabilities for the greedy action
+    target_act  = tf.argmax(agent_q, axis=-1)                               # out: [None]
+    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    target_mask = tf.expand_dims(target_mask, axis=-1)                      # out: [None, n_actions, 1]
+    target_z    = tf.reduce_sum(target_z * target_mask, axis=1)             # out: [None, N]
     return target_z
 
 
