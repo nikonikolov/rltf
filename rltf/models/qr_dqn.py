@@ -16,9 +16,7 @@ class QRDQN(BaseDQN):
       N: int. number of quantiles
       k: int. Huber loss order
     """
-
     super().__init__(obs_shape, n_actions, opt_conf, gamma)
-
     self.N = N
     self.k = k
 
@@ -54,30 +52,52 @@ class QRDQN(BaseDQN):
 
 
   def _compute_estimate(self, agent_net):
-    # Get the Z-distribution for the selected action; output shape [None, N]
-    a_mask  = tf.expand_dims(tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32), axis=-1)
-    z       = tf.reduce_sum(agent_net * a_mask, axis=1)
+    """Select the return distribution Z of the selected action
+    Args:
+      agent_net: `tf.Tensor`, shape `[None, n_actions, N]. The tensor output from `self._nn_model()`
+        for the agent
+    Returns:
+      `tf.Tensor` of shape `[None, N]`
+    """
+    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
+    z       = tf.reduce_sum(agent_net * a_mask, axis=1)                     # out: [None, N]
     return z
 
 
-  def _compute_target(self, target_net):
-    target_z      = target_net
+  def _select_target(self, target_net):
+    """Select the QRDQN target distributions - use the greedy action from E[Z]
+    Args:
+      target_net: `tf.Tensor`, shape `[None, n_actions, N]. The tensor output from `self._nn_model()`
+        for the target
+    Returns:
+      `tf.Tensor` of shape `[None, N]`
+    """
+    # Compute the Q-function as expectation of Z
+    target_z    = target_net                                                # out: [None, n_actions, N]
+    target_q    = tf.reduce_mean(target_z, axis=-1)                         # out: [None, n_actions]
 
-    # Compute the Q-function as expectation of Z; output shape [None, n_actions]
-    target_q      = tf.reduce_mean(target_z, axis=-1)
+    # Get the target Q probabilities for the greedy action
+    target_act  = tf.argmax(target_q, axis=-1)                              # out: [None]
+    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    target_mask = tf.expand_dims(target_mask, axis=-1)                      # out: [None, n_actions, 1]
+    target_z    = tf.reduce_sum(target_z * target_mask, axis=1)             # out: [None, N]
+    return target_z
 
-    # Get the target Q probabilities for the greedy action; output shape [None, N]
-    target_act    = tf.argmax(target_q, axis=-1)
-    a_mask        = tf.expand_dims(tf.one_hot(target_act, self.n_actions, dtype=tf.float32), axis=-1)
-    target_z      = tf.reduce_sum(target_z * a_mask, axis=1)
 
+  def _compute_backup(self, target):
+    """Compute the QRDQN backup distributions
+    Args:
+      target: `tf.Tensor`, shape `[None, N]. The output from `self._select_target()`
+    Returns:
+      `tf.Tensor` of shape `[None, N]`
+    """
     # Compute the projected quantiles; output shape [None, N]
-    done_mask     = tf.cast(tf.logical_not(self.done_ph), tf.float32)
-    done_mask     = tf.expand_dims(done_mask, axis=-1)
-    rew_t         = tf.expand_dims(self.rew_t_ph, axis=-1)
-    target_z      = rew_t + self.gamma * done_mask * target_z
-    target_z      = tf.stop_gradient(target_z)
-
+    target_z  = target
+    done_mask = tf.cast(tf.logical_not(self.done_ph), tf.float32)
+    done_mask = tf.expand_dims(done_mask, axis=-1)
+    rew_t     = tf.expand_dims(self.rew_t_ph, axis=-1)
+    target_z  = rew_t + self.gamma * done_mask * target_z
     return target_z
 
 

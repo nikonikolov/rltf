@@ -110,6 +110,17 @@ class BaseDQN(Model):
 
 
   def _compute_target(self, target_net):
+    target = self._select_target(target_net)
+    backup = self._compute_backup(target)
+    backup = tf.stop_gradient(backup)
+    return backup
+
+
+  def _select_target(self, target_net):
+    raise NotImplementedError()
+
+
+  def _compute_backup(self, target):
     raise NotImplementedError()
 
 
@@ -241,12 +252,14 @@ class DQN(BaseDQN):
     return q
 
 
-  def _compute_target(self, target_net):
-    done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+  def _select_target(self, target_net):
     target_q  = tf.reduce_max(target_net, axis=-1)
-    target_q  = self.rew_t_ph + self.gamma * done_mask * target_q
-    target_q  = tf.stop_gradient(target_q)
+    return target_q
 
+
+  def _compute_backup(self, target):
+    done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+    target_q  = self.rew_t_ph + self.gamma * done_mask * target
     return target_q
 
 

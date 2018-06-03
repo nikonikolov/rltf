@@ -74,16 +74,36 @@ class C51(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
-    a_mask  = tf.expand_dims(tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32), axis=-1)
-    z       = tf.reduce_sum(agent_net * a_mask, axis=1)
+    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
+    z       = tf.reduce_sum(agent_net * a_mask, axis=1)                     # out: [None, N]
     return z
 
 
-  def _compute_target(self, target_net):
-    """Compute the C51 backup distributions - use the greedy action from E[Z]
+  def _select_target(self, target_net):
+    """Select the C51 target distributions - use the greedy action from E[Z]
     Args:
       target_net: `tf.Tensor`, shape `[None, n_actions, N]. The tensor output from `self._nn_model()`
         for the target
+    Returns:
+      `tf.Tensor` of shape `[None, N]`
+    """
+    n_actions   = self.n_actions
+    target_z    = target_net
+
+    # Get the target Q probabilities for the greedy action; output shape [None, N]
+    target_q    = tf.reduce_sum(target_z * self.bins, axis=-1)            # out: [None, n_actions]
+    target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)      # out: [None]
+    target_mask = tf.one_hot(target_act, n_actions, dtype=tf.float32)     # out: [None, n_actions]
+    target_mask = tf.expand_dims(target_mask, axis=-1)                    # out: [None, n_actions, 1]
+    target_z    = tf.reduce_sum(target_z * target_mask, axis=1)           # out: [None, N]
+    return target_z
+
+
+  def _compute_backup(self, target):
+    """Compute the C51 backup distributions
+    Args:
+      target: `tf.Tensor`, shape `[None, N]. The output from `self._select_target()`
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
@@ -103,13 +123,7 @@ class C51(BaseDQN):
 
       return bin_inds_lo, bin_inds_hi
 
-    # Get the target Q probabilities for the greedy action; output shape [None, N]
-    target_z    = target_net
-    target_q    = tf.reduce_sum(target_z * self.bins, axis=-1)
-    target_act  = tf.argmax(target_q, axis=-1, output_type=tf.int32)
-    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)
-    target_mask = tf.expand_dims(target_mask, axis=-1)
-    target_z    = tf.reduce_sum(target_z * target_mask, axis=1)
+    target_z    = target
 
     # Compute projected bin support; output shape [None, N]
     done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)
@@ -140,7 +154,6 @@ class C51(BaseDQN):
     with tf.control_dependencies([target_z]):
       target_z  = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
       target_z  = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
-      target_z  = tf.stop_gradient(target_z)
 
     return target_z
 

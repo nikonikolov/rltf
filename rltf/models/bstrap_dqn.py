@@ -44,8 +44,9 @@ class BstrapDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[batch_size, n_heads, n_actions]`. Contains the Q-function for each action
     """
+    n_actions = self.n_actions
 
-    def _build_head(x, n_actions):
+    def build_head(x):
       """ Build the head of the DQN network
       Args:
         x: tf.Tensor. Tensor for the input
@@ -57,7 +58,6 @@ class BstrapDQN(BaseDQN):
       x = tf.expand_dims(x, axis=-2)
       return x
 
-    n_actions = self.n_actions
     with tf.variable_scope("conv_net"):
       x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
       x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu)
@@ -66,7 +66,7 @@ class BstrapDQN(BaseDQN):
     # Careful: Make sure self._conv_out is set only during the right function call
     if "agent_net" in tf.get_variable_scope().name and self._conv_out is None: self._conv_out = x
     with tf.variable_scope("action_value"):
-      heads = [_build_head(x, n_actions) for _ in range(self.n_heads)]
+      heads = [build_head(x) for _ in range(self.n_heads)]
       x = tf.concat(heads, axis=-2)
     return x
 
@@ -121,28 +121,38 @@ class BstrapDQN(BaseDQN):
     return q
 
 
-  def _compute_target(self, target_net):
-    """Compute the Double DQN backup value - use the greedy action from the q estimate
+  def _select_target(self, target_net):
+    """Select the Double DQN target
     Args:
-      target_net: `tf.Tensor`. The tensor output from `self._nn_model()` for the target
+      target_net: `tf.Tensor`. shape `[None, n_heads, n_actions]. The output from `self._nn_model()`
+        for the target
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
-    # Compute the Q-estimate with the agent network variables
-    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")
+    n_actions   = self.n_actions
 
-    # Compute the target action
-    target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
-    target_mask = tf.one_hot(target_act, self.n_actions, dtype=tf.float32)
+    # Compute the Q-estimate with the agent network variables and select the maximizing action
+    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")      # out: [None, n_heads, n_actions]
+    target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)   # out: [None, n_heads]
 
-    # Compute the target
-    done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)
-    done_mask   = tf.expand_dims(done_mask, axis=-1)
-    rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
-    target_q    = tf.reduce_sum(target_net * target_mask, axis=-1)
-    target_q    = rew_t + self.gamma * done_mask * target_q
-    target_q    = tf.stop_gradient(target_q)
+    # Select the target Q-function
+    target_mask = tf.one_hot(target_act, n_actions, dtype=tf.float32)   # out: [None, n_heads, n_actions]
+    target_q    = tf.reduce_sum(target_net * target_mask, axis=-1)      # out: [None, n_heads]
 
+    return target_q
+
+
+  def _compute_backup(self, target):
+    """Compute the backup Q-value for each head
+    Args:
+      target: `tf.Tensor`, shape `[None, n_heads]. The output from `self._select_target()`
+    Returns:
+      `tf.Tensor` of shape `[None, n_heads]`
+    """
+    done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)  # out: [None]
+    done_mask   = tf.expand_dims(done_mask, axis=-1)                  # out: [None, 1]
+    rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)              # out: [None, 1]
+    target_q    = rew_t + self.gamma * done_mask * target             # out: [None, n_heads]
     return target_q
 
 
