@@ -104,7 +104,7 @@ class OffPolicyAgent(Agent):
     return True
 
 
-  def _restore(self, graph):
+  def _restore(self):
     self.replay_buf.restore(self.model_dir)
 
 

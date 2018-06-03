@@ -94,32 +94,32 @@ class Agent:
 
 
   def build(self):
-    """Build the graph. Automatically calls (in order) `self._build()` and `self.model.build()`
-    or `self._restore()` and `self.model.restore()`.
-    If `restore_dir is None`, the graph will be built and initialized from scratch.
-    If `restore_dir == model_dir`, the graph will be restored and the build procedure will not be called.
-    If `restore_dir != model_dir`, the graph will be built from scratch and initialized with the values.
-    of the variables in `restore_dir` which match the provided pattern
+    """Build the graph. The graph is always built and initialized from scratch. After that, tf.Variables
+     are restored (if needed). Meta graphs are not used. Calls `self._build()` and `self.model.build()`.
+    If `restore_dir is None`, the graph will be initialized from scratch.
+    If `restore_dir == model_dir`, all graph variable values will be restored from checkpoint
+    If `restore_dir != model_dir`, variables which match the provided pattern will be restored from
+    checkpoint. The rest of the variables will reatin their original random values
     """
 
     restore = self.restore_dir is not None and self.restore_dir == self.model_dir
     reuse   = self.restore_dir is not None and self.restore_dir != self.model_dir
 
-    if not restore:
-      if reuse:
-        # Set regex to match variables which should not be trained. Must be done before building the graph
-        if self.reuse_regex is not None:
-          self.model.exclude_train_vars(self.reuse_regex)
-        # Build the model from scratch
-        self._build_base()
-        # Reuse variables
-        self._reuse_base()
-      else:
-        # Build the model from scratch
-        self._build_base()
-    else:
-      # Restore an existing model
-      self._restore_base()
+    # Set regex to match variables which should not be trained. Must be done before building the graph
+    if reuse and self.reuse_regex is not None:
+      self.model.exclude_train_vars(self.reuse_regex)
+
+    # Build the graph from scratch
+    self._build_graph()
+
+    # Restore all variables if model is being restored
+    if restore:
+      self._restore_vars()  # Restore tf variables
+      self._restore()       # Execute agent-specific restore, e.g. restore buffer
+
+    # Reuse some variables if model is being reused
+    elif reuse:
+      self._reuse_vars()
 
     # NOTE: Create tf.train.Saver **after** building the whole graph
     self.train_saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
@@ -177,7 +177,7 @@ class Agent:
     self.env_eval.close()
 
 
-  def _build_base(self):
+  def _build_graph(self):
     logger.info("Building model")
 
     # Call the subclass _build method
@@ -198,28 +198,12 @@ class Agent:
     self.model.initialize(self.sess)
 
 
-  def _restore_base(self):
+  def _restore_vars(self):
     logger.info("Restoring model")
 
-    # Get the checkpoint
-    ckpt_path = self._ckpt_path()
-
-    # Restore the graph structure
-    saver = tf.train.import_meta_graph(ckpt_path + '.meta')
-    graph = tf.get_default_graph()
-
-    # Recover the model variables
-    self.model.restore(graph)
-
-    # Recover the agent subclass variables
-    self._restore(graph)
-
-    # Restore the values of all tf.Variables
-    self.sess = self._get_sess()
-    saver.restore(self.sess, ckpt_path)
-
-    # Get the summary Op
-    self.summary_op = graph.get_tensor_by_name("Merge/MergeSummary:0")
+    # Restore all variables
+    saver = tf.train.Saver()
+    saver.restore(self.sess, self._ckpt_path())
 
     # Recover the agent state
     state_file = os.path.join(self.model_dir, "agent_state.json")
@@ -235,7 +219,12 @@ class Agent:
       logger.warning("Random policy will be run for %d steps", self.warm_up-self.train_step)
 
 
-  def _reuse_base(self):
+  def _restore(self):
+    """Execute agent-specific restore procedures"""
+    pass
+
+
+  def _reuse_vars(self):
     logger.info("Reusing model variables:")
 
     # Get the list of variables to restore
@@ -288,16 +277,6 @@ class Agent:
     Args:
       t: int. Current timestep
       run_summary: bool. Whether summary should be run and set during the train step
-    """
-    raise NotImplementedError()
-
-
-  def _restore(self, graph):
-    """Restore the Variables, placeholders and Ops needed by the class so that
-    it can operate in exactly the same way as if `self._build()` was called
-    Args:
-      graph: tf.Graph. Graph, restored from a checkpoint
-      resume: bool. True - training should continue as started. False - use only NN weights
     """
     raise NotImplementedError()
 

@@ -93,12 +93,6 @@ class AgentDDPG(ParallelOffPolicyAgent):
     tf.summary.scalar("train/critic_learn_rate", self.critic_learn_rate_ph)
 
 
-  def _restore(self, graph):
-    self.actor_learn_rate_ph  = graph.get_tensor_by_name("actor_learn_rate_ph:0")
-    self.critic_learn_rate_ph = graph.get_tensor_by_name("critic_learn_rate_ph:0")
-    super()._restore(graph)
-
-
   def _append_log_info(self):
     t = self.log_freq
     log_info = [

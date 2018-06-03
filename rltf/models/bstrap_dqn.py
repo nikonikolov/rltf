@@ -204,12 +204,5 @@ class BstrapDQN(BaseDQN):
     return train_op
 
 
-  def _restore(self, graph):
-    super()._restore(graph)
-
-    self._active_head   = graph.get_tensor_by_name("active_head:0")
-    self._set_act_head  = graph.get_operation_by_name("set_act_head")
-
-
   def reset(self, sess):
     sess.run(self._set_act_head)
