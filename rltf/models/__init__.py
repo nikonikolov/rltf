@@ -9,6 +9,7 @@ from rltf.models.bstrap_dqn   import BstrapDQN
 from rltf.models.bstrap_dqn   import BstrapDQN_IDS
 from rltf.models.bstrap_dqn   import BstrapDQN_UCB
 from rltf.models.bstrap_dqn   import BstrapDQN_Ensemble
+from rltf.models.bstrap_dqnc51 import BstrapDQNC51_IDS
 from rltf.models.bstrap_qrdqn import BstrapQRDQN
 from rltf.models.bstrap_qrdqn import BstrapQRDQN_IDS
 from rltf.models.c51          import C51
