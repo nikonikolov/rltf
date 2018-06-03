@@ -106,6 +106,20 @@ class BaseBstrapDQN(BaseDQN):
     return target_q
 
 
+  def _compute_backup(self, target):
+    """Compute the backup Q-value for each head
+    Args:
+      target: `tf.Tensor`, shape `[None, n_heads]. The output from `self._select_target()`
+    Returns:
+      `tf.Tensor` of shape `[None, n_heads]`
+    """
+    done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)  # out: [None]
+    done_mask   = tf.expand_dims(done_mask, axis=-1)                  # out: [None, 1]
+    rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)              # out: [None, 1]
+    target_q    = rew_t + self.gamma * done_mask * target             # out: [None, n_heads]
+    return target_q
+
+
   def _compute_loss(self, estimate, target):
     """
     Args: shape `[None, n_heads]`
