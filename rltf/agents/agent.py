@@ -337,7 +337,7 @@ class Agent:
       t: int. Current timestep
       mode: str, either 't' (train) or 'e' (eval). The mode for which to log the statistics
     """
-    if t % self.log_freq != 0:
+    if t % self.log_freq != 0 and mode == 't':
       return
     assert mode in ['t', 'e']
 
