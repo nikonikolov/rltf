@@ -4,7 +4,7 @@ from rltf.models.dqn  import BaseDQN
 from rltf.models      import tf_utils
 
 
-class BstrapDQN(BaseDQN):
+class BaseBstrapDQN(BaseDQN):
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
     """
@@ -19,28 +19,17 @@ class BstrapDQN(BaseDQN):
 
     super().__init__(obs_shape, n_actions, opt_conf, gamma)
 
-    self.huber_loss   = huber_loss
-    self.n_heads      = n_heads
+    self.huber_loss = huber_loss
+    self.n_heads    = n_heads
 
     # Custom TF Tensors and Ops
-    self._active_head   = None
-    self._set_act_head  = None
-    self._conv_out      = None
-
-
-  def build(self):
-    self._active_head   = tf.Variable([0], trainable=False, name="active_head")
-    sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
-    self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
-
-    super().build()
+    self._conv_out  = None
 
 
   def _conv_nn(self, x):
     """ Build the Bootstrapped DQN architecture - as described in the original paper
     Args:
       x: tf.Tensor. Tensor for the input
-      scope: str. Scope in which all the model related variables should be created
     Returns:
       `tf.Tensor` of shape `[batch_size, n_heads, n_actions]`. Contains the Q-function for each action
     """
@@ -51,7 +40,7 @@ class BstrapDQN(BaseDQN):
       Args:
         x: tf.Tensor. Tensor for the input
       Returns:
-        `tf.Tensor` of shape `[batch_size, n_actions]`. Contains the Q-function for each action
+        `tf.Tensor` of shape `[batch_size, 1, n_actions]`. Contains the Q-function for each action
       """
       x = tf.layers.dense(x, units=512,       activation=tf.nn.relu)
       x = tf.layers.dense(x, units=n_actions, activation=None)
@@ -69,45 +58,6 @@ class BstrapDQN(BaseDQN):
       heads = [build_head(x) for _ in range(self.n_heads)]
       x = tf.concat(heads, axis=-2)
     return x
-
-
-  def _act_train(self, agent_net, name):
-    """Select the greedy action from the selected head
-    Args:
-      agent_net: `tf.Tensor`, shape `[None, n_heads, n_actions]. The tensor output from
-        `self._nn_model()` for the agent
-    Returns:
-      `tf.Tensor` of shape `[None]`
-    """
-
-    # Get the Q function from the active head
-    head_mask = tf.one_hot(self._active_head, self.n_heads, dtype=tf.float32) # out: [1,    n_heads]
-    head_mask = tf.tile(head_mask, [tf.shape(agent_net)[0], 1])               # out: [None, n_heads]
-    head_mask = tf.expand_dims(head_mask, axis=-1)                            # out: [None, n_heads, 1]
-    q_head    = tf.reduce_sum(agent_net * head_mask, axis=1)                  # out: [None, n_actions]
-
-    # Compute the greedy action
-    action    = tf.argmax(q_head, axis=-1, output_type=tf.int32, name=name)
-    return action
-
-
-  def _act_eval(self, agent_net, name):
-
-    def count_value(votes, i):
-      count = tf.equal(votes, i)
-      count = tf.cast(count, tf.int32)
-      count = tf.reduce_sum(count, axis=-1, keepdims=True)
-      return count
-
-    # Get the greedy action from each head; output shape `[batch_size, n_heads]`
-    votes   = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
-    # Get the action votes; output shape `[batch_size, n_actions]`
-    counts  = [count_value(votes, i) for i in range(self.n_actions)]
-    counts  = tf.concat(counts, axis=-1)
-    # Get the max vote action; output shape `[batch_size]`
-    action  = tf.argmax(counts, axis=-1, output_type=tf.int32, name=name)
-
-    return action
 
 
   def _compute_estimate(self, agent_net):
@@ -205,4 +155,134 @@ class BstrapDQN(BaseDQN):
 
 
   def reset(self, sess):
+    pass
+
+
+  def _act_eval_vote(self, agent_net, name):
+    """Evaluation action based on voting policy from the heads"""
+
+    def count_value(votes, i):
+      count = tf.equal(votes, i)
+      count = tf.cast(count, tf.int32)
+      count = tf.reduce_sum(count, axis=-1, keepdims=True)
+      return count
+
+    # Get the greedy action from each head; output shape `[batch_size, n_heads]`
+    votes   = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
+    # Get the action votes; output shape `[batch_size, n_actions]`
+    votes   = [count_value(votes, i) for i in range(self.n_actions)]
+    votes   = tf.concat(votes, axis=-1)
+    # Get the max vote action; output shape `[batch_size]`
+    action  = tf.argmax(votes, axis=-1, output_type=tf.int32, name=name)
+
+    # Set the plottable tensors for video. Use only the first action in the batch
+    p_a     = tf.identity(action[0],  name="plot/eval/a")
+    p_vote  = tf.identity(votes[0],   name="plot/eval/vote")
+
+    self.plot_eval["eval_actions"] = {
+      "a_vote": dict(height=p_vote, a=p_a),
+    }
+
+    return action
+
+
+  def _act_eval_greedy(self, agent_net, name):
+    """Evaluation action based on the greedy action w.r.t. the mean of all heads"""
+
+    mean    = tf.reduce_mean(agent_net, axis=1)
+    action  = tf.argmax(mean, axis=-1, output_type=tf.int32, name=name)
+
+    # Set the plottable tensors for video. Use only the first action in the batch
+    p_a     = tf.identity(action[0],  name="plot/eval/a")
+    p_mean  = tf.identity(mean[0],    name="plot/eval/mean")
+
+    self.plot_eval["eval_actions"] = {
+      "a_mean": dict(height=p_mean, a=p_a),
+    }
+
+    return action
+
+
+
+class BstrapDQN(BaseBstrapDQN):
+
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+
+    # Custom TF Tensors and Ops
+    self._active_head   = None
+    self._set_act_head  = None
+
+
+  def build(self):
+    self._active_head   = tf.Variable([0], trainable=False, name="active_head")
+    sample_head         = tf.random_uniform(shape=[1], maxval=self.n_heads, dtype=tf.int32)
+    self._set_act_head  = tf.assign(self._active_head, sample_head, name="set_act_head")
+    super().build()
+
+
+  def _act_train(self, agent_net, name):
+    """Select the greedy action from the selected head
+    Args:
+      agent_net: `tf.Tensor`, shape `[None, n_heads, n_actions]. The tensor output from
+        `self._nn_model()` for the agent
+    Returns:
+      `tf.Tensor` of shape `[None]`
+    """
+    # Get the Q function from the active head
+    head_mask = tf.one_hot(self._active_head, self.n_heads, dtype=tf.float32) # out: [1,    n_heads]
+    head_mask = tf.tile(head_mask, [tf.shape(agent_net)[0], 1])               # out: [None, n_heads]
+    head_mask = tf.expand_dims(head_mask, axis=-1)                            # out: [None, n_heads, 1]
+    q_head    = tf.reduce_sum(agent_net * head_mask, axis=1)                  # out: [None, n_actions]
+
+    # Compute the greedy action
+    action    = tf.argmax(q_head, axis=-1, output_type=tf.int32, name=name)
+    return action
+
+
+  def _act_eval(self, agent_net, name):
+    return self._act_eval_vote(agent_net, name)
+
+
+  def reset(self, sess):
     sess.run(self._set_act_head)
+
+
+
+class BstrapDQN_UCB(BaseBstrapDQN):
+  """UCB policy from Boostrapped DQN"""
+
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, n_stds=0.1):
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+    self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
+
+
+  def _act_train(self, agent_net, name):
+    mean    = tf.reduce_mean(agent_net, axis=1)
+    std     = agent_net - tf.expand_dims(mean, axis=-2)
+    std     = tf.sqrt(tf.reduce_mean(tf.square(std), axis=1))
+    action  = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32, name=name)
+
+    # Add debug histograms
+    tf.summary.histogram("debug/a_std",   std)
+    tf.summary.histogram("debug/a_mean",  mean)
+
+    return action
+
+
+  def _act_eval(self, agent_net, name):
+    return self._act_eval_vote(agent_net, name)
+
+
+
+class BstrapDQN_Ensemble(BaseBstrapDQN):
+  """Ensemble policy from Boostrapped DQN"""
+
+  def _act_train(self, agent_net, name):
+    # TODO: If plotting, self.plot_train will be empty
+    return self._act_eval_vote(agent_net, name)
+
+
+  def _act_eval(self, agent_net, name):
+    return tf.identity(self.a_train, name=name)

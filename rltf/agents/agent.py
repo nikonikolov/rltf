@@ -77,7 +77,7 @@ class Agent:
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
     self.eval_step      = 0             # Current agent eval step
 
-    self.layout         = plots_layout
+    self.plots_layout   = plots_layout
     self.built          = False
 
     # TensorFlow attributes
@@ -133,16 +133,19 @@ class Agent:
     self.tb_train_writer  = tf.summary.FileWriter(tb_dir, self.sess.graph)
     self.tb_eval_writer   = tf.summary.FileWriter(tb_dir)
 
+    # Configure the plot layout for recorded videos
+    if self.plots_layout is not None:
+      self._plots_layout()
+    else:
+      self.model.clear_plot_tensors()
+
     self.built = True
-    if self.layout:
-      self.plots_layout(self.layout)
 
 
-  def plots_layout(self, layout):
-    assert self.built
-    self.env_train_mon.conf_video_plots(layout=layout, train_tensors=self.model.plot_train,
+  def _plots_layout(self):
+    self.env_train_mon.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
       eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
-    self.env_eval_mon.conf_video_plots(layout=layout, train_tensors=self.model.plot_train,
+    self.env_eval_mon.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
       eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
 
 

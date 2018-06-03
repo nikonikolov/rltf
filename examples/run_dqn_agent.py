@@ -3,6 +3,8 @@ import tensorflow as tf
 from rltf.agents        import AgentDQN
 from rltf.envs          import wrap_dqn
 from rltf.models        import BstrapDQN
+from rltf.models        import BstrapDQN_UCB
+from rltf.models        import BstrapDQN_Ensemble
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
@@ -13,11 +15,12 @@ from rltf.schedules     import PiecewiseSchedule
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
 from rltf.utils         import cmdargs
+from rltf.utils         import layouts
 
 
 def parse_args():
 
-  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN"]
+  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -40,9 +43,11 @@ def parse_args():
     ('--huber-loss',    dict(default=True,   type=s2b,   help='use huber loss')),
     # ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
 
-    ('--eval-freq',     dict(default=250000,  type=int,   help='freq in # *agent* steps to run eval')),
-    ('--eval-len',      dict(default=125000,  type=int,   help='# *agent* steps to run eval each time')),
-    ('--eval-ep-steps', dict(default=None,    type=int,   help='max episode *env* steps in eval mode')),
+    ('--eval-freq',     dict(default=250000, type=int,   help='freq in # *agent* steps to run eval')),
+    ('--eval-len',      dict(default=125000, type=int,   help='# *agent* steps to run eval each time')),
+    ('--eval-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in eval mode')),
+
+    ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB')),
   ]
 
   return cmdargs.parse_args(args)
@@ -68,8 +73,9 @@ def make_agent():
 
   if   args.model in ["DQN", "DDQN"]:
     model_kwargs  = dict(huber_loss=args.huber_loss)
-  elif args.model == "BstrapDQN":
+  elif args.model in ["BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]:
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
+    if args.model in ["BstrapDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
   elif args.model == "C51":
     model_kwargs  = dict(V_min=-10, V_max=10, N=51)
   elif args.model == "QRDQN":
@@ -103,6 +109,8 @@ def make_agent():
   else:
     exploration = ConstSchedule(0.0)
 
+  if args.plot_video:
+    plots_layout = layouts.layouts.get(args.model, None)
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(
@@ -118,6 +126,7 @@ def make_agent():
     log_freq=args.log_freq,
     save_freq=args.save_freq,
     restore_dir=restore_dir,
+    plots_layout=plots_layout,
     confirm_kill=args.confirm_kill,
     reuse_regex=args.reuse_regex,
   )

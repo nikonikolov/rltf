@@ -124,6 +124,13 @@ class Model:
     return train_vars
 
 
+  def clear_plot_tensors(self):
+    """Clear dicts with plot tensors in order to avoid running them every time"""
+    self.plot_train.data = dict()
+    self.plot_eval.data  = dict()
+    self.plot_data.data  = dict()
+
+
   @property
   def name(self):
     """
