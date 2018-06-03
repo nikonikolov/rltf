@@ -75,7 +75,7 @@ class Agent:
 
     self.eval_freq      = eval_freq     # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
-    self.eval_step      = 1             # Current agent eval step
+    self.eval_step      = 0             # Current agent eval step
 
     self.layout         = plots_layout
     self.built          = False
