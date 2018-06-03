@@ -200,13 +200,6 @@ class DDPG(Model):
     return control_deps
 
 
-  def _restore(self, graph):
-    # Retrieve the Ops for changing between train and eval modes
-    self._training  = graph.get_tensor_by_name("training:0")
-    self._init_op   = graph.get_operation_by_name("init_op")
-    self._action    = graph.get_tensor_by_name("action:0")
-
-
   def initialize(self, sess):
     """Initialize the model. See Model.initialize()"""
     sess.run(self._init_op)

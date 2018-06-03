@@ -57,52 +57,6 @@ class Model:
     self._done_ph     = tf.placeholder(tf.bool,         [None],                  name="done_ph")
 
 
-  def restore(self, graph):
-    """Restore the Variables, placeholders and Ops needed by the class so that
-    it can operate in exactly the same way as if `self.build()` was called
-    Args:
-      graph: tf.Graph. Graph, restored from a checkpoint
-    """
-
-    # Get Ops
-    try:
-      self._train_op       = graph.get_operation_by_name("train_op")
-    except KeyError:
-      pass
-    try:
-      self._update_target  = graph.get_operation_by_name("update_target")
-    except KeyError:
-      pass
-
-    # Get Placeholders
-    try:
-      self._obs_t_ph   = graph.get_tensor_by_name("obs_t_ph:0")
-    except KeyError:
-      pass
-
-    try:
-      self._act_t_ph   = graph.get_tensor_by_name("act_t_ph:0")
-    except KeyError:
-      pass
-
-    try:
-      self._rew_t_ph   = graph.get_tensor_by_name("rew_t_ph:0")
-    except KeyError:
-      pass
-
-    try:
-      self._obs_tp1_ph = graph.get_tensor_by_name("obs_tp1_ph:0")
-    except KeyError:
-      pass
-
-    try:
-      self._done_ph    = graph.get_tensor_by_name("done_ph:0")
-    except KeyError:
-      pass
-
-    self._restore(graph)
-
-
   def initialize(self, sess):
     """Run additional initialization for the model when it was created via
     self.build(). Assumes that tf.global_variables_initializer() and
@@ -142,10 +96,6 @@ class Model:
     raise NotImplementedError()
 
 
-  def _restore(self, graph):
-    raise NotImplementedError()
-
-
   def exclude_train_vars(self, regex):
     """Set a regex to match and exclude model variables which should not be trained
     Args:
@@ -172,6 +122,13 @@ class Model:
       else:
         logger.info("No variables in scope '%s' will be excluded from training:", scope)
     return train_vars
+
+
+  def clear_plot_tensors(self):
+    """Clear dicts with plot tensors in order to avoid running them every time"""
+    self.plot_train.data = dict()
+    self.plot_eval.data  = dict()
+    self.plot_data.data  = dict()
 
 
   @property

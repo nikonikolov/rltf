@@ -232,12 +232,6 @@ class BstrapQRDQN(BaseBstrapQRDQN):
     sess.run(self._set_act_head)
 
 
-  def _restore(self, graph):
-    super()._restore(graph)
-    self._active_head   = graph.get_tensor_by_name("active_head:0")
-    self._set_act_head  = graph.get_operation_by_name("set_act_head")
-
-
 
 class BstrapQRDQN_IDS(BaseBstrapQRDQN):
   """IDS policy from Boostrapped QRDQN"""
@@ -278,13 +272,3 @@ class BstrapQRDQN_IDS(BaseBstrapQRDQN):
     q = tf.reduce_mean(agent_net, axis=-1)    # out: [1, n_heads, n_actions]
     return self._act_eval_greedy(q, name)
     # return self._act_eval_vote(q, name)
-
-
-  def _restore(self, graph):
-    # Ulgy way to restore IDS data
-    BstrapDQN_IDS._restore(self, graph)
-
-    a     = graph.get_tensor_by_name("plot/train/a:0")
-    rho2  = graph.get_tensor_by_name("plot/train/rho2:0")
-
-    self.plot_train["train_actions"]["a_rho2"] = dict(height=rho2, a=a)

@@ -133,12 +133,6 @@ class BaseDQN(Model):
     return train_op
 
 
-  def _restore(self, graph):
-    # Get the train and eval action tensors
-    self.a_train  = graph.get_tensor_by_name("a_train:0")
-    self.a_eval   = graph.get_tensor_by_name("a_eval:0")
-
-
   def initialize(self, sess):
     """Initialize the model. See Model.initialize()"""
     sess.run(self._update_target)

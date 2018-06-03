@@ -28,6 +28,10 @@ class OffPolicyAgent(Agent):
     self._eval_start.clear()
     self._eval_done.clear()
 
+    # Trick to avoid thread synchronization when no evaluation should be run
+    if self.eval_len <= 0 or self.eval_freq <=0:
+      self.eval_freq = self.stop_step + 2
+
 
   def train(self):
     # Start threads
@@ -100,7 +104,7 @@ class OffPolicyAgent(Agent):
     return True
 
 
-  def _restore(self, graph):
+  def _restore(self):
     self.replay_buf.restore(self.model_dir)
 
 
@@ -130,21 +134,15 @@ class OffPolicyAgent(Agent):
 
   def _eval(self):
 
-    start_step  = self.eval_step
+    start_step  = self.eval_step + 1
     eval_runs   = int(self.stop_step / self.eval_freq)
     stop_step   = eval_runs * self.eval_len
 
-    if start_step >= stop_step:
-      logger.warning("Evaluation frequency too big or evaluation length too small")
-      logger.warning("Evaluation will not be run")
-      # Thread should continue running for synchronization purposes
-      for _ in range(eval_runs):
-        if self._terminate:
-          self._signal_eval_done()
-          break
-        self._wait_eval_start()
-        self._signal_eval_done()
+    if eval_runs <= 0:
       return
+
+    if start_step >= stop_step:
+      raise ValueError("Evaluation length too small")
 
     self._wait_eval_start()             # Wait for the eval run to start
     obs = self.env_eval.reset()         # Reset the environment

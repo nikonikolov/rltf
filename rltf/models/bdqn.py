@@ -106,12 +106,6 @@ class BDQN(DDQN):
     return super()._build_train_op(optimizer, loss, agent_vars, name)
 
 
-  def _restore(self, graph):
-    super()._restore(graph)
-    self.train_blr  = graph.get_operation_by_name("train_blr")
-    self.reset_blr  = graph.get_operation_by_name("reset_blr")
-
-
 
 class BDQN_TS(BDQN):
 
@@ -134,12 +128,6 @@ class BDQN_TS(BDQN):
 
   def reset(self, sess):
     sess.run(self.reset_ts)
-
-
-  def _restore(self, graph):
-    super()._restore(graph)
-    self.reset_ts   = graph.get_operation_by_name("reset_ts")
-
 
 
 
@@ -249,26 +237,3 @@ class BDQN_IDS(BDQN):
     }
 
     return action
-
-
-  def _restore(self, graph):
-    super()._restore(graph)
-
-    # Restore plot_train
-    mean  = graph.get_tensor_by_name("plot/train/mean:0")
-    std   = graph.get_tensor_by_name("plot/train/std:0")
-    ids   = graph.get_tensor_by_name("plot/train/ids:0")
-    a     = graph.get_tensor_by_name("plot/train/a:0")
-
-    self.plot_train["train_actions"] = {
-      "a_mean": dict(height=mean, a=a),
-      "a_std":  dict(height=std,  a=a),
-      "a_ids":  dict(height=ids,  a=a),
-    }
-
-    mean  = graph.get_tensor_by_name("plot/eval/mean:0")
-    a     = graph.get_tensor_by_name("plot/eval/a:0")
-
-    self.plot_eval["eval_actions"] = {
-      "a_mean": dict(height=mean, a=a),
-    }

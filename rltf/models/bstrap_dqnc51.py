@@ -235,13 +235,3 @@ class BstrapDQNC51_IDS(BaseBstrapDQNC51):
     q = agent_net[0]
     return self._act_eval_greedy(q, name)
     # return self._act_eval_vote(q, name)
-
-
-  def _restore(self, graph):
-    # Ulgy way to restore IDS data
-    BstrapDQN_IDS._restore(self, graph)
-
-    a     = graph.get_tensor_by_name("plot/train/a:0")
-    rho2  = graph.get_tensor_by_name("plot/train/rho2:0")
-
-    self.plot_train["train_actions"]["a_rho2"] = dict(height=rho2, a=a)

@@ -217,21 +217,6 @@ class BaseBstrapDQN(BaseDQN):
     return action
 
 
-  def _restore_act_eval_plot(self, graph):
-    a = graph.get_tensor_by_name("plot/eval/a:0")
-
-    try:
-      vote = graph.get_tensor_by_name("plot/eval/vote:0")
-      self.plot_eval["eval_actions"] = {
-        "a_vote": dict(height=vote, a=a),
-      }
-    except KeyError:
-      mean = graph.get_tensor_by_name("plot/eval/mean:0")
-      self.plot_eval["eval_actions"] = {
-        "a_mean": dict(height=mean, a=a),
-      }
-
-
 
 class BstrapDQN(BaseBstrapDQN):
 
@@ -276,12 +261,6 @@ class BstrapDQN(BaseBstrapDQN):
 
   def reset(self, sess):
     sess.run(self._set_act_head)
-
-
-  def _restore(self, graph):
-    super()._restore(graph)
-    self._active_head   = graph.get_tensor_by_name("active_head:0")
-    self._set_act_head  = graph.get_operation_by_name("set_act_head")
 
 
 
@@ -405,22 +384,3 @@ class BstrapDQN_IDS(BaseBstrapDQN):
   def _act_eval(self, agent_net, name):
     # return self._act_eval_vote(agent_net, name)
     return self._act_eval_greedy(agent_net, name)
-
-
-  def _restore(self, graph):
-    super()._restore(graph)
-
-    # Restore plot_train
-    mean  = graph.get_tensor_by_name("plot/train/mean:0")
-    std   = graph.get_tensor_by_name("plot/train/std:0")
-    ids   = graph.get_tensor_by_name("plot/train/ids:0")
-    a     = graph.get_tensor_by_name("plot/train/a:0")
-
-    self.plot_train["train_actions"] = {
-      "a_mean": dict(height=mean, a=a),
-      "a_std":  dict(height=std,  a=a),
-      "a_ids":  dict(height=ids,  a=a),
-    }
-
-    # Restore plot_eval
-    self._restore_act_eval_plot(graph)

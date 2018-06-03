@@ -32,9 +32,9 @@ from rltf.utils         import layouts
 
 def parse_args():
 
-  model_types = ["DQN", "DDQN", "C51", "QRDQN", "QRDQNTS", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_IDS",
-                 "BstrapDQN_Ensemble", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS",
-                 "BDQN_TS", "C51TS", "BstrapC51", "BstrapC51_IDS", "BstrapDQNC51_IDS"]
+  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble",
+                 "BstrapDQN_IDS", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS",
+                 "BDQN_TS", "BstrapC51", "BstrapC51_IDS", "BstrapDQNC51_IDS", "QRDQNTS", "C51TS"]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -55,11 +55,10 @@ def parse_args():
     ('--update-freq',   dict(default=10000,  type=int,   help='update target freq in # *param updates*')),
     ('--stop-step',     dict(default=5*10**7,type=int,   help='steps to run the *agent* for')),
     ('--huber-loss',    dict(default=True,   type=s2b,   help='use huber loss')),
-    # ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
 
-    ('--eval-freq',     dict(default=250000,  type=int,   help='freq in # *agent* steps to run eval')),
-    ('--eval-len',      dict(default=125000,  type=int,   help='# *agent* steps to run eval each time')),
-    ('--eval-ep-steps', dict(default=None,    type=int,   help='max episode *env* steps in eval mode')),
+    ('--eval-freq',     dict(default=250000, type=int,   help='freq in # *agent* steps to run eval')),
+    ('--eval-len',      dict(default=125000, type=int,   help='# *agent* steps to run eval each time')),
+    ('--eval-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in eval mode')),
 
     ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB and IDS')),
     ('--tau',           dict(default=0.01,   type=float, help='BLR prior covariance')),
@@ -143,6 +142,8 @@ def make_agent():
   else:
     exploration = ConstSchedule(0.0)
 
+  if args.plot_video:
+    plots_layout = layouts.layouts.get(args.model, None)
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(
@@ -158,6 +159,7 @@ def make_agent():
     log_freq=args.log_freq,
     save_freq=args.save_freq,
     restore_dir=restore_dir,
+    plots_layout=plots_layout,
     confirm_kill=args.confirm_kill,
     reuse_regex=args.reuse_regex,
   )
@@ -192,9 +194,6 @@ def main():
 
   # Build the agent and the TF graph
   dqn_agent.build()
-
-  if args.plot_video and args.model in layouts.layouts:
-    dqn_agent.plots_layout(layouts.layouts[args.model])
 
   # Train or eval the agent
   if args.mode == 'train':
