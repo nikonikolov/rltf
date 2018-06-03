@@ -11,9 +11,9 @@ current distinctive features are:
 - Unified framework for algorithm implementation and reusable modules
 - Easy control over algorithm behavior
 - Detailed logs of hyperparameters, training and evaluation scores
-- TensorBoard plots. Configurable matplotlib plots coming soon
+- Detailed TensorBoard plots to help debugging. Episode videos recorded with plots of network output
 - Saving network weights, train/eval scores or any additional custom metrics
-- Restoring the training process from where it stopped or retraining on a new task
+- Restoring the training process from where it stopped, retraining on a new task or fine-tuning
 
 All currently-implemented algorithms achieve competitive performance with results
 reported in the original papers. While all implementations are as close as
@@ -39,17 +39,19 @@ pip package coming soon
 
 ## Implemented Algorithms
 
-| Algorithm     | Model                             | Agent                                       | Orignal Paper |
-| ---           | ---                               | ---                                         | --- |
-| DQN           | [dqn.py](rltf/models/dqn.py)      | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [DQN](https://www.nature.com/articles/nature14236) |
-| Double DQN    | [ddqn.py](rltf/models/ddqn.py)    | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [Double DQN](https://arxiv.org/abs/1509.06461) |
-| Dueling DQN   | next                              | next                                        | [Dueling DQN](https://arxiv.org/abs/1511.06581) |
-| C51           | [c51.py](rltf/models/c51.py)      | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [C51](https://arxiv.org/abs/1707.06887) |
-| QR-DQN        | [qrdqn.py](rltf/models/qrdqn.py)  | [dqn_agent.py](rltf/agents/dqn_agent.py)    | [QR-DQN](https://arxiv.org/abs/1710.10044) |
-| DDPG          | [ddpg.py](rltf/models/ddpg.py)    | [ddpg_agent.py](rltf/agents/ddpg_agent.py)  | [DDPG](https://arxiv.org/abs/1509.02971) |
-| NAF           | next                              | next                                        | [NAF](https://arxiv.org/abs/1603.00748) |
-| Bootstrapped DQN | [bstrap_dqn.py](rltf/models/bstrap_dqn.py) | [dqn_agent.py](rltf/agents/dqn_agent.py) | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf) |
-| PPO           | next                              | next                                        | [PPO](https://arxiv.org/abs/1707.06347) |
+| Algorithm                                                 | Model                                          | Agent   |
+| ---                                                       | ---                                            | ---     |
+| [DQN](https://www.nature.com/articles/nature14236)        | [DQN](rltf/models/dqn.py)                      | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [Double DQN](https://arxiv.org/abs/1509.06461)            | [DDQN](rltf/models/ddqn.py)                    | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [Dueling DQN](https://arxiv.org/abs/1511.06581)           | next                                           | next                                       |
+| [C51](https://arxiv.org/abs/1707.06887)                   | [C51](rltf/models/c51.py)                      | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [QR-DQN](https://arxiv.org/abs/1710.10044)                | [QRDQN](rltf/models/qrdqn.py)                  | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [DDPG](https://arxiv.org/abs/1509.02971)                  | [DDPG](rltf/models/ddpg.py)                    | [ddpg_agent.py](rltf/agents/ddpg_agent.py) |
+| [NAF](https://arxiv.org/abs/1603.00748)                   | next                                           | next                                       |
+| [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf)  | [BstrapDQN](rltf/models/bstrap_dqn.py)         | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [Bootstrapped UCB](https://arxiv.org/pdf/1706.01502.pdf)  | [BstrapDQN_UCB](rltf/models/bstrap_dqn.py)     | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [DQN Ensemble](https://arxiv.org/pdf/1706.01502.pdf)      | [BstrapDQN_Ensemble](rltf/models/bstrap_dqn.py)| [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [PPO](https://arxiv.org/abs/1707.06347)                   | next                                           | next                                       |
 
 Other algorithms which are also coming soon:
 - [TRPO](https://arxiv.org/abs/1502.05477)
