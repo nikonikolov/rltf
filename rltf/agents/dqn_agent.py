@@ -26,8 +26,7 @@ class AgentDQN(ParallelOffPolicyAgent):
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
       opt_conf: rltf.optimizers.OptimizerConf. Config for the network optimizer
       exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
-      update_target_freq: Period in number of parameter updates (not steps!) at which to update the
-        target net. Results in the period `train_freq * update_target_freq` number in number of step
+      update_target_freq: Period in number of agent steps at which to update the target net
       memory_size: int. Size of the replay buffer
       obs_len: int. How many environment observations comprise a single state.
       agent_kwargs: Keyword arguments that will be passed to the Agent base class
