@@ -109,8 +109,7 @@ def make_agent():
   else:
     exploration = ConstSchedule(0.0)
 
-  if args.plot_video:
-    plots_layout = layouts.layouts.get(args.model, None)
+  plots_layout = layouts.layouts.get(args.model, None) if args.plot_video else None
 
   # Set the Agent class keyword arguments
   agent_kwargs = dict(
