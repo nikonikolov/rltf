@@ -318,7 +318,8 @@ class BstrapDQN_IDS(BaseBstrapDQN):
   def _act_train(self, agent_net, name):
     mean      = tf.reduce_mean(agent_net, axis=1)
     zero_mean = agent_net - tf.expand_dims(mean, axis=-2)
-    var       = tf.reduce_mean(tf.square(zero_mean), axis=1)
+    # var       = tf.reduce_mean(tf.square(zero_mean), axis=1)
+    var       = tf.reduce_sum(tf.square(zero_mean), axis=1) / float(self.n_heads-1)
     std       = tf.sqrt(var)
     regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keepdims=True)
     regret    = regret - (mean - self.n_stds * std)

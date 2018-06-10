@@ -187,10 +187,18 @@ class BaseBstrapDQNC51(BaseBstrapDQN):
 
   def _compute_z_variance(self, agent_net):
     z       = agent_net[1]
+
+    # Var(X) = sum_x p(X)*[X - E[X]]^2
     q       = tf.reduce_sum(z * self.bins, axis=-1)
     center  = self.bins - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
     z_var   = tf.square(center) * z                       # out: [None, n_actions, N]
     z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
+
+    # Normalize the variance
+    a_var   = tf.reduce_sum(tf.square(z_var), axis=-1)    # out: [None]
+    a_var   = tf.expand_dims(tf.sqrt(a_var), axis=-1)     # out: [None, 1]
+    z_var   = z_var / a_var                               # out: [None, n_actions]
+
     return z_var
 
 
@@ -211,7 +219,8 @@ class BstrapDQNC51_IDS(BaseBstrapDQNC51):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
     z_var     = self._compute_z_variance(agent_net)           # out: [None, n_actions]
-    self.rho2 = tf.maximum(z_var + 1e-5, 1.0)
+    # self.rho2 = tf.maximum(z_var, 1.0)
+    self.rho2 = tf.maximum(z_var, 0.25)
     # self.rho2 = z_var + 1e-5
     # self.rho2 = 1.0
 
