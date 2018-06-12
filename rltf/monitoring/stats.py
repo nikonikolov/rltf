@@ -46,7 +46,6 @@ class StatsRecorder:
     # Evaluation statistics
     self.eval_ep_rews = []
     self.eval_ep_lens = []
-    self.eval_ep_inds = []      # Indices for the final episode in each eval run (exclusive index)
     self.eval_steps   = 0       # Total number of environment steps in eval mode
     self.eval_stats   = None    # A dictionary with runtime statistics about evaluation
     self.eval_ep_id   = 0
@@ -55,6 +54,7 @@ class StatsRecorder:
     self.eval_run_lens      = None  # Episode lengths of the current eval run
     self.eval_scores_rews   = []    # Evaluation scores so far
     self.eval_scores_steps  = []    # The final agent step of each evaluation score
+    self.eval_scores_inds   = []    # Indices for the final episode in each eval run (exclusive index)
 
     # Runtime variables
     self.ep_reward  = None
@@ -289,7 +289,7 @@ class StatsRecorder:
 
       self._write_npy("eval_ep_rews.npy", np.asarray(self.eval_ep_rews, dtype=np.float32))
       self._write_npy("eval_ep_lens.npy", np.asarray(self.eval_ep_lens, dtype=np.int32))
-      self._write_npy("eval_ep_inds.npy", np.asarray(self.eval_ep_inds, dtype=np.int32))
+      self._write_npy("eval_scores_inds.npy",  np.asarray(self.eval_scores_inds, dtype=np.int32))
       self._write_npy("eval_scores_rews.npy",  np.asarray(self.eval_scores_rews,  dtype=np.float32))
       self._write_npy("eval_scores_steps.npy", np.asarray(self.eval_scores_steps, dtype=np.int32))
 
@@ -313,7 +313,7 @@ class StatsRecorder:
 
       self.eval_ep_rews = self._read_npy("eval_ep_rews.npy")
       self.eval_ep_lens = self._read_npy("eval_ep_lens.npy")
-      self.eval_ep_inds = self._read_npy("eval_ep_inds.npy")
+      self.eval_scores_inds   = self._read_npy("eval_scores_inds.npy")
       self.eval_scores_rews   = self._read_npy("eval_scores_rews.npy")
       self.eval_scores_steps  = self._read_npy("eval_scores_steps.npy")
 
@@ -413,14 +413,14 @@ class StatsRecorder:
     else:
       best_agent = False
 
-    # Append the evaluation score data
-    self.eval_scores_rews.append(score_mean)
-    self.eval_scores_steps.append(t)
-
     # Append the episode statistics
     self.eval_ep_rews += self.eval_run_rews
     self.eval_ep_lens += self.eval_run_lens
-    self.eval_ep_inds.append(len(self.eval_ep_rews))
+
+    # Append the evaluation score data
+    self.eval_scores_rews.append(score_mean)
+    self.eval_scores_steps.append(t)
+    self.eval_scores_inds.append(len(self.eval_ep_rews))
 
     return best_agent
 
