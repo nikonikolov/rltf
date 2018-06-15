@@ -221,9 +221,12 @@ class BaseBstrapC51(BaseBstrapDQN):
     z_var   = tf.reduce_sum(z_var, axis=1) / float(self.n_heads-1)  # out: [None, n_actions]
 
     # Normalize the variance
-    a_var   = tf.reduce_sum(tf.square(z_var), axis=-1)    # out: [None]
-    a_var   = tf.expand_dims(tf.sqrt(a_var), axis=-1)     # out: [None, 1]
-    z_var   = z_var / a_var                               # out: [None, n_actions]
+    # a_var   = tf.reduce_mean(tf.square(z_var), axis=-1)   # out: [None]
+    # a_var   = tf.expand_dims(tf.sqrt(a_var), axis=-1)     # out: [None, 1]
+    # z_var   = z_var / a_var                               # out: [None, n_actions]
+    mean    = tf.reduce_mean(z_var, axis=-1, keep_dims=True)  # out: [None, 1]
+    z_var   = z_var / mean                                    # out: [None, n_actions]
+
     return z_var
 
 
