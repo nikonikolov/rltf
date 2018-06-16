@@ -130,8 +130,8 @@ class Agent:
 
     # Create TensorBoard summary writers
     tb_dir = os.path.join(self.model_dir, "tf/tb/")
-    self.tb_train_writer  = tf.summary.FileWriter(tb_dir, self.sess.graph)
-    self.tb_eval_writer   = tf.summary.FileWriter(tb_dir)
+    self.tb_train_writer  = tf.summary.FileWriter(tb_dir, self.sess.graph, filename_suffix=".train")
+    self.tb_eval_writer   = tf.summary.FileWriter(tb_dir, filename_suffix=".eval")
 
     # Configure the plot layout for recorded videos
     if self.plots_layout is not None:
