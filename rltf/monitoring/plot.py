@@ -260,12 +260,10 @@ class VideoPlotter(gym.Wrapper):
       # Create the figure
       fig     = Figure(figsize=(width/dpi, height/dpi), dpi=dpi)
       canvas  = FigureCanvas(fig)
-      # Create subplots; axes is a list
-      axes    = fig.subplots(**fconf["subplots"])
-
-      # Create a list when a single subplot
-      if not isinstance(axes, np.ndarray):
-        axes = [axes]
+      # Create subplots; axes is always a 2D array
+      axes    = fig.subplots(**fconf["subplots"], squeeze=False)
+      # Squeeze the axes in a list
+      axes    = [ax for r in axes for ax in r]
 
       assert len(axes) == len(fconf["subplots_conf"])
 
