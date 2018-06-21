@@ -63,7 +63,6 @@ def parse_args():
     ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB and IDS')),
     ('--tau',           dict(default=0.01,   type=float, help='BLR prior covariance')),
     ('--sigma-e',       dict(default=1.0,    type=float, help='BLR observation noise')),
-    ('--policy',        dict(default="deterministic", type=str, choices=["stochastic", "deterministic"])),
   ]
 
   return cmdargs.parse_args(args)
@@ -93,22 +92,19 @@ def make_agent():
   elif args.model in ["BstrapDQN", "BstrapDQN_IDS", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]:
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
     if args.model in ["BstrapDQN_IDS", "BstrapDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
-    if args.model == "BstrapDQN_IDS": model_kwargs["policy"] = args.policy
   elif args.model in ["BDQN", "BDQN_TS", "BDQN_IDS", "BDQN_UCB"]:
     model_kwargs  = dict(huber_loss=args.huber_loss, sigma_e=args.sigma_e, tau=args.tau)
     if args.model in ["BDQN_IDS", "BDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
-    if args.model == "BDQN_IDS": model_kwargs["policy"] = args.policy
     agent = AgentBDQN
   elif args.model in ["BstrapC51", "BstrapC51_IDS", "BstrapDQNC51_IDS"]:
     model_kwargs  = dict(n_heads=args.n_heads, V_min=-10, V_max=10, N=51)
     if args.model in ["BstrapC51_IDS", "BstrapDQNC51_IDS"]:
       model_kwargs["n_stds"] = args.n_stds
-      model_kwargs["policy"] = args.policy
   elif args.model in ["BstrapQRDQN", "BstrapQRDQN_IDS"]:
     model_kwargs  = dict(n_heads=args.n_heads, N=200, k=int(args.huber_loss))
     if args.model == "BstrapQRDQN_IDS":
       model_kwargs["n_stds"] = args.n_stds
-      model_kwargs["policy"] = args.policy
+      model_kwargs["policy"] = "determinisitc"
   elif args.model in ["C51", "C51TS"]:
     model_kwargs  = dict(V_min=-10, V_max=10, N=51)
   elif args.model in ["QRDQN", "QRDQNTS"]:

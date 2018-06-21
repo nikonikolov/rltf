@@ -195,25 +195,19 @@ class BaseBstrapDQNC51(BaseBstrapDQN):
     z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
 
     # Normalize the variance
-    # a_var   = tf.reduce_mean(tf.square(z_var), axis=-1)   # out: [None]
-    # a_var   = tf.expand_dims(tf.sqrt(a_var), axis=-1)     # out: [None, 1]
-    # z_var   = z_var / a_var                               # out: [None, n_actions]
-    mean    = tf.reduce_mean(z_var, axis=-1, keep_dims=True)  # out: [None, 1]
-    z_var   = z_var / mean                                    # out: [None, n_actions]
-
+    # mean    = tf.reduce_mean(z_var, axis=-1, keep_dims=True)  # out: [None, 1]
+    # z_var   = z_var / mean                                    # out: [None, n_actions]
     return z_var
 
 
 
 class BstrapDQNC51_IDS(BaseBstrapDQNC51):
-  """IDS policy from Boostrapped QRDQN"""
+  """IDS policy from Boostrapped DQN-C51"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, policy, n_stds=0.1):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, n_stds=0.1):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N)
 
-    assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
-    self.policy = policy
     self.rho2   = None
 
 
@@ -221,10 +215,7 @@ class BstrapDQNC51_IDS(BaseBstrapDQNC51):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
     z_var     = self._compute_z_variance(agent_net)           # out: [None, n_actions]
-    # self.rho2 = tf.maximum(z_var, 1.0)
     self.rho2 = tf.maximum(z_var, 0.25)
-    # self.rho2 = z_var + 1e-5
-    # self.rho2 = 1.0
 
     # Compute the IDS action - ugly way
     action    = BstrapDQN_IDS._act_train(self, agent_net[0], name)
@@ -245,4 +236,3 @@ class BstrapDQNC51_IDS(BaseBstrapDQNC51):
   def _act_eval(self, agent_net, name):
     q = agent_net[0]
     return self._act_eval_greedy(q, name)
-    # return self._act_eval_vote(q, name)

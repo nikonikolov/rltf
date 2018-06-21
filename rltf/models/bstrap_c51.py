@@ -217,16 +217,12 @@ class BaseBstrapC51(BaseBstrapDQN):
     z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_heads, n_actions]
 
     # Take the sample mean of all heads
-    # z_var   = tf.reduce_mean(z_var, axis=1)               # out: [None, n_actions]
-    z_var   = tf.reduce_sum(z_var, axis=1) / float(self.n_heads-1)  # out: [None, n_actions]
+    z_var   = tf.reduce_mean(z_var, axis=1)               # out: [None, n_actions]
+    # z_var   = tf.reduce_sum(z_var, axis=1) / float(self.n_heads-1)  # out: [None, n_actions]
 
     # Normalize the variance
-    # a_var   = tf.reduce_mean(tf.square(z_var), axis=-1)   # out: [None]
-    # a_var   = tf.expand_dims(tf.sqrt(a_var), axis=-1)     # out: [None, 1]
-    # z_var   = z_var / a_var                               # out: [None, n_actions]
-    mean    = tf.reduce_mean(z_var, axis=-1, keep_dims=True)  # out: [None, 1]
-    z_var   = z_var / mean                                    # out: [None, n_actions]
-
+    # mean    = tf.reduce_mean(z_var, axis=-1, keep_dims=True)  # out: [None, 1]
+    # z_var   = z_var / mean                                    # out: [None, n_actions]
     return z_var
 
 
@@ -287,12 +283,10 @@ class BstrapC51(BaseBstrapC51):
 class BstrapC51_IDS(BaseBstrapC51):
   """IDS policy from Boostrapped QRDQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, policy, n_stds=0.1):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, n_stds=0.1):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N)
 
-    assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
-    self.policy = policy
     self.rho2   = None
 
 
@@ -324,4 +318,3 @@ class BstrapC51_IDS(BaseBstrapC51):
     bins  = tf.expand_dims(self.bins, axis=0)
     q     = tf.reduce_sum(agent_net * bins, axis=-1)      # out: [None, n_heads, n_actions]
     return self._act_eval_greedy(q, name)
-    # return self._act_eval_vote(q, name)

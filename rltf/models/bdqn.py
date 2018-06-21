@@ -157,17 +157,15 @@ class BDQN_UCB(BDQN):
 
 class BDQN_IDS(BDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, policy, n_stds=0.1):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, n_stds=0.1):
     """
     Args:
       n_stds: float. Scale constant for the uncertainty
     """
     super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean")
 
-    assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
     self.rho    = 1.0
-    self.policy = policy
 
 
   def _act_train(self, agent_net, name):
@@ -181,24 +179,8 @@ class BDQN_IDS(BDQN):
     ids_score = tf.div(regret_sq, info_gain)
     ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
 
-    if self.policy == "deterministic":
-      action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
-      a_ucb     = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
-    else:
-      scores  = -ids_score    # NOTE: Take -ids_score to make the min have highest probability
-      sample  = tf.random_uniform([tf.shape(ids_score)[0], 1], 0.0, 1.0)
-      pdf     = scores - tf.expand_dims(tf.reduce_max(scores, axis=-1), axis=-1)
-      pdf     = tf.nn.softmax(pdf, axis=-1)
-      cdf     = tf.cumsum(pdf, axis=-1, exclusive=True)
-      offset  = tf.where(cdf <= sample, tf.zeros_like(cdf), -2*tf.ones_like(cdf))
-      sample  = cdf + offset
-      action  = tf.argmax(sample, axis=-1, output_type=tf.int32, name=name)
-      a_ucb   = None
-
-
-      a_det   = tf.argmin(ids_score, axis=-1, output_type=tf.int32)
-      a_diff  = tf.reduce_mean(tf.cast(tf.equal(a_det, action), tf.float32))
-      tf.summary.scalar("debug/a_det_vs_stoch", a_diff)
+    action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
+    a_ucb     = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
 
     # Add debug histograms
     tf.summary.histogram("debug/a_mean",    mean)
@@ -207,9 +189,8 @@ class BDQN_IDS(BDQN):
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
 
-    if a_ucb is not None:
-      a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
-      tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
+    a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
+    tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
 
     # Set the plottable tensors for video. Use only the first action in the batch
     p_a     = tf.identity(action[0],    name="plot/train/a")
