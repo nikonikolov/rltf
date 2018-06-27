@@ -5,7 +5,7 @@ from rltf.models.tf_utils import woodburry_inverse
 
 class BLR(tf.layers.Layer):
 
-  def __init__(self, tau, sigma_e, mode="mean", bias=False, dtype=tf.float64, name=None):
+  def __init__(self, tau, sigma_e, mode="mean", w_dim=None, bias=False, dtype=tf.float64, name=None):
 
     super().__init__(trainable=False, dtype=dtype, name=name)
 
@@ -15,7 +15,7 @@ class BLR(tf.layers.Layer):
     self.beta   = 1.0 / self.sigma**2
     self.tau    = tau
     self.bias   = bias
-    self.w_dim  = None
+    self.w_dim  = w_dim
     self.mode   = mode
 
     # Custom TF Tensors and Ops
