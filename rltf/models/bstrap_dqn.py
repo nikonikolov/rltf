@@ -324,7 +324,6 @@ class BstrapDQN_IDS(BaseBstrapDQN):
     regret_sq = tf.square(regret)
     info_gain = tf.log(1 + var / self.rho2) + 1e-5
     ids_score = tf.div(regret_sq, info_gain)
-    # ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
     action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
 
     # Add debug histograms
