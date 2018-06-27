@@ -72,7 +72,7 @@ def get_env_name(model_dir):
 
 
 def get_model_dir(model, args):
-  return os.path.join(args.conf["model_dir"], model)
+  return os.path.join(args.conf["root_dir"], model)
 
 
 def read_conf(file):
@@ -84,6 +84,7 @@ def read_conf(file):
     conf = json.load(f, object_pairs_hook=OrderedDict)
 
   assert "legend" in conf
+  assert "root_dir" in conf
   for label, props in conf["legend"].items():
     assert "models" in props
     assert "color" in props
