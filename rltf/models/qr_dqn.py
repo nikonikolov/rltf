@@ -156,6 +156,7 @@ class QRDQN(BaseDQN):
     center  = agent_net - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
     z_var   = tf.reduce_mean(tf.square(center), axis=-1)  # out: [None, n_actions]
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
+    tf.summary.histogram("debug/a_rho2", z_var)
 
     return action
 
