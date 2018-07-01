@@ -2,3 +2,5 @@
 trained_models/
 /**/__pycache__
 Notes.md
+plot/conf
+plot/restore.py
