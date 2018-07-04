@@ -40,7 +40,10 @@ def parse_cmd_args():
   parser.add_argument('--eval-freq',  default=250000,   type=int,   help='freq of eval in # *agent* steps')
   parser.add_argument('--eval-len',   default=125000,   type=int,   help='len of eval in # *agent* steps')
   parser.add_argument('--n-eps',      default=100,      type=int,   help='number of eps to average')
+  parser.add_argument('--tag',        default="eval/mean_ep_rew",   type=str,
+                      help='TB tag to read if numpy data is missing')
 
+  parser.add_argument('--filter',     default=True,     type=bool,  help='filter data based on eval-freq')
   parser.add_argument('--tablemax',   default=True,     type=bool,  help='bold max scores in table output')
 
   args = parser.parse_args()
@@ -56,9 +59,6 @@ def parse_args():
   if args.filename is None:
     args.filename = args.conf
 
-  # TODO:
-  # - If custom conf file is provided, need to make sure path is correct
-  # - If the conf file contains custom arguments, they must be overwritten in args
   if "args" in conf and len(conf["args"].keys()) > 0:
     newargs  = conf["args"]
     argnames = vars(args)
@@ -145,7 +145,7 @@ def add_legend(fig, axes, envs, shrink):
 
 def limit_model_steps(model_dir, model_data, args):
   """Assumes model_data is in proper format:
-    - len(scores_rews) == len(scores_steps) == len(scores_inds)
+    - len(scores_steps) == len(scores_inds)
     - each index in the score arrays corresponds to a single eval run
     - the values in score_inds correspond to correct indices in ep_rews and ep_lens
   Args:
@@ -164,7 +164,6 @@ def limit_model_steps(model_dir, model_data, args):
   try:
     i = inds[0]+1
     model_data["scores_steps"] = model_data["scores_steps"][:i] * step_scale
-    model_data["scores_rews"]  = model_data["scores_rews"][:i]
     model_data["scores_inds"]  = model_data["scores_inds"][:i]
 
     # Remember that indices are exclusive
@@ -181,7 +180,6 @@ def limit_model_steps(model_dir, model_data, args):
     ep_lens       = list(model_data["ep_lens"])
     ep_rews       = list(model_data["ep_rews"])
     scores_steps  = list(model_data["scores_steps"] * step_scale)
-    scores_rews   = list(model_data["scores_rews"])
     scores_inds   = list(model_data["scores_inds"])
 
     period = args.eval_len
@@ -193,13 +191,11 @@ def limit_model_steps(model_dir, model_data, args):
       ep_rews.append(-float("inf"))
       ep_lens.append(0)
       scores_steps.append(s)
-      scores_rews.append(-float("inf"))
       scores_inds.append(len(ep_rews))
 
     model_data["ep_lens"]      = np.asarray(ep_lens, dtype=np.int32)
     model_data["ep_rews"]      = np.asarray(ep_rews, dtype=np.float32)
     model_data["scores_steps"] = np.asarray(scores_steps, dtype=np.int32)
-    model_data["scores_rews"]  = np.asarray(scores_rews, dtype=np.float32)
     model_data["scores_inds"]  = np.asarray(scores_inds, dtype=np.int32)
 
   return model_data
@@ -217,9 +213,9 @@ def n_episodes_averages(model_data, n_eps=100):
 
   assert len(rews)  > 0
 
-  return dict(scores_rews=model_data["scores_rews"],
-              scores_steps=model_data["scores_steps"],
-              mean_rews=rews,
+  return dict(
+              steps=model_data["scores_steps"],
+              scores=rews,
              )
 
 def filter_tb_data(x, y, args, model_dir):
@@ -229,6 +225,19 @@ def filter_tb_data(x, y, args, model_dir):
   max_step    = args.max_step
   step_scale  = args.step_scale
   period      = args.eval_len
+
+  if not args.filter:
+    if x[-1] < max_step:
+      sdiff = x[-1] - x[-2]
+      steps, scores = list(x), list(y)
+      for s in range(steps[-1], max_step, sdiff):
+        steps.append(s + sdiff)
+        scores.append(-float("inf"))
+    elif x[-1] > max_step:
+      data = [(step, score) for step, score in zip(x,y) if step <= max_step]
+      steps, scores = zip(*data)
+      steps, scores = list(steps), list(scores)
+    return dict(steps=steps, scores=scores)
 
   for s, r, s1, r1 in zip(x, y, x[1:], y[1:]):
     if s > max_step:
@@ -275,7 +284,7 @@ def filter_tb_data(x, y, args, model_dir):
 
   steps = np.asarray(steps) * step_scale
   rews  = np.asarray(rews)
-  return dict(scores_steps=steps, mean_rews=rews)
+  return dict(steps=steps, scores=rews)
 
 
 def process_run(model_dir, args):
@@ -291,20 +300,19 @@ def process_run(model_dir, args):
 
   model_path  = dataio.get_model_dir(model_dir, args)
   model_data  = dataio.read_model_data(model_path)
-  rews        = model_data["scores_rews"]
   steps       = model_data["scores_steps"]
   inds        = model_data["scores_inds"]
-  use_tb      = rews is None or steps is None or inds is None
+  use_tb      = steps is None or inds is None
 
   # Compute model data from stats
   if use_tb:
-    assert args.n_eps == 100
-    x, y       = dataio.read_tb_file(model_path, tag="eval/mean_ep_rew")
+    x, y       = dataio.read_tb_file(model_path, tag=args.tag)
     model_data = filter_tb_data(x, y, args, model_dir)
   # Compute model data from TensorBoard
   else:
     model_data = limit_model_steps(model_dir, model_data, args)
-    model_data = n_episodes_averages(model_data, n_eps=args.n_eps)
+    if args.filter:
+      model_data = n_episodes_averages(model_data, n_eps=args.n_eps)
 
   return model_data
 
@@ -315,7 +323,7 @@ def process_group(groups, args):
     groups: dict. Structure as returned from group_models
     fn: lambda. Takes model_dir as arguments and returns a dictionary of the processed model data
   Returns:
-    dict. Has the same structure as groups, except that model directory names are substituted with 
+    dict. Has the same structure as groups, except that model directory names are substituted with
       data read from the directory
   """
   for env, labels in groups.items():
@@ -427,8 +435,8 @@ def plot_figure(args):
       # runs = labels[model]
     for label, runs in labels.items():
       color = legend[label]["color"]
-      x = runs[0]["scores_steps"]
-      y = [mdata["mean_rews"] for mdata in runs]
+      x = runs[0]["steps"]
+      y = [mdata["scores"] for mdata in runs]
       print("Processing env: '%s', label: '%s'" % (env, label))
       score, y = average_models(x, y)
       plot_model(ax, x, y, label, color)

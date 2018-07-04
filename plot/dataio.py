@@ -85,6 +85,7 @@ def read_conf(file):
 
   assert "legend" in conf
   assert "root_dir" in conf
+  assert os.path.exists(conf["root_dir"])
   for label, props in conf["legend"].items():
     assert "models" in props
     assert "color" in props
@@ -104,23 +105,15 @@ def read_model_data(model_dir):
   ep_lens = read_npy(os.path.join(model_dir, "env_monitor/data/eval_ep_lens.npy"))
   ep_rews = read_npy(os.path.join(model_dir, "env_monitor/data/eval_ep_rews.npy"))
 
-  scores_rews  = read_npy(os.path.join(model_dir, "env_monitor/data/eval_scores_rews.npy"))
   scores_steps = read_npy(os.path.join(model_dir, "env_monitor/data/eval_scores_steps.npy"))
   scores_inds  = read_npy(os.path.join(model_dir, "env_monitor/data/eval_scores_inds.npy"))
 
-
-  if scores_rews is not None and scores_steps is not None and scores_inds is not None:
-    assert len(scores_rews) == len(scores_steps) == len(scores_inds)
-    # raise ValueError
+  if scores_steps is not None and scores_inds is not None:
+    assert len(scores_steps) == len(scores_inds)
     assert ep_lens is not None
     assert ep_rews is not None
 
-  # assert scores_rews  is not None
-  # assert scores_steps is not None
-  # assert scores_inds  is not None
-
-
-  return dict(scores_rews=scores_rews,
+  return dict(
               scores_steps=scores_steps,
               scores_inds=scores_inds,
               ep_rews=ep_rews,
@@ -128,7 +121,7 @@ def read_model_data(model_dir):
              )
 
 
-# TODO: Allow for reading histograms and for tags starting with "debug"
+# TODO: Allow for reading histograms
 def read_tb_file(model_dir, tag):
   """Read data from a tensorboard file
   Args:
@@ -143,7 +136,7 @@ def read_tb_file(model_dir, tag):
   x, y   = [], []
 
   # Check tag for correctness
-  assert tag.startswith("train/") or tag.startswith("eval/")
+  assert tag.startswith("train/") or tag.startswith("eval/") or tag.startswith("debug/")
 
   # Read TB file
   for file in files:
