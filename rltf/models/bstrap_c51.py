@@ -182,7 +182,7 @@ class BaseBstrapC51(BaseBstrapDQN):
     return target_z
 
 
-  def _compute_loss(self, estimate, target):
+  def _compute_loss(self, estimate, target, name):
     """
     Args:
       estimate: tf.Tensor, shape `[None, n_heads, N]`. Q-function estimate
@@ -203,7 +203,7 @@ class BaseBstrapC51(BaseBstrapDQN):
 
     losses = [compute_head_loss(z, target_z) for z, target_z in zip(estimates, targets)]
 
-    tf.summary.scalar("train/loss", tf.add_n(losses)/self.n_heads)
+    tf.summary.scalar(name, tf.add_n(losses)/self.n_heads)
 
     return losses
 
@@ -221,7 +221,7 @@ class BaseBstrapC51(BaseBstrapDQN):
     # z_var   = tf.reduce_sum(z_var, axis=1) / float(self.n_heads-1)  # out: [None, n_actions]
 
     # Normalize the variance
-    # mean    = tf.reduce_mean(z_var, axis=-1, keep_dims=True)  # out: [None, 1]
+    # mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
     # z_var   = z_var / mean                                    # out: [None, n_actions]
     return z_var
 

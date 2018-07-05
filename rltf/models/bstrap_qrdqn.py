@@ -121,7 +121,7 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     return target_z
 
 
-  def _compute_loss(self, estimate, target):
+  def _compute_loss(self, estimate, target, name):
     """
     Args:
       estimate: tf.Tensor, shape `[None, n_heads, N]`. Q-function estimate
@@ -168,7 +168,7 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
 
     losses = [compute_head_loss(z, target_z) for z, target_z in zip(estimates, targets)]
 
-    tf.summary.scalar("train/loss", tf.add_n(losses)/self.n_heads)
+    tf.summary.scalar(name, tf.add_n(losses)/self.n_heads)
 
     return losses
 
@@ -236,12 +236,10 @@ class BstrapQRDQN(BaseBstrapQRDQN):
 class BstrapQRDQN_IDS(BaseBstrapQRDQN):
   """IDS policy from Boostrapped QRDQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, policy, n_stds=0.1):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, n_stds=0.1):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, N, k)
 
-    assert policy in ["stochastic", "deterministic"]
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
-    self.policy = policy
     self.rho2   = None
 
 

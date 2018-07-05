@@ -12,6 +12,7 @@ from rltf.models.bstrap_dqn   import BstrapDQN_Ensemble
 from rltf.models.bstrap_dqnc51 import BstrapDQNC51_IDS
 from rltf.models.bstrap_qrdqn import BstrapQRDQN
 from rltf.models.bstrap_qrdqn import BstrapQRDQN_IDS
+from rltf.models.bstrap_dqnqr import BstrapDQNQR_IDS
 from rltf.models.c51          import C51
 from rltf.models.c51          import C51TS
 from rltf.models.ddpg         import DDPG

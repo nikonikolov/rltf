@@ -101,7 +101,7 @@ class QRDQN(BaseDQN):
     return target_z
 
 
-  def _compute_loss(self, estimate, target):
+  def _compute_loss(self, estimate, target, name):
     """Compute the QRDQN loss.
     Args:
       agent_net: `tf.Tensor`, shape `[None, N]. The tensor output from `self._compute_estimate()`
@@ -136,7 +136,7 @@ class QRDQN(BaseDQN):
     loss          = tf.reduce_sum(quantile_loss, axis=-1)
     loss          = tf.reduce_mean(loss)
 
-    tf.summary.scalar("train/loss", loss)
+    tf.summary.scalar(name, loss)
 
     return loss
 

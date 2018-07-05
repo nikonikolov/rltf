@@ -158,15 +158,16 @@ class C51(BaseDQN):
     return target_z
 
 
-  def _compute_loss(self, estimate, target):
+  def _compute_loss(self, estimate, target, name):
     z         = estimate
     target_z  = target
     entropy   = -tf.reduce_sum(target_z * tf.log(z), axis=-1)
     loss      = tf.reduce_mean(entropy)
 
-    tf.summary.scalar("train/loss", loss)
+    tf.summary.scalar(name, loss)
 
     return loss
+
 
   def _act_train(self, agent_net, name):
     # Compute the Q-function as expectation of Z; output shape [None, n_actions]
@@ -179,7 +180,7 @@ class C51(BaseDQN):
     z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
-    
+
     return action
 
 
