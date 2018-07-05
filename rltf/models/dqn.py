@@ -51,7 +51,7 @@ class BaseDQN(Model):
     target        = self._compute_target(target_net)
 
     # Compute the loss
-    loss          = self._compute_loss(estimate, target)
+    loss          = self._compute_loss(estimate, target, name="train/loss")
 
     train_vars    = self._trainable_variables(scope="agent_net")
     agent_vars    = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="agent_net")
@@ -124,7 +124,7 @@ class BaseDQN(Model):
     raise NotImplementedError()
 
 
-  def _compute_loss(self, estimate, target):
+  def _compute_loss(self, estimate, target, name):
     raise NotImplementedError()
 
 
@@ -257,10 +257,10 @@ class DQN(BaseDQN):
     return target_q
 
 
-  def _compute_loss(self, estimate, target):
+  def _compute_loss(self, estimate, target, name):
     if self.huber_loss:
       loss = tf.losses.huber_loss(target, estimate)
     else:
       loss = tf.losses.mean_squared_error(target, estimate)
-    tf.summary.scalar("train/loss", loss)
+    tf.summary.scalar(name, loss)
     return loss

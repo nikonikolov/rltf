@@ -106,7 +106,7 @@ class BaseBstrapDQN(BaseDQN):
     return target_q
 
 
-  def _compute_loss(self, estimate, target):
+  def _compute_loss(self, estimate, target, name):
     """
     Args: shape `[None, n_heads]`
     Returns:
@@ -120,7 +120,7 @@ class BaseBstrapDQN(BaseDQN):
     losses = tf.split(loss, self.n_heads, axis=-1)
     losses = [tf.reduce_mean(loss) for loss in losses]
 
-    tf.summary.scalar("train/loss", tf.add_n(losses)/self.n_heads)
+    tf.summary.scalar(name, tf.add_n(losses)/self.n_heads)
 
     return losses
 
