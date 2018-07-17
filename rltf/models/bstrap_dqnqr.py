@@ -160,6 +160,28 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     return train_op
 
 
+  # Propagate QR loss gradients
+  # def _build_train_op(self, optimizer, loss, agent_vars, name):
+  #   head_loss = loss[0]
+  #   z_loss    = loss[1]
+
+  #   # Update the Bootstrap heads variables. Do not backpropagate gradients to the conv layers
+  #   head_vars   = tf_utils.scope_vars(agent_vars, scope='agent_net/action_value')
+  #   head_grads  = tf.gradients(loss, head_vars)
+  #   head_grads  = list(zip(head_grads, head_vars))
+  #   train_heads = optimizer.apply_gradients(head_grads)
+  #   # heads_grads = optimizer.compute_gradients(head_loss, var_list=head_vars)
+  #   # train_heads = optimizer.minimize(head_loss, var_list=head_vars)
+
+  #   # Update the conv and the QRDQN head variables based on QRDQN loss
+  #   conv_vars = tf_utils.scope_vars(agent_vars, scope='agent_net/conv_net')
+  #   z_vars    = tf_utils.scope_vars(agent_vars, scope='agent_net/distribution_value')
+  #   train_z   = optimizer.minimize(z_loss, var_list=conv_vars+z_vars)
+
+  #   train_op  = tf.group(train_heads, train_z, name=name)
+  #   return train_op
+
+
   def _compute_z_variance(self, agent_net):
     z       = agent_net[1]
 
