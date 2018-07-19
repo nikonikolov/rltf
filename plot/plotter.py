@@ -13,6 +13,11 @@ import dataio
 PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FIG_DIR     = os.path.join(PROJECT_DIR, "figures")
 
+def _warning(message, category=UserWarning, filename='', lineno=-1, file=None, line=None):
+  print("[WARNING]: %s" % message)
+
+warnings.showwarning = _warning
+
 
 def parse_cmd_args():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -182,11 +187,11 @@ def limit_model_steps(model_dir, model_data, args):
     scores_steps  = list(model_data["scores_steps"] * step_scale)
     scores_inds   = list(model_data["scores_inds"])
 
-    period = args.eval_len
+    period = args.eval_freq
 
     while True:
       s = scores_steps[-1] + period
-      if s > max_step:
+      if s > max_step * step_scale:
         break
       ep_rews.append(-float("inf"))
       ep_lens.append(0)
@@ -196,7 +201,7 @@ def limit_model_steps(model_dir, model_data, args):
     model_data["ep_lens"]      = np.asarray(ep_lens, dtype=np.int32)
     model_data["ep_rews"]      = np.asarray(ep_rews, dtype=np.float32)
     model_data["scores_steps"] = np.asarray(scores_steps, dtype=np.int32)
-    model_data["scores_inds"]  = np.asarray(scores_inds, dtype=np.int32)
+    model_data["scores_inds"]  = np.asarray(scores_inds,  dtype=np.int32)
 
   return model_data
 
@@ -211,7 +216,7 @@ def n_episodes_averages(model_data, n_eps=100):
   rews    = [np.mean(eps) if len(eps) > 0 else -float("inf") for eps in rews]
   rews    = np.asarray(rews)
 
-  assert len(rews)  > 0
+  assert len(rews) > 0
 
   return dict(
               steps=model_data["scores_steps"],
@@ -304,11 +309,11 @@ def process_run(model_dir, args):
   inds        = model_data["scores_inds"]
   use_tb      = steps is None or inds is None
 
-  # Compute model data from stats
+  # Compute model data from TensorBoard
   if use_tb:
     x, y       = dataio.read_tb_file(model_path, tag=args.tag)
     model_data = filter_tb_data(x, y, args, model_dir)
-  # Compute model data from TensorBoard
+  # Compute model data from stats
   else:
     model_data = limit_model_steps(model_dir, model_data, args)
     if args.filter:
@@ -376,7 +381,7 @@ def plot_model(axes, x, y, label, color):
   """
   axes.plot(x, y["mean"], label=label, color=color)
   if "lo" in y and "hi" in y:
-    axes.fill_between(x, y["lo"], y["hi"], color=color, alpha=0.5)
+    axes.fill_between(x, y["lo"], y["hi"], color=color, alpha=0.3)
 
 
 def average_models(x, y):
