@@ -85,11 +85,13 @@ directory `trained_models/<model-name>/<env-id>_<date>_<time>`. For example:
 contain:
 - `run.log` - Log file with all logs from the training run
 - `params.txt` - Log containing the values of all parameter used
+- `git.diff` - Diff file with uncommited git changes
 - `env_monitor/data/` - data for the training and evaluation statistics. Can be used for plots later
 - `env_monitor/*.mp4` - video recordings of episodes, if any were made
-- `tf/tb_train/` - TensorBoard file with training data
-- `tf/tb_eval/` - TensorBoard file with evaluation data
-- `tf/` - will also contain the saved graph, which can be restored later
+- `tf/best_agent/` - the network weights which produced best performance
+- `tf/tb/` - TensorBoard files with training and evaluation data
+- `tf/` - the latest network weights
+- `buffer/` - the latest data of the replay buffer (if saved)
 
 
 ### DDPG
