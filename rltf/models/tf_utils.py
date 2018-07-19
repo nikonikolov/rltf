@@ -53,7 +53,7 @@ def scope_vars(var_list, scope):
 def huber_loss(x, delta=1.0):
   """Apply the function:
   ```
-  x^2 if |x| < delta else delta*(|x| - 0.5*delta)
+  0.5*x^2 if |x| < delta else delta*(|x| - 0.5*delta)
   ```
   """
   abs_x = tf.abs(x)

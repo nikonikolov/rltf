@@ -119,9 +119,9 @@ class QRDQN(BaseDQN):
 
     # Operate over last dimensions to get result for for theta_i
     z_diff        = tf.expand_dims(target_z, axis=-2) - tf.expand_dims(z, axis=-1)
-    indicator_fn  = tf.to_float(z_diff < 0.0)
+    indicator_fn  = tf.to_float(z_diff < 0.0)       # out: [None, N, N]
 
-    penalty_w     = mid_quantiles - indicator_fn
+    penalty_w     = mid_quantiles - indicator_fn    # out: [None, N, N]
 
     # Pure Quantile Regression Loss
     if self.k == 0:
@@ -131,10 +131,10 @@ class QRDQN(BaseDQN):
       penalty_w   = tf.abs(penalty_w)
       huber_loss  = tf_utils.huber_loss(z_diff, delta=np.float32(self.k))
 
-    quantile_loss = huber_loss * penalty_w
-    quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)
-    loss          = tf.reduce_sum(quantile_loss, axis=-1)
-    loss          = tf.reduce_mean(loss)
+    quantile_loss = huber_loss * penalty_w                    # out: [None, N, N]
+    quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)    # Expected loss for each quntile
+    loss          = tf.reduce_sum(quantile_loss, axis=-1)     # Sum loss over all quantiles
+    loss          = tf.reduce_mean(loss)                      # Average loss over the batch
 
     tf.summary.scalar(name, loss)
 

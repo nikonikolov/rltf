@@ -45,7 +45,7 @@ pip package coming soon
 | [Double DQN](https://arxiv.org/abs/1509.06461)            | [DDQN](rltf/models/ddqn.py)                    | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
 | [Dueling DQN](https://arxiv.org/abs/1511.06581)           | next                                           | next                                       |
 | [C51](https://arxiv.org/abs/1707.06887)                   | [C51](rltf/models/c51.py)                      | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
-| [QR-DQN](https://arxiv.org/abs/1710.10044)                | [QRDQN](rltf/models/qrdqn.py)                  | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
+| [QR-DQN](https://arxiv.org/abs/1710.10044)                | [QRDQN](rltf/models/qr_dqn.py)                 | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
 | [DDPG](https://arxiv.org/abs/1509.02971)                  | [DDPG](rltf/models/ddpg.py)                    | [ddpg_agent.py](rltf/agents/ddpg_agent.py) |
 | [NAF](https://arxiv.org/abs/1603.00748)                   | next                                           | next                                       |
 | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf)  | [BstrapDQN](rltf/models/bstrap_dqn.py)         | [dqn_agent.py](rltf/agents/dqn_agent.py)   |
