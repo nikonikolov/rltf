@@ -72,7 +72,7 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     # Careful: Make sure self._conv_out is set only during the right function call
     if "agent_net" in tf.get_variable_scope().name and self._conv_out is None: self._conv_out = x
 
-    # Build the C51 head
+    # Build the QRDQN head
     with tf.variable_scope("distribution_value"):
       z = build_z_head(x)
 
@@ -183,7 +183,7 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
 
 
   def _compute_z_variance(self, agent_net):
-    z       = agent_net[1]
+    z       = agent_net[1]                                    # out: [None, n_actions, N]
 
     # Var(X) = sum_x p(X)*[X - E[X]]^2
     z_mean  = tf.reduce_mean(z, axis=-1)                      # out: [None, n_actions]
