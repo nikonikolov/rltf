@@ -19,7 +19,7 @@ class VideoPlotter(gym.Wrapper):
     self.enabled  = False       # True if enabled for the episode
     self.allowed  = False       # True if layout is configured. If False, no rendering
     self.changed  = True
-    self.mode     = None        # Track the mode of the last episode
+    # self.mode     = None        # Track the mode of the last episode
     self.first_t  = True        # Track if the first train episode
     self.first_e  = True        # Track if the first eval episode
 
@@ -98,12 +98,12 @@ class VideoPlotter(gym.Wrapper):
       for name in self.figs:
         self.figs[name]["image"] = None
 
-      # NOTE: Clear the runnable tensors only for the mode that was run last time. This allows
-      # for one agent to interact simulatenously with 2 environments - eval and train
-      if self.mode == 't':
-        self.run_t_tensors.data = {}
-      else:
-        self.run_e_tensors.data = {}
+      # # NOTE: Clear the runnable tensors only for the mode that was run last time. This allows
+      # # for one agent to interact simulatenously with 2 environments - eval and train
+      # if self.mode == 't':
+      #   self.run_t_tensors.data = {}
+      # else:
+      #   self.run_e_tensors.data = {}
 
       self.image = None
 
@@ -118,7 +118,7 @@ class VideoPlotter(gym.Wrapper):
       self.image = np.ones(shape=[self.height, self.width, 3], dtype=np.uint8) * 255
       self.plot_data_id = id(self.plot_data.data)
 
-    self.mode = mode
+    # self.mode = mode
     self.enabled = enabled
     return self.env.reset(**kwargs)
 
