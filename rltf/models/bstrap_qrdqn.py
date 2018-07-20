@@ -36,7 +36,9 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     """
     n_actions = self.n_actions
     N         = self.N
-    init_glorot_normal = tf_utils.init_glorot_normal
+    # k_init    = tf_utils.init_dqn
+    k_init    = tf_utils.init_glorot_normal
+    # k_init    = tf_utils.init_default
 
     def build_bstrap_head(x):
       """ Build the head of the DQN network
@@ -58,8 +60,8 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
         `tf.Tensor` of shape `[batch_size, n_actions, N]`. Contains the Q-function distribution
           for each action
       """
-      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=init_glorot_normal())
-      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=init_glorot_normal())
+      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=k_init())
+      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=k_init())
       x = tf.reshape(x, [-1, n_actions, N])
       return x
 
