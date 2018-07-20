@@ -6,7 +6,8 @@ from rltf.models.bstrap_dqn import BstrapDQN_IDS
 from rltf.models            import tf_utils
 
 
-class BaseBstrapQRDQN(BaseBstrapDQN):
+class BaseDUBstrapQRDQN(BaseBstrapDQN):
+  """Base class for Double Uncertain Bootstrap QRDQN model"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k):
     """
@@ -35,7 +36,9 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     """
     n_actions = self.n_actions
     N         = self.N
-    init_glorot_normal = tf_utils.init_glorot_normal
+    # k_init    = tf_utils.init_dqn
+    k_init    = tf_utils.init_glorot_normal
+    # k_init    = tf_utils.init_default
 
     def build_head(x):
       """ Build the head of the QRDQN network
@@ -45,8 +48,8 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
         `tf.Tensor` of shape `[batch_size, 1, n_actions, N]`. Contains the Q-function distribution
           for each action
       """
-      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=init_glorot_normal())
-      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=init_glorot_normal())
+      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=k_init())
+      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=k_init())
       x = tf.reshape(x, [-1, n_actions, N])
       x = tf.expand_dims(x, axis=1)
       return x
@@ -181,7 +184,9 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     return z_var
 
 
-class BstrapQRDQN(BaseBstrapQRDQN):
+
+class DUBstrapQRDQN(BaseDUBstrapQRDQN):
+  """Double Uncertain Bootstrap QRDQN model with TS policy"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, N, k)
@@ -233,8 +238,8 @@ class BstrapQRDQN(BaseBstrapQRDQN):
 
 
 
-class BstrapQRDQN_IDS(BaseBstrapQRDQN):
-  """IDS policy from Boostrapped QRDQN"""
+class DUBstrapQRDQN_IDS(BaseDUBstrapQRDQN):
+  """Double Uncertain Bootstrap QRDQN model with IDS policy"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, n_stds=0.1):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, N, k)

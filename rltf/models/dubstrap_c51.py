@@ -5,7 +5,8 @@ from rltf.models.bstrap_dqn import BaseBstrapDQN
 from rltf.models.bstrap_dqn import BstrapDQN_IDS
 
 
-class BaseBstrapC51(BaseBstrapDQN):
+class BaseDUBstrapC51(BaseBstrapDQN):
+  """Base class for Double Uncertain Bootstrap C51 model"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N):
     """
@@ -227,7 +228,8 @@ class BaseBstrapC51(BaseBstrapDQN):
 
 
 
-class BstrapC51(BaseBstrapC51):
+class DUBstrapC51(BaseDUBstrapC51):
+  """Double Uncertain Bootstrap C51 model with TS policy"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N)
@@ -280,8 +282,8 @@ class BstrapC51(BaseBstrapC51):
 
 
 
-class BstrapC51_IDS(BaseBstrapC51):
-  """IDS policy from Boostrapped QRDQN"""
+class DUBstrapC51_IDS(BaseDUBstrapC51):
+  """Double Uncertain Bootstrap C51 model with IDS policy"""
 
   def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, n_stds=0.1):
     super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N)

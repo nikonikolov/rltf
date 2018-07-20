@@ -10,18 +10,18 @@ from rltf.models        import BstrapDQN
 from rltf.models        import BstrapDQN_IDS
 from rltf.models        import BstrapDQN_UCB
 from rltf.models        import BstrapDQN_Ensemble
-from rltf.models        import BstrapQRDQN
 from rltf.models        import BstrapDQNQR_IDS
-from rltf.models        import BstrapQRDQN_IDS
 from rltf.models        import BstrapDQNC51_IDS
-from rltf.models        import BstrapC51
-from rltf.models        import BstrapC51_IDS
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
 from rltf.models        import C51TS
 from rltf.models        import QRDQN
 from rltf.models        import QRDQNTS
+from rltf.models        import DUBstrapC51
+from rltf.models        import DUBstrapC51_IDS
+from rltf.models        import DUBstrapQRDQN
+from rltf.models        import DUBstrapQRDQN_IDS
 from rltf.optimizers    import OptimizerConf
 from rltf.schedules     import ConstSchedule
 from rltf.schedules     import PiecewiseSchedule
@@ -33,10 +33,11 @@ from rltf.utils         import layouts
 
 def parse_args():
 
-  model_types = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble",
-                 "BstrapDQN_IDS", "BstrapQRDQN", "BstrapQRDQN_IDS", "BDQN", "BDQN_UCB", "BDQN_IDS",
-                 "BDQN_TS", "BstrapC51", "BstrapC51_IDS", "BstrapDQNC51_IDS", "QRDQNTS", "C51TS",
-                 "BstrapDQNQR_IDS"]
+  model_types = ["DQN", "DDQN", "C51", "QRDQN",
+                 "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble", "BstrapDQN_IDS",
+                 "BstrapDQNC51_IDS", "BstrapDQNQR_IDS",
+                 "BDQN", "BDQN_TS", "BDQN_UCB", "BDQN_IDS", "C51TS", "QRDQNTS",
+                 "DUBstrapC51", "DUBstrapC51_IDS", "DUBstrapQRDQN", "DUBstrapQRDQN_IDS",]
   s2b         = cmdargs.str2bool
 
   args = [
@@ -94,23 +95,20 @@ def make_agent():
     model_kwargs  = dict(huber_loss=args.huber_loss)
   elif args.model in ["BstrapDQN", "BstrapDQN_IDS", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]:
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
-    if args.model in ["BstrapDQN_IDS", "BstrapDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
-  elif args.model in ["BDQN", "BDQN_TS", "BDQN_IDS", "BDQN_UCB"]:
-    model_kwargs  = dict(huber_loss=args.huber_loss, sigma_e=args.sigma_e, tau=args.tau)
-    if args.model in ["BDQN_IDS", "BDQN_UCB"]: model_kwargs["n_stds"] = args.n_stds
-    agent = AgentBDQN
-  elif args.model in ["BstrapC51", "BstrapC51_IDS", "BstrapDQNC51_IDS"]:
+  elif args.model in ["BstrapDQNC51_IDS", "DUBstrapC51", "DUBstrapC51_IDS",]:
     model_kwargs  = dict(n_heads=args.n_heads, V_min=-10, V_max=10, N=51)
-    if args.model in ["BstrapC51_IDS", "BstrapDQNC51_IDS"]:
-      model_kwargs["n_stds"] = args.n_stds
-  elif args.model in ["BstrapQRDQN", "BstrapQRDQN_IDS", "BstrapDQNQR_IDS"]:
+  elif args.model in ["BstrapDQNQR_IDS", "DUBstrapQRDQN", "DUBstrapQRDQN_IDS",]:
     model_kwargs  = dict(n_heads=args.n_heads, N=200, k=int(args.huber_loss))
-    if args.model in ["BstrapQRDQN_IDS", "BstrapDQNQR_IDS"]:
-      model_kwargs["n_stds"] = args.n_stds
   elif args.model in ["C51", "C51TS"]:
     model_kwargs  = dict(V_min=-10, V_max=10, N=51)
   elif args.model in ["QRDQN", "QRDQNTS"]:
     model_kwargs  = dict(N=200, k=int(args.huber_loss))
+  elif args.model in ["BDQN", "BDQN_TS", "BDQN_IDS", "BDQN_UCB"]:
+    model_kwargs  = dict(huber_loss=args.huber_loss, sigma_e=args.sigma_e, tau=args.tau)
+    agent         = AgentBDQN
+
+  if args.model.endswith("_IDS") or args.model.endswith("_UCB"):
+    model_kwargs["n_stds"] = args.n_stds
 
   model_kwargs["gamma"] = args.gamma
 
