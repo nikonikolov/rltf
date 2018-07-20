@@ -45,7 +45,8 @@ def parse_args():
 
     ('--eval-freq',     dict(default=250000, type=int,   help='freq in # *agent* steps to run eval')),
     ('--eval-len',      dict(default=125000, type=int,   help='# *agent* steps to run eval each time')),
-    ('--eval-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in eval mode')),
+    ('--eval-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in *eval* mode')),
+    ('--train-ep-steps',dict(default=None,   type=int,   help='max episode *env* steps in *train* mode')),
 
     ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB')),
   ]
@@ -91,7 +92,7 @@ def make_agent():
     model_dir=model_dir,
     video_freq=args.video_freq,
     wrap=wrap_dqn,
-    max_ep_steps_train=None,
+    max_ep_steps_train=args.train_ep_steps,
     max_ep_steps_eval=args.eval_ep_steps,
   )
   env_train, env_eval = maker.make_envs(**env_kwargs)

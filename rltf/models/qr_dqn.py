@@ -32,20 +32,22 @@ class QRDQN(BaseDQN):
     """
     n_actions = self.n_actions
     N         = self.N
-    init_glorot_normal = tf_utils.init_glorot_normal
+    k_init    = tf_utils.init_dqn
+    # k_init    = tf_utils.init_glorot_normal
+    # k_init    = tf_utils.init_default
 
     with tf.variable_scope("conv_net"):
       # original architecture
       x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu,
-                           kernel_initializer=init_glorot_normal())
+                           kernel_initializer=k_init())
       x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu,
-                           kernel_initializer=init_glorot_normal())
+                           kernel_initializer=k_init())
       x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu,
-                           kernel_initializer=init_glorot_normal())
+                           kernel_initializer=k_init())
     x = tf.layers.flatten(x)
     with tf.variable_scope("action_value"):
-      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=init_glorot_normal())
-      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=init_glorot_normal())
+      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=k_init())
+      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=k_init())
 
     x = tf.reshape(x, [-1, n_actions, N])
     return x
@@ -117,11 +119,14 @@ class QRDQN(BaseDQN):
     mid_quantiles = np.asarray(mid_quantiles, dtype=np.float32)
     mid_quantiles = tf.constant(mid_quantiles[None, None, :], dtype=tf.float32)
 
-    # Operate over last dimensions to get result for for theta_i
+    # Operate over last dimensions to average over samples (target locations)
     z_diff        = tf.expand_dims(target_z, axis=-2) - tf.expand_dims(z, axis=-1)
     indicator_fn  = tf.to_float(z_diff < 0.0)       # out: [None, N, N]
 
+    # Compute quantile penalty
     penalty_w     = mid_quantiles - indicator_fn    # out: [None, N, N]
+    # Make sure no gradient flows through the indicator function. The penalty is only a scaling factor
+    penalty_w     = tf.stop_gradient(penalty_w)
 
     # Pure Quantile Regression Loss
     if self.k == 0:
@@ -131,7 +136,7 @@ class QRDQN(BaseDQN):
       penalty_w   = tf.abs(penalty_w)
       huber_loss  = tf_utils.huber_loss(z_diff, delta=np.float32(self.k))
 
-    quantile_loss = huber_loss * penalty_w                    # out: [None, N, N]
+    quantile_loss = penalty_w * huber_loss                    # out: [None, N, N]
     quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)    # Expected loss for each quntile
     loss          = tf.reduce_sum(quantile_loss, axis=-1)     # Sum loss over all quantiles
     loss          = tf.reduce_mean(loss)                      # Average loss over the batch
