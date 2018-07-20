@@ -1,14 +1,15 @@
+import numpy as np
 import tensorflow as tf
 
 from rltf.models.bstrap_dqn import BaseBstrapDQN
 from rltf.models.bstrap_dqn import BstrapDQN_IDS
-from rltf.models.qr_dqn     import QRDQN
+from rltf.models.c51        import C51
 from rltf.models            import tf_utils
 
 
-class BaseBstrapDQNQR(BaseBstrapDQN):
+class BaseBstrapC51(BaseBstrapDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -16,13 +17,28 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
       opt_conf: rltf.optimizers.OptimizerConf. Configuration for the optimizer
       gamma: float. Discount factor
       n_heads: Number of bootstrap heads
-      N: int. number of quantiles
-      k: int. Huber loss order
+      V_min: float. lower bound for histrogram range
+      V_max: float. upper bound for histrogram range
+      N: int. number of histogram bins
     """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, True, n_heads)
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, False, n_heads)
 
-    self.N = N
-    self.k = k
+    self.N      = N
+    self.V_min  = V_min
+    self.V_max  = V_max
+    self.dz     = (self.V_max - self.V_min) / float(self.N - 1)
+
+    # Custom TF Tensors and Ops
+    self.bins   = None
+
+
+  def build(self):
+    # Costruct the tensor of the bins for the probability distribution
+    bins      = np.arange(0, self.N, 1, dtype=np.float32)
+    bins      = bins * self.dz + self.V_min
+    self.bins = tf.constant(bins[None, None, :], dtype=tf.float32)  # out shape: [1, 1, N]
+
+    super().build()
 
 
   def _conv_nn(self, x):
@@ -36,7 +52,6 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     """
     n_actions = self.n_actions
     N         = self.N
-    init_glorot_normal = tf_utils.init_glorot_normal
 
     def build_bstrap_head(x):
       """ Build the head of the DQN network
@@ -51,16 +66,19 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
       return x
 
     def build_z_head(x):
-      """ Build the head of the QRDQN network
+      """ Build the head of the C51 network
       Args:
         x: tf.Tensor. Tensor for the input
       Returns:
         `tf.Tensor` of shape `[batch_size, n_actions, N]`. Contains the Q-function distribution
           for each action
       """
-      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=init_glorot_normal())
-      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=init_glorot_normal())
+      x = tf.layers.dense(x, 512,         activation=tf.nn.relu)
+      x = tf.layers.dense(x, N*n_actions, activation=None)
       x = tf.reshape(x, [-1, n_actions, N])
+      # Compute Softmax probabilities in numerically stable way
+      x = x - tf.expand_dims(tf.reduce_max(x, axis=-1), axis=-1)
+      x = tf.nn.softmax(x, axis=-1)
       return x
 
     with tf.variable_scope("conv_net"):
@@ -72,7 +90,7 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     # Careful: Make sure self._conv_out is set only during the right function call
     if "agent_net" in tf.get_variable_scope().name and self._conv_out is None: self._conv_out = x
 
-    # Build the QRDQN head
+    # Build the C51 head
     with tf.variable_scope("distribution_value"):
       z = build_z_head(x)
 
@@ -93,7 +111,10 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     """
     q, z = agent_net
     q = super()._compute_estimate(q)
-    z = QRDQN._compute_estimate(self, z)
+    z = C51._compute_estimate(self, z)
+    # a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    # a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
+    # z       = tf.reduce_sum(z * a_mask, axis=1)                             # out: [None, N]
     return q, z
 
 
@@ -129,9 +150,9 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     """
     target_q, target_z = target_net
     backup_q = super()._compute_target(target_q)
-    # backup_z = QRDQN._compute_target(self, target_z)  # NOT correct
-    target_z = QRDQN._select_target(self, target_z)
-    backup_z = QRDQN._compute_backup(self, target_z)
+    # backup_z = C51._compute_target(self, target_z)  # NOT correct
+    target_z = C51._select_target(self, target_z)
+    backup_z = C51._compute_backup(self, target_z)
     backup_z = tf.stop_gradient(backup_z)
     return backup_q, backup_z
 
@@ -141,7 +162,11 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     target_q, target_z  = target
 
     head_loss = super()._compute_loss(estimate_q, target_q, name)
-    z_loss    = QRDQN._compute_loss(self, z, target_z, "train/z_loss")
+
+    z_loss    = C51._compute_loss(self, z, target_z, "train/z_loss")
+    # entropy   = -tf.reduce_sum(target_z * tf.log(z), axis=-1)
+    # z_loss    = tf.reduce_mean(entropy)
+    # tf.summary.scalar("train/z_loss", z_loss)
 
     return head_loss, z_loss
 
@@ -160,48 +185,27 @@ class BaseBstrapDQNQR(BaseBstrapDQN):
     return train_op
 
 
-  # Propagate QR loss gradients
-  # def _build_train_op(self, optimizer, loss, agent_vars, name):
-  #   head_loss = loss[0]
-  #   z_loss    = loss[1]
-
-  #   # Update the Bootstrap heads variables. Do not backpropagate gradients to the conv layers
-  #   head_vars   = tf_utils.scope_vars(agent_vars, scope='agent_net/action_value')
-  #   head_grads  = tf.gradients(loss, head_vars)
-  #   head_grads  = list(zip(head_grads, head_vars))
-  #   train_heads = optimizer.apply_gradients(head_grads)
-  #   # heads_grads = optimizer.compute_gradients(head_loss, var_list=head_vars)
-  #   # train_heads = optimizer.minimize(head_loss, var_list=head_vars)
-
-  #   # Update the conv and the QRDQN head variables based on QRDQN loss
-  #   conv_vars = tf_utils.scope_vars(agent_vars, scope='agent_net/conv_net')
-  #   z_vars    = tf_utils.scope_vars(agent_vars, scope='agent_net/distribution_value')
-  #   train_z   = optimizer.minimize(z_loss, var_list=conv_vars+z_vars)
-
-  #   train_op  = tf.group(train_heads, train_z, name=name)
-  #   return train_op
-
-
   def _compute_z_variance(self, agent_net):
-    z       = agent_net[1]                                    # out: [None, n_actions, N]
+    z       = agent_net[1]
 
     # Var(X) = sum_x p(X)*[X - E[X]]^2
-    z_mean  = tf.reduce_mean(z, axis=-1)                      # out: [None, n_actions]
-    center  = z - tf.expand_dims(z_mean, axis=-1)             # out: [None, n_actions, N]
-    z_var   = tf.reduce_mean(tf.square(center), axis=-1)      # out: [None, n_actions]
+    q       = tf.reduce_sum(z * self.bins, axis=-1)       # out: [None, n_actions]
+    center  = self.bins - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
+    z_var   = tf.square(center) * z                       # out: [None, n_actions, N]
+    z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
 
     # Normalize the variance
-    mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-    z_var   = z_var / mean                                    # out: [None, n_actions]
+    # mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
+    # z_var   = z_var / mean                                    # out: [None, n_actions]
     return z_var
 
 
 
-class BstrapDQNQR_IDS(BaseBstrapDQNQR):
-  """IDS policy from Boostrapped DQN-QRDQN"""
+class BstrapC51_IDS(BaseBstrapC51):
+  """IDS policy from Boostrapped DQN-C51"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, n_stds=0.1):
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, N, k)
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, n_stds=0.1):
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N)
 
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
     self.rho2   = None
@@ -220,6 +224,7 @@ class BstrapDQNQR_IDS(BaseBstrapDQNQR):
     tf.summary.histogram("debug/a_rho2", self.rho2)
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
 
+    # p_rho2  = tf.identity(self.z_var[0], name="plot/train/rho2")
     p_rho2  = tf.identity(self.rho2[0], name="plot/train/rho2")
     p_a     = self.plot_train["train_actions"]["a_mean"]["a"]
 

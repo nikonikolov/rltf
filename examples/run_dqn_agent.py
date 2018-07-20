@@ -10,8 +10,8 @@ from rltf.models        import BstrapDQN
 from rltf.models        import BstrapDQN_IDS
 from rltf.models        import BstrapDQN_UCB
 from rltf.models        import BstrapDQN_Ensemble
-from rltf.models        import BstrapDQNQR_IDS
-from rltf.models        import BstrapDQNC51_IDS
+from rltf.models        import BstrapC51_IDS
+from rltf.models        import BstrapQRDQN_IDS
 from rltf.models        import DDQN
 from rltf.models        import DQN
 from rltf.models        import C51
@@ -35,7 +35,7 @@ def parse_args():
 
   model_types = ["DQN", "DDQN", "C51", "QRDQN",
                  "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble", "BstrapDQN_IDS",
-                 "BstrapDQNC51_IDS", "BstrapDQNQR_IDS",
+                 "BstrapC51_IDS", "BstrapQRDQN_IDS",
                  "BDQN", "BDQN_TS", "BDQN_UCB", "BDQN_IDS", "C51TS", "QRDQNTS",
                  "DUBstrapC51", "DUBstrapC51_IDS", "DUBstrapQRDQN", "DUBstrapQRDQN_IDS",]
   s2b         = cmdargs.str2bool
@@ -95,9 +95,9 @@ def make_agent():
     model_kwargs  = dict(huber_loss=args.huber_loss)
   elif args.model in ["BstrapDQN", "BstrapDQN_IDS", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]:
     model_kwargs  = dict(huber_loss=args.huber_loss, n_heads=args.n_heads)
-  elif args.model in ["BstrapDQNC51_IDS", "DUBstrapC51", "DUBstrapC51_IDS",]:
+  elif args.model in ["BstrapC51_IDS", "DUBstrapC51", "DUBstrapC51_IDS",]:
     model_kwargs  = dict(n_heads=args.n_heads, V_min=-10, V_max=10, N=51)
-  elif args.model in ["BstrapDQNQR_IDS", "DUBstrapQRDQN", "DUBstrapQRDQN_IDS",]:
+  elif args.model in ["BstrapQRDQN_IDS", "DUBstrapQRDQN", "DUBstrapQRDQN_IDS",]:
     model_kwargs  = dict(n_heads=args.n_heads, N=200, k=int(args.huber_loss))
   elif args.model in ["C51", "C51TS"]:
     model_kwargs  = dict(V_min=-10, V_max=10, N=51)

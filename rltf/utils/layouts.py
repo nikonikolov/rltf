@@ -181,7 +181,6 @@ ids_heteroscedastic_layout = {
 layouts = {
   "BstrapDQN_IDS": ids_layout,
   "BDQN_IDS": ids_layout,
-  "BstrapQRDQN_IDS": ids_heteroscedastic_layout,
   "BstrapC51_IDS": ids_heteroscedastic_layout,
-  "BstrapDQNC51_IDS": ids_heteroscedastic_layout,
+  "BstrapQRDQN_IDS": ids_heteroscedastic_layout,
 }
