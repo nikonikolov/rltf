@@ -109,10 +109,11 @@ class StatsRecorder:
 
 
   def _finish_episode(self):
-    """This function can be called on reset() or on step() when done=True. The former is more clear.
-    Either way, if self.done = False, the episode data MUST be ignored. Otherwise, the data
-    will corrupt the statistics. The most likely case for calling reset() in the middle of the
-    episode is that evaluation run has reached max steps without being able to complete the episode.
+    """This function can be called either on env.reset() or on env.step() when done=True. The former
+    is more clear and thus chosen as the final implementation. Either way, if self.done = False,
+    the episode data MUST be ignored. Otherwise, the data will corrupt the statistics. The most likely
+    case for calling reset() in the middle of the episode is that evaluation run has reached max steps
+    without being able to complete the episode.
     """
     if self.done is None:
       return

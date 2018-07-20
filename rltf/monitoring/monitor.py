@@ -131,6 +131,8 @@ class Monitor(Wrapper):
 
 
   def reset(self, **kwargs):
+    # First reset stats for correct episode_id
+    self.stats_recorder.reset()
     # obs = self.env.reset(**kwargs)
     obs = self.env.reset(enabled=self.video_callable(self.episode_id), mode=self.mode, **kwargs)
     self._after_reset(obs)
@@ -199,7 +201,7 @@ class Monitor(Wrapper):
     if not self._enabled:
       return
 
-    self.stats_recorder.reset()
+    # self.stats_recorder.reset()
 
     self.env_started = True
     self.done = False

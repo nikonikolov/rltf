@@ -148,7 +148,7 @@ class BaseDQN(Model):
     # action = action[0]
     a, data = sess.run([self.a_train, self.plot_train.data], feed_dict={self.obs_t_ph: state[None,:]})
     action  = a[0]
-    self.update_plot_data(data)
+    self._update_plot_data(data)
     return action
 
 
@@ -158,18 +158,8 @@ class BaseDQN(Model):
     # action = action[0]
     a, data = sess.run([self.a_eval, self.plot_eval.data], feed_dict={self.obs_t_ph: state[None,:]})
     action  = a[0]
-    self.update_plot_data(data)
+    self._update_plot_data(data)
     return action
-
-
-  def update_plot_data(self, data, pack=True):
-    if pack:
-      data = self._update_plot_data(data)
-    self.plot_data.data = data
-
-
-  def _update_plot_data(self, data):
-    return data
 
 
 

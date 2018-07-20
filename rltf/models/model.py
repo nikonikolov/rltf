@@ -131,6 +131,10 @@ class Model:
     self.plot_data.data  = dict()
 
 
+  def _update_plot_data(self, data):
+    self.plot_data.data = data
+
+
   @property
   def name(self):
     """

@@ -163,10 +163,21 @@ class QRDQN(BaseDQN):
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 
+    p_a     = tf.identity(action[0],    name="plot/train/a")
+    p_q     = tf.identity(q[0],         name="plot/train/q")
+    p_z_var = tf.identity(z_var[0],     name="plot/train/z_var")
+
+    self.plot_train["train_actions"] = {
+      "a_q":      dict(height=p_q,      a=p_a),
+      "a_z_var":  dict(height=p_z_var,  a=p_a),
+      # "a_z":      dict(height=p_z,      a=p_a),
+    }
+
     return action
 
 
   def _act_eval(self, agent_net, name):
+    self.plot_eval["eval_actions"] = dict(self.plot_train["train_actions"])
     return tf.identity(self.a_train, name=name)
 
 
