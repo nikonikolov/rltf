@@ -82,6 +82,11 @@ def init_default():
   return None
 
 
+def init_dqn():
+  """Return the initializer used in DQN and its improvements"""
+  return tf.variance_scaling_initializer(scale=1./3.0, mode="fan_in", distribution="uniform")
+
+
 def cholesky_inverse(A):
   """Compute the inverse of `A` using Choselky decomposition. NOTE: `A` must be
   symmetric positive definite. This method of inversion is not completely stable since
