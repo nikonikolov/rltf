@@ -138,6 +138,7 @@ def make_agent():
     model_dir=model_dir,
     log_freq=args.log_freq,
     save_freq=args.save_freq,
+    save_buf=args.save_buf,
     restore_dir=restore_dir,
     confirm_kill=args.confirm_kill,
     reuse_regex=args.reuse_regex,

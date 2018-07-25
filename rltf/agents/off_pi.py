@@ -18,7 +18,6 @@ class OffPolicyAgent(Agent):
     self.update_target_freq = None
     self.replay_buf = None
     self._terminate = False
-    self._save_buf  = False
     # NOTE: Keep the eval thread always as the first entry. Used in self.eval()
     self.threads    = [threading.Thread(name='eval_thread', target=self._eval)]
 
@@ -100,7 +99,7 @@ class OffPolicyAgent(Agent):
       if y == 'n':
         return False
       elif y == 's':
-        self._save_buf = True
+        self.save_buf = True
     return True
 
 
@@ -109,7 +108,7 @@ class OffPolicyAgent(Agent):
 
 
   def _save(self):
-    if self._save_buf:
+    if self.save_buf:
       self.replay_buf.save(self.model_dir)
 
 
