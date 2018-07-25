@@ -47,6 +47,7 @@ def parse_args():
     ('--eval-len',      dict(default=125000, type=int,   help='# *agent* steps to run eval each time')),
     ('--eval-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in *eval* mode')),
     ('--train-ep-steps',dict(default=None,   type=int,   help='max episode *env* steps in *train* mode')),
+    ('--stack-frames',  dict(default=4,      type=int,   help='# of stacked frames that make an observation')),
 
     ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB')),
   ]
@@ -91,7 +92,7 @@ def make_agent():
     seed=args.seed,
     model_dir=model_dir,
     video_freq=args.video_freq,
-    wrap=wrap_dqn,
+    wrap=lambda env, mode: wrap_dqn(env, mode, stack=args.stack_frames),
     max_ep_steps_train=args.train_ep_steps,
     max_ep_steps_eval=args.eval_ep_steps,
   )
@@ -138,7 +139,7 @@ def make_agent():
     exploration=exploration,
     update_target_freq=args.update_freq,
     memory_size=args.memory_size,
-    obs_len=4,
+    obs_len=args.stack_frames,
     epsilon_eval=args.epsilon_eval,
   )
 

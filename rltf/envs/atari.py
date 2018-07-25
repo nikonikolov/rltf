@@ -121,26 +121,26 @@ class EpisodicLifeEnv(gym.Wrapper):
     return obs
 
 
-class MaxAndSkipEnv(gym.Wrapper):
-  """Return only every `skip`-th frame. The returned observation is the element-wise max
-  over the last 2 frames - done by DeepMind due to flickering objects.
+class MaxAndRepeatEnv(gym.Wrapper):
+  """Repeat an action `repeat` times and return the element-wise max over the
+  last 2 frames - done by DeepMind due to flickering objects.
   """
 
-  def __init__(self, env, skip=4):
+  def __init__(self, env, repeat=4):
     super().__init__(env)
     # most recent raw observations (for max pooling across time steps)
     # self._obs_buffer = deque(maxlen=2)
     self._obs_buffer = np.zeros((2,)+env.observation_space.shape, dtype=np.uint8)
-    self._skip       = skip
-    assert self._skip >= 1
+    self._repeat     = repeat
+    assert self._repeat >= 1
 
   def step(self, action):
     """Repeat action, sum reward, and max over last observations."""
     total_reward = 0.0
-    for i in range(self._skip):
+    for i in range(self._repeat):
       obs, reward, done, info = self.env.step(action)
-      if i == self._skip - 2: self._obs_buffer[0] = obs
-      if i == self._skip - 1: self._obs_buffer[1] = obs
+      if i == self._repeat - 2: self._obs_buffer[0] = obs
+      if i == self._repeat - 1: self._obs_buffer[1] = obs
       total_reward += reward
       if done:
         break
@@ -207,11 +207,12 @@ class StackFrames(gym.Wrapper):
     return np.concatenate(self.obs_buf, axis=-1)
 
 
-def wrap_deepmind_atari(env, mode):
+def wrap_deepmind_atari(env, mode, stack=4):
   """Wraps an Atari environment to have the same settings as in the original DQN Nature paper by Deepmind.
   Args:
     env: gym.Env
     mode: str, either 't' or 'e'. Mode in which the environment will be run - train or eval
+    stack: int. Number of frames to stack that comrise the agent observation
   Returns:
     The wrapped environment
   """
@@ -223,11 +224,11 @@ def wrap_deepmind_atari(env, mode):
   if mode == 't':
     env = EpisodicLifeEnv(env)
   env = NoopResetEnv(env, noop_max=30)
-  env = MaxAndSkipEnv(env, skip=4)
+  env = MaxAndRepeatEnv(env, repeat=4)
   if 'FIRE' in env.unwrapped.get_action_meanings():
     env = FireResetEnv(env)
   env = WarpFrame(env)
   if mode == 't':
     env = ClippedRewardsWrapper(env)
-  env = StackFrames(env, k=4)
+  env = StackFrames(env, k=stack)
   return env
