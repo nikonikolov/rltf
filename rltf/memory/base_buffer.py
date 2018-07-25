@@ -94,7 +94,16 @@ class BaseBuffer():
     state_file  = os.path.join(save_dir, "state.json")
 
     if not os.path.exists(save_dir):
-      os.makedirs(save_dir)
+      # Create symlink to store buffer if $RLTFBUF is defined
+      if 'RLTFBUF' in os.environ:
+        store_dir = os.path.join(os.environ['RLTFBUF'], os.path.basename(model_dir))
+        store_dir = os.path.join(store_dir, "buffer")
+        if not os.path.exists(store_dir):
+          os.makedirs(store_dir)
+        os.symlink(store_dir, save_dir)
+      # Store the buffer directly in the folder
+      else:
+        os.makedirs(save_dir)
 
     np.save(os.path.join(save_dir, "obs.npy"),   self.obs[:self.size_now])
     np.save(os.path.join(save_dir, "act.npy"),   self.action[:self.size_now])
