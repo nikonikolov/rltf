@@ -27,7 +27,7 @@ very slight differences for the purpose of improving results.
 - Python >= 3.5
 - Tensorflow >= 1.6.0
 - OpenAI gym >= 0.9.6
-- opencv-python (pip package or OpenCV library)
+- opencv-python (either pip package or OpenCV library with python bindings)
 - matplotlib (with TkAgg backend)
 
 ### Install
@@ -94,25 +94,51 @@ contain:
 - `buffer/` - the latest data of the replay buffer (if saved)
 
 
-### DDPG
-To see configurable parameters, run:
+### DQN and derivatives
+
+To see all configurable hyperparameters, run:
 ```
 python3 -m examples.run_dqn_agent --help
+```
+
+Note that from the Atari environments only `<AtariEnv>NoFrameskip-v4` and `<AtariEnv>NoFrameskip-v0` are currently supported. To enable other versions of the gym environments, you need to select the correct wrappers from [atari.py](rltf/envs/atari.py).
+
+#### DQN
+```
+python3 -m examples.run_dqn_agent --model DQN --env-id PongNoFrameskip-v4
+```
+
+#### DDQN
+```
+python3 -m examples.run_dqn_agent --model DDQN --env-id PongNoFrameskip-v4
+```
+
+#### Bootstrapped DQN
+```
+python3 -m examples.run_dqn_agent --model BstrapDQN --n-heads 10 --env-id PongNoFrameskip-v4
+```
+
+#### Bootstrapped UCB
+```
+python3 -m examples.run_dqn_agent --model BstrapDQN_UCB --n-heads 10 --n-stds 0.1 --env-id PongNoFrameskip-v4
+```
+
+#### C51
+```
+python3 -m examples.run_dqn_agent --model C51 --env-id PongNoFrameskip-v4
+```
+
+#### QR-DQN
+```
+python3 -m examples.run_dqn_agent --model QRDQN --env-id PongNoFrameskip-v4
+```
+
+### DDPG
+To see all configurable hyperparameters, run:
+```
+python3 -m examples.run_ddpg_agent --help
 ```
 An example configuration is:
 ```
 python3 -m examples.run_ddpg_agent --model DDPG --env-id RoboschoolHopper-v1 --critic-reg 0.0 --sigma 0.5 --max-ep-steps 2500 --noise-decay 500000
 ```
-
-### DQN, C51, QR-DQN, Double DQN
-To see configurable parameters, run:
-```
-python3 -m examples.run_dqn_agent --help
-```
-
-At the moment `run_dqn_agent.py` enforces only Atari environments and image
-observations. It also requires that the environment is of the `NoFrameskip-v4`
-OpenAI gym family. The `NoFrameskip-v4` environments (together with some
-additional wrappers) replicate the training process desribed in the orginal DQN
-Nature paper. To make modifications, you need to add/remove some wrappers (see
-[atari.py](rltf/envs/atari.py)).

@@ -25,8 +25,8 @@ def _wrap_nonimg_dqn(env, mode):
   return env
 
 
-def wrap_dqn(env, mode):
+def wrap_dqn(env, mode, **kwargs):
   if len(env.observation_space.shape) == 3:
-    return wrap_deepmind_atari(env, mode)
+    return wrap_deepmind_atari(env, mode, **kwargs)
   else:
-    return _wrap_nonimg_dqn(env, mode)
+    return _wrap_nonimg_dqn(env, mode, **kwargs)
