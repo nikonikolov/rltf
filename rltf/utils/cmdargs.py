@@ -36,6 +36,7 @@ def parse_args(custom_args):
     ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # *agent* steps')),
     ('--save-freq',    dict(default=0,      type=int,     help='how often to save the model in # \
       *agent* steps; if <=0, model is saved only at the end')),
+    ('--save-buf',     dict(default=False,  type=str2bool,help='whether to save the buffer')),
     ('--video-freq',   dict(default=500,    type=int,     help='how often to record videos in # \
       *episodes*; if <=0, do not record any video')),
     ('--restore-model',dict(default=None,   type=str,     help='path to existing dir; if set, will \

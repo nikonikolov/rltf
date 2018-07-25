@@ -26,6 +26,7 @@ class Agent:
                model_dir,
                log_freq=10000,
                save_freq=100000,
+               save_buf=False,
                restore_dir=None,
                plots_layout=None,
                confirm_kill=False,
@@ -43,6 +44,7 @@ class Agent:
       model_dir: string. Directory path for the model logs and checkpoints
       log_freq: int. Add TensorBoard summary and print progress every log_freq agent steps
       save_freq: int. Save the model every `save_freq` training steps. `<=0` means no saving
+      save_buf: bool. If True, save buffer (if any) in calls to `self.save()`
       restore_dir: str. Path to a directory which contains an existing model to restore. If
         `restore_dir==model_dir`, then training is continued from the saved model time step and
         the existing model is overwritten. Otherwise, the saved weights are used but training
@@ -61,6 +63,7 @@ class Agent:
     self.batch_size     = batch_size
     self.model_dir      = model_dir
     self.save_freq      = save_freq
+    self.save_buf       = save_buf
     self.log_freq       = log_freq
     self.restore_dir    = restore_dir
     self.prng           = seeding.get_prng()
