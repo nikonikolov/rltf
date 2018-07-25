@@ -96,7 +96,7 @@ class BaseBuffer():
     if not os.path.exists(save_dir):
       # Create symlink to store buffer if $RLTFBUF is defined
       if 'RLTFBUF' in os.environ:
-        store_dir = os.path.join(os.environ['RLTFBUF'], os.path.basename(model_dir))
+        store_dir = os.path.join(os.environ['RLTFBUF'], os.path.basename(os.path.normpath(model_dir)))
         store_dir = os.path.join(store_dir, "buffer")
         if not os.path.exists(store_dir):
           os.makedirs(store_dir)
