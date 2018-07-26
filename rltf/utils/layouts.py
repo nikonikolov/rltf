@@ -45,14 +45,14 @@ def atari_labels(x):
 
 
 qrdqn_layout = {
-  "width": 840,
+  "width": 900,
   "height": 440,
   "obs_align": dict(vertical='center', horizontal='left'),
   # "obs_scale": 1.0,
   "figures": {
     "train_actions": {
       "align": dict(vertical='center', horizontal='right'),
-      "width": 660,
+      "width": 720,
       "height": -1,
       "fig": {
         "subplots": dict(nrows=2, ncols=1, sharex=True),
@@ -63,7 +63,7 @@ qrdqn_layout = {
           },
           a_z_var={
             "tick_params": dict(axis='y', labelsize=5.5),
-            "set_title": dict(label="Z VARINACE", size=6),
+            "set_title": dict(label="Z VARIANCE", size=6),
           },
           # a_z={
           #   "tick_params": dict(axis='y', labelsize=5.5),
@@ -82,7 +82,7 @@ qrdqn_layout = {
     },
     "eval_actions": {
       "align": dict(vertical='center', horizontal='right'),
-      "width": 660,
+      "width": 720,
       "height": -1,
       "fig": {
         "subplots": dict(nrows=2, ncols=1),

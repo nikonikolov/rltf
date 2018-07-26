@@ -74,7 +74,7 @@ class Agent:
     self.stop_step      = stop_step     # Step at which training stops
     self.learn_started  = False         # Bool: Indicates if learning has started or not
     self.train_freq     = train_freq    # How often to run a training step
-    self.train_step     = 1             # Current agent train step
+    self.train_step     = 0             # Current agent train step
 
     self.eval_freq      = eval_freq     # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts

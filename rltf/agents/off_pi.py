@@ -172,6 +172,18 @@ class OffPolicyAgent(Agent):
           self.env_eval_mon.start_eval_run()  # Start new eval run
 
 
+  def _complete_stopped_eval(self):
+    """Complete the evaluation run if execution was stopped before it
+    managed to complete and then the model was restored
+    """
+    if self.eval_len > 0 and self.train_step % self.eval_freq == 0:
+      # Compute what eval step would be if eval run was able to complete
+      eval_step = self.train_step / self.eval_freq * self.eval_len
+      if self.eval_step != eval_step:
+        self._signal_eval_start()
+        self._wait_eval_done()
+
+
   def _signal_eval_start(self):
     # Signal that evaluation run should start
     self._eval_start.set()
@@ -251,9 +263,12 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     `self._train_model()` thread to start a new training step
     """
 
+    self._complete_stopped_eval()
+
     obs = self.reset()
 
-    for t in range(self.train_step, self.stop_step+1):
+    for t in range(self.train_step+1, self.stop_step+1):
+      print(t)
       if self._terminate:
         self._signal_act_chosen()
         self._signal_eval_start()
@@ -294,6 +309,10 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
       # Update the train step
       self.train_step = t
 
+      # Save **after** train step is correct and completed
+      if self.save_freq > 0 and t % self.save_freq == 0:
+        self.save()
+
 
   def _train_model(self):
     """Thread for trianing the model. Must call `self._wait_act_chosen()`
@@ -303,7 +322,7 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     `self._run_env()` thread to select a new action
     """
 
-    for t in range(self.train_step, self.stop_step+1):
+    for t in range(self.train_step+1, self.stop_step+1):
       if self._terminate:
         self._signal_train_done()
         break
@@ -321,9 +340,6 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
         self.replay_buf.wait_stored()
         self.replay_buf.signal_sampled()
         self._wait_act_chosen()
-
-      if self.save_freq > 0 and t % self.save_freq == 0:
-        self.save()
 
       self._signal_train_done()
 
@@ -363,9 +379,11 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
   def _train(self):
 
+    self._complete_stopped_eval()
+
     obs = self.reset()
 
-    for t in range(self.train_step, self.stop_step+1):
+    for t in range(self.train_step+1, self.stop_step+1):
       if self._terminate:
         self._signal_eval_start()
         break
@@ -398,10 +416,6 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
         run_summary = t % self.log_freq == 0
         self._run_train_step(t, run_summary=run_summary)
 
-      # Save data
-      if self.save_freq > 0 and t % self.save_freq == 0:
-        self.save()
-
       # Log data
       self._log_stats(t, 't')
 
@@ -412,6 +426,10 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
       # Update the train step
       self.train_step = t
+
+      # Save **after** train step is correct and completed
+      if self.save_freq > 0 and t % self.save_freq == 0:
+        self.save()
 
 
   def _wait_act_chosen(self):
