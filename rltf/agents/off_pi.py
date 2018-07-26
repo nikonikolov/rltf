@@ -268,7 +268,6 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     obs = self.reset()
 
     for t in range(self.train_step+1, self.stop_step+1):
-      print(t)
       if self._terminate:
         self._signal_act_chosen()
         self._signal_eval_start()
