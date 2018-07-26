@@ -317,11 +317,12 @@ class StatsRecorder:
 
       data = self._read_json("eval_stats_summary.json")
 
-      self.eval_ep_id   = data["eval_episodes"]
-      self.eval_steps   = data["eval_steps"]
-      self.env_steps    = data["total_env_steps"]
-      self.eval_stats["best_mean_rew"]  = data["best_mean_rew"]
-      self.eval_stats["best_score"]     = data["best_score"]
+      if data:
+        self.eval_ep_id   = data["eval_episodes"]
+        self.eval_steps   = data["eval_steps"]
+        self.env_steps    = data["total_env_steps"]
+        self.eval_stats["best_mean_rew"]  = data["best_mean_rew"]
+        self.eval_stats["best_score"]     = data["best_score"]
 
 
   @property

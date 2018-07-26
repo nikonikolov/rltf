@@ -38,7 +38,7 @@ def parse_args():
 
     ('--warm-up',       dict(default=50000,  type=int,   help='# *agent* steps before training starts')),
     ('--train-freq',    dict(default=4,      type=int,   help='train frequency in # *agent* steps')),
-    ('--update-freq',   dict(default=10000,  type=int,   help='update target freq in # *param updates*')),
+    ('--update-freq',   dict(default=10000,  type=int,   help='update target freq in # *agent* steps')),
     ('--stop-step',     dict(default=5*10**7,type=int,   help='steps to run the *agent* for')),
     ('--huber-loss',    dict(default=True,   type=s2b,   help='use huber loss')),
     # ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
