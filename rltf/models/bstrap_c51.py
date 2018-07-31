@@ -195,8 +195,8 @@ class BaseBstrapC51(BaseBstrapDQN):
     z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
 
     # Normalize the variance
-    # mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-    # z_var   = z_var / mean                                    # out: [None, n_actions]
+    mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
+    z_var   = z_var / mean                                    # out: [None, n_actions]
     return z_var
 
 
