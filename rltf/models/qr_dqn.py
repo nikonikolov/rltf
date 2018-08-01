@@ -120,23 +120,23 @@ class QRDQN(BaseDQN):
     mid_quantiles = tf.constant(mid_quantiles[None, None, :], dtype=tf.float32)
 
     # Operate over last dimensions to average over samples (target locations)
-    z_diff        = tf.expand_dims(target_z, axis=-2) - tf.expand_dims(z, axis=-1)
-    indicator_fn  = tf.to_float(z_diff < 0.0)       # out: [None, N, N]
+    td_z          = tf.expand_dims(target_z, axis=-2) - tf.expand_dims(z, axis=-1)
+    indicator_fn  = tf.to_float(td_z < 0.0)                   # out: [None, N, N]
 
-    # Compute quantile penalty
-    penalty_w     = mid_quantiles - indicator_fn    # out: [None, N, N]
+    # Compute the quantile penalty weights
+    quant_weight  = mid_quantiles - indicator_fn              # out: [None, N, N]
     # Make sure no gradient flows through the indicator function. The penalty is only a scaling factor
-    penalty_w     = tf.stop_gradient(penalty_w)
+    quant_weight  = tf.stop_gradient(quant_weight)
 
     # Pure Quantile Regression Loss
     if self.k == 0:
-      huber_loss  = z_diff
+      quantile_loss = quant_weight * td_z                     # out: [None, N, N]
     # Quantile Huber Loss
     else:
-      penalty_w   = tf.abs(penalty_w)
-      huber_loss  = tf_utils.huber_loss(z_diff, delta=np.float32(self.k))
+      quant_weight  = tf.abs(quant_weight)
+      huber_loss    = tf_utils.huber_loss(td_z, delta=np.float32(self.k))
+      quantile_loss = quant_weight * huber_loss               # out: [None, N, N]
 
-    quantile_loss = penalty_w * huber_loss                    # out: [None, N, N]
     quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)    # Expected loss for each quntile
     loss          = tf.reduce_sum(quantile_loss, axis=-1)     # Sum loss over all quantiles
     loss          = tf.reduce_mean(loss)                      # Average loss over the batch
