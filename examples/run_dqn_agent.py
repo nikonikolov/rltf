@@ -41,11 +41,10 @@ def parse_args():
     ('--update-freq',   dict(default=10000,  type=int,   help='update target freq in # *agent* steps')),
     ('--stop-step',     dict(default=5*10**7,type=int,   help='steps to run the *agent* for')),
     ('--huber-loss',    dict(default=True,   type=s2b,   help='use huber loss')),
-    # ('--grad-clip',     dict(default=None,   type=float, help='value to clip gradient norms to')),
 
     ('--eval-freq',     dict(default=250000, type=int,   help='freq in # *agent* steps to run eval')),
     ('--eval-len',      dict(default=125000, type=int,   help='# *agent* steps to run eval each time')),
-    ('--eval-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in *eval* mode')),
+    ('--eval-ep-steps', dict(default=108000, type=int,   help='max episode *env* steps in *eval* mode')),
     ('--train-ep-steps',dict(default=None,   type=int,   help='max episode *env* steps in *train* mode')),
     ('--stack-frames',  dict(default=4,      type=int,   help='# of stacked frames that make an observation')),
 
