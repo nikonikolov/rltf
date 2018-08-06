@@ -5,6 +5,7 @@ import numpy as np
 
 from gym.utils  import atomic_write
 from rltf.utils import seeding
+import rltf.conf
 
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,13 @@ class BaseBuffer():
     if not os.path.exists(save_dir):
       # Create symlink to store buffer if $RLTFBUF is defined
       if 'RLTFBUF' in os.environ:
-        store_dir = os.path.join(os.environ['RLTFBUF'], os.path.basename(os.path.normpath(model_dir)))
+        # split     = os.path.split(os.path.normpath(model_dir))
+        # envdir    = split[1]
+        # model     = os.path.split(split[0])
+        # store_dir = os.path.join(os.environ['RLTFBUF'], os.path.join(model, envdir))
+        mdir      = os.path.relpath(model_dir, rltf.conf.MODELS_DIR)
+        store_dir = os.path.join(os.environ['RLTFBUF'], mdir)
+
         store_dir = os.path.join(store_dir, "buffer")
         if not os.path.exists(store_dir):
           os.makedirs(store_dir)

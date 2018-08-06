@@ -45,7 +45,7 @@ def parse_args():
     ('--eval-freq',     dict(default=250000, type=int,   help='freq in # *agent* steps to run eval')),
     ('--eval-len',      dict(default=125000, type=int,   help='# *agent* steps to run eval each time')),
     ('--eval-ep-steps', dict(default=108000, type=int,   help='max episode *env* steps in *eval* mode')),
-    ('--train-ep-steps',dict(default=None,   type=int,   help='max episode *env* steps in *train* mode')),
+    ('--train-ep-steps',dict(default=108000, type=int,   help='max episode *env* steps in *train* mode')),
     ('--stack-frames',  dict(default=4,      type=int,   help='# of stacked frames that make an observation')),
 
     ('--n-stds',        dict(default=0.1,    type=float, help='uncertainty scale for UCB')),
