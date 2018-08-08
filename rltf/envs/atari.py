@@ -56,7 +56,7 @@ class NoopResetEnv(gym.Wrapper):
       obs, _, done, _ = self.env.step(0)
       if done:
         logger.warning("Environment reset during initial NOOPs")
-        obs = self.env.reset()
+        obs = self.env.reset(**kwargs)
     return obs
 
 
@@ -91,13 +91,14 @@ class EpisodicLifeEnv(gym.Wrapper):
   def __init__(self, env):
     super().__init__(env)
     self.lives = 0
-    self.was_real_done = True
+    self.env_done = True
 
   def step(self, action):
     obs, reward, done, info = self.env.step(action)
-    self.was_real_done = done
-    # check current lives, make loss of life terminal,
-    # then update lives to handle bonus lives
+    # Remember done as reported by env
+    self.env_done = done
+    # If a life was lost, broadcast done=True to upper levels: make
+    # loss of life terminal. Then update lives to handle bonus lives
     lives = self.env.unwrapped.ale.lives()
     if lives < self.lives and lives > 0:
       # for Qbert somtimes we stay in lives == 0 condtion for a few frames
@@ -112,11 +113,13 @@ class EpisodicLifeEnv(gym.Wrapper):
     This way all states are still reachable even though lives are episodic,
     and the learner need not know about any of this behind-the-scenes.
     """
-    if self.was_real_done:
+    if self.env_done:
       obs = self.env.reset(**kwargs)
     else:
       # no-op step to advance from terminal/lost life state
-      obs, _, _, _ = self.env.step(0)
+      obs, _, done, _ = self.env.step(0)
+      if done:
+        obs = self.env.reset(**kwargs)
     self.lives = self.env.unwrapped.ale.lives()
     return obs
 
