@@ -119,7 +119,7 @@ class Monitor(Wrapper):
   def _detect_wrapped_env(self, env):
     if isinstance(env, Wrapper):
       if not isinstance(env, TimeLimit):
-        logger.warning("Trying to monitor the environment %s wrapped with %s. Reported statistics might"
+        logger.warning("Trying to monitor the environment %s wrapped with %s. Reported statistics might "
                        "be incorrect", env.spec.id, type(env))
 
 
