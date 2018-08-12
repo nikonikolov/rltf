@@ -25,6 +25,8 @@ def parse_cmd_args():
   # Configuration arguments
   parser.add_argument('--conf',       required=True,    type=str,   help='path for conf file')
   parser.add_argument('--filename',   default=None,     type=str,   help='output filename; default is `conf`')
+  parser.add_argument('--score-mode', default=None,     type=str,   help='what statistic to plot',
+                      choices=["eval_score", "n_eps"])
 
   # Matplotlib arguments
   parser.add_argument('--ncols',      default=2,        type=int,   help='number of cols in the fig')
@@ -45,15 +47,16 @@ def parse_cmd_args():
   parser.add_argument('--eval-freq',  default=250000,   type=int,   help='freq of eval in # *agent* steps')
   parser.add_argument('--eval-len',   default=125000,   type=int,   help='len of eval in # *agent* steps')
   parser.add_argument('--n-eps',      default=100,      type=int,   help='number of eps to average')
-  parser.add_argument('--tag',        default="eval/mean_ep_rew",   type=str,
-                      help='TB tag to read if numpy data is missing')
+  parser.add_argument('--tb-tag',     default=None,     type=str,   help='TensorBoard tag to read if numpy '
+                      'data is missing from disk. Default is determined based on --score-mode')
 
-  parser.add_argument('--filter',     default=True,     type=bool,  help='filter data based on eval-freq')
+  parser.add_argument('--tb-filter',  default=True,     type=bool,  help='filter TB data based on eval-freq')
   parser.add_argument('--tablemax',   default=True,     type=bool,  help='bold max scores in table output')
 
   args = parser.parse_args()
 
   return args
+
 
 def parse_args():
   args = parse_cmd_args()
@@ -64,6 +67,7 @@ def parse_args():
   if args.filename is None:
     args.filename = args.conf
 
+  # Read arguments from conf file - overwrite cmd values
   if "args" in conf and len(conf["args"].keys()) > 0:
     newargs  = conf["args"]
     argnames = vars(args)
@@ -75,8 +79,21 @@ def parse_args():
       else:
         warnings.warn("Ignoring conf file argument {}={}".format(newarg, value))
 
-      assert type(value) == type(oldval)
+      if oldval is not None:
+        assert type(value) == type(oldval)
       setattr(args, newarg, value)
+
+  # Score mode must be provided
+  assert args.score_mode in ["eval_score", "n_eps"], "--score-mode argument must be set"
+
+  # Default to correct TensorBoard tag if not provided
+  if args.tb_tag is None:
+    if args.score_mode == "n_eps":
+      args.tb_tag = "eval/mean_ep_rew"
+    elif args.score_mode == "eval_score":
+      args.tb_tag = "eval/score"
+    else:
+      raise ValueError("Unknown --score_mode argument")
 
   # Compute correct values for Figure
   args.width  = int(args.width  * args.subscale)
@@ -206,13 +223,20 @@ def limit_model_steps(model_dir, model_data, args):
   return model_data
 
 
-def n_episodes_averages(model_data, n_eps=100):
+def compute_score(model_data, score_mode, n_eps=100):
   """Average episode rewards in a window of n_eps"""
 
   ep_rews = model_data["ep_rews"]
   inds    = model_data["scores_inds"]
-  # rews    = [np.mean(ep_rews[i-n_eps:i]) for i in inds]
-  rews    = [ep_rews[i-n_eps:i] for i in inds]
+  # Extract windows of n_eps
+  if score_mode == "n_eps":
+    rews    = [ep_rews[i-n_eps:i] for i in inds]
+  # Extract episodes from the same evaluation run
+  elif score_mode == "eval_score":
+    rews    = [ep_rews[lo:hi] for lo, hi in zip(np.concatenate([[0],inds]), inds)]
+  else:
+    raise ValueError("Unknown --score-mode")
+  # Average over the extracted episodes
   rews    = [np.mean(eps) if len(eps) > 0 else -float("inf") for eps in rews]
   rews    = np.asarray(rews)
 
@@ -223,6 +247,7 @@ def n_episodes_averages(model_data, n_eps=100):
               scores=rews,
              )
 
+
 def filter_tb_data(x, y, args, model_dir):
   assert len(x) == len(y)
   steps, rews = [], []
@@ -231,7 +256,8 @@ def filter_tb_data(x, y, args, model_dir):
   step_scale  = args.step_scale
   period      = args.eval_len
 
-  if not args.filter:
+  # TB data is logged with a fixed freqency. Do not filter it in this case
+  if not args.tb_filter:
     if x[-1] < max_step:
       sdiff = x[-1] - x[-2]
       steps, scores = list(x), list(y)
@@ -244,6 +270,7 @@ def filter_tb_data(x, y, args, model_dir):
       steps, scores = list(steps), list(scores)
     return dict(steps=steps, scores=scores)
 
+  # Filter the TB data, since it is logged with a fixed freqency
   for s, r, s1, r1 in zip(x, y, x[1:], y[1:]):
     if s > max_step:
       break
@@ -311,13 +338,12 @@ def process_run(model_dir, args):
 
   # Compute model data from TensorBoard
   if use_tb:
-    x, y       = dataio.read_tb_file(model_path, tag=args.tag)
+    x, y       = dataio.read_tb_file(model_path, tag=args.tb_tag)
     model_data = filter_tb_data(x, y, args, model_dir)
   # Compute model data from stats
   else:
     model_data = limit_model_steps(model_dir, model_data, args)
-    if args.filter:
-      model_data = n_episodes_averages(model_data, n_eps=args.n_eps)
+    model_data = compute_score(model_data, score_mode=args.score_mode, n_eps=args.n_eps)
 
   return model_data
 
@@ -463,8 +489,8 @@ def main():
   fig, scores = plot_figure(args)
 
   # Save figure
-  pngfile = os.path.join(FIG_DIR, args.filename + ".png")
-  plt.savefig(pngfile)
+  pngpath = os.path.join(FIG_DIR, args.filename + ".png")
+  plt.savefig(pngpath)
 
   # Save scores
   txtfile = os.path.join(FIG_DIR, args.filename)
