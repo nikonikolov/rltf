@@ -67,7 +67,7 @@ def make_agent():
     restore_dir = args.restore_model
 
   # Configure loggers
-  rltf_log.conf_logs(model_dir)
+  rltf_log.conf_logs(model_dir, args.log_lvl, args.log_lvl)
 
   # Get the model-specific settings
   model = eval(args.model)

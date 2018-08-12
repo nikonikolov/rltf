@@ -1,10 +1,14 @@
 import gym
+import logging
 import numpy as np
 import tensorflow as tf
 
 from rltf.agents.off_pi import ParallelOffPolicyAgent
 from rltf.agents.off_pi import SequentialOffPolicyAgent
 from rltf.memory        import ReplayBuffer
+
+
+logger = logging.getLogger(__name__)
 
 
 class AgentDQN(ParallelOffPolicyAgent):
@@ -46,7 +50,10 @@ class AgentDQN(ParallelOffPolicyAgent):
     n_actions = self.env_train.action_space.n
     obs_shape = self.env_train.observation_space.shape
     obs_shape = list(obs_shape)
-    obs_len   = obs_len if len(obs_shape) == 3 else 1
+    # obs_len   = obs_len if len(obs_shape) == 3 else 1
+    if len(obs_shape) != 3:
+      obs_len = 1
+      logger.warning("Overriding obs_len value since env has low-level observations space ")
 
     model_kwargs["obs_shape"] = obs_shape
     model_kwargs["n_actions"] = n_actions

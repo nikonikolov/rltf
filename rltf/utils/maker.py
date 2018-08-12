@@ -26,6 +26,7 @@ def _make_env(env_id, seed, model_dir, video_callable, mode, max_ep_steps):
   # NOTE: Episode steps limit wrapper must be set before the Monitor. Otherwise, statistics of
   # reported reward will be wrong
   if max_ep_steps is not None:
+  # if max_ep_steps is not None and max_ep_steps > 0:
     # env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
     env = rltf.envs.MaxEpisodeLen(env, max_episode_steps=max_ep_steps)
   env = rltf.monitoring.Monitor(env, monitor_dir, video_callable, mode)
