@@ -77,8 +77,8 @@ class BaseBstrapC51(BaseBstrapDQN):
       x = tf.layers.dense(x, N*n_actions, activation=None)
       x = tf.reshape(x, [-1, n_actions, N])
       # Compute Softmax probabilities in numerically stable way
-      x = x - tf.expand_dims(tf.reduce_max(x, axis=-1), axis=-1)
-      x = tf.nn.softmax(x, axis=-1)
+      C = tf.stop_gradient(tf.reduce_max(x, axis=-1, keepdims=True))
+      x = tf.nn.softmax(x-C, axis=-1)
       return x
 
     with tf.variable_scope("conv_net"):
