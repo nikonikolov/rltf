@@ -1,5 +1,5 @@
-import gym
 import logging
+import gym
 import numpy as np
 import tensorflow as tf
 
