@@ -34,7 +34,7 @@ from gym          import __version__ as GYM_VERSION
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 
 from rltf.monitoring.stats import StatsRecorder
-from rltf.monitoring.plot  import VideoPlotter
+from rltf.monitoring.vplot import VideoPlotter
 
 
 logger          = logging.getLogger(__name__)

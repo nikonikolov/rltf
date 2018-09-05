@@ -51,7 +51,8 @@ def parse_cmd_args():
                       'data is missing from disk. Default is determined based on --score-mode')
 
   parser.add_argument('--tb-filter',  default=True,     type=bool,  help='filter TB data based on eval-freq')
-  parser.add_argument('--tablemax',   default=True,     type=bool,  help='bold max scores in table output')
+  parser.add_argument('--boldmax',    default=True,     type=bool,  help='bold max scores in table output')
+  parser.add_argument('--tablestd',   default=False,    type=bool,  help='Add std of max scores in table output')
 
   args = parser.parse_args()
 
@@ -406,25 +407,29 @@ def plot_model(axes, x, y, label, color):
     color: str. MPL color for the plotted line
   """
   axes.plot(x, y["mean"], label=label, color=color)
-  if "lo" in y and "hi" in y:
+  if y["lo"] is not None and y["hi"] is not None:
     axes.fill_between(x, y["lo"], y["hi"], color=color, alpha=0.3)
 
 
 def average_models(x, y):
+  mean = np.mean(y, axis=0)
+  assert len(x) == len(mean)
+
   if len(y) == 1:
-    max_score = np.amax(y[0])
-    mean = y[0]
-    assert len(x) == len(mean)
-    return max_score, dict(mean=mean)
+    lo, hi = None, None
   else:
     lo = np.amin(y, axis=0)
     hi = np.amax(y, axis=0)
-    mean = np.mean(y, axis=0)
     assert len(x) == len(hi)
     assert len(x) == len(lo)
-    assert len(x) == len(mean)
-    max_score = np.amax(mean)
-    return max_score, dict(mean=mean, lo=lo, hi=hi)
+
+  return dict(mean=mean, lo=lo, hi=hi)
+
+
+def average_max(y):
+  best = np.amax(y, axis=1)
+  # return np.mean(best, axis=0), np.std(best, axis=0)
+  return np.mean(best, axis=0)
 
 
 def plot_figure(args):
@@ -469,9 +474,9 @@ def plot_figure(args):
       x = runs[0]["steps"]
       y = [mdata["scores"] for mdata in runs]
       print("Processing env: '%s', label: '%s'" % (env, label))
-      score, y = average_models(x, y)
+      scores[env][label] = average_max(y)
+      y = average_models(x, y)
       plot_model(ax, x, y, label, color)
-      scores[env][label] = score
 
   add_legend(fig, axes, envs, args.shrink)
 

@@ -21,12 +21,12 @@ def save_scores(scores, file, args):
   texdata = []
 
   for env in envs:
-    csvdata.append([env] + [scores[env].get(label, -float("inf")) for label in labels])
-    if args.tablemax:
-      data = [scores[env].get(label, -float("inf")) for label in labels]
+    data = [scores[env].get(label, -float("inf")) for label in labels]
+    csvdata.append([env] + data)
+    if args.boldmax:
       best = max(data)
-      data = ["%.1f" % score if score != best else "\\textbf{%.1f}" % score for score in data]
-      texdata.append([env] + data)
+      data = ["{:,.1f}".format(score) if score != best else "\\textbf{{{:,.1f}}}".format(score) for score in data]
+    texdata.append([env] + data)
 
   csvtable = tabulate.tabulate(csvdata, headers=labels, floatfmt=".1f", tablefmt="presto")
   textable = tabulate.tabulate(texdata, headers=labels, floatfmt=".1f", tablefmt="latex_raw")
