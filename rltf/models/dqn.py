@@ -111,7 +111,9 @@ class BaseDQN(Model):
 
   def _compute_target(self, target_net):
     target = self._select_target(target_net)
+    target = tf.identity(target, name="target")
     backup = self._compute_backup(target)
+    backup = tf.identity(backup, name="backup")
     backup = tf.stop_gradient(backup)
     return backup
 

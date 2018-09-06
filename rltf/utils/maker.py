@@ -14,8 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 def _make_env(env_id, seed, model_dir, video_callable, mode, max_ep_steps):
-  if ("Roboschool") in env_id:
+  if "Roboschool" in env_id:
     import roboschool
+
+  if "Bullet" in env_id:
+    import pybullet_envs
 
   monitor_dir = os.path.join(model_dir, "env_monitor")
 
