@@ -106,15 +106,15 @@ def make_agent():
 
   # Set additional arguments
   if args.batch_size is None:
-    args.batch_size = 16 if len(env.observation_space.shape) == 3 else 64
+    args.batch_size = 16 if len(env_train.observation_space.shape) == 3 else 64
 
   # Set learning rates and optimizer
   actor_opt_conf  = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.actor_lr))
   critic_opt_conf = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.critic_lr))
 
   # Create the exploration noise
-  mu    = np.zeros(env.action_space.shape, dtype=np.float32)
-  sigma = np.ones(env.action_space.shape,  dtype=np.float32) * args.sigma
+  mu    = np.zeros(env_train.action_space.shape, dtype=np.float32)
+  sigma = np.ones(env_train.action_space.shape,  dtype=np.float32) * args.sigma
   if args.noise_type == "OU":
     action_noise = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
   elif args.noise_type == "Gaussian":
@@ -164,6 +164,8 @@ def make_agent():
 
   # Create the agent
   ddpg_agent = AgentDDPG(**kwargs)
+
+  return ddpg_agent, args
 
 
 def main():
