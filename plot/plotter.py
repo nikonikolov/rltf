@@ -37,6 +37,7 @@ def parse_cmd_args():
   # parser.add_argument('--fwidth',     default=None,     type=int,   help='width of the figure')
   # parser.add_argument('--fheight',    default=None,     type=int,   help='height of the figure')
   parser.add_argument('--fontsize',   default=16,       type=int,   help='fontsize for all plots')
+  parser.add_argument('--linewidth',  default=2,        type=float, help='linewidth for all plots')
   parser.add_argument('--shrink',     default=0.9,      type=float, help='shrink factor to fit legend')
   parser.add_argument('--pad',        default=3,        type=int,   help='pad between subplots and fig margins')
   parser.add_argument('--hpad',       default=3,        type=int,   help='horizonal pad between subplots')
@@ -137,7 +138,7 @@ def make_figure(args):
   return fig, axes
 
 
-def add_legend(fig, axes, envs, shrink):
+def add_legend(fig, axes, envs, shrink, linewidth):
   # Get line handles and labels and remove duplicates
   # handles, labels = fig.gca().get_legend_handles_labels()
   handles = [ax.get_legend_handles_labels()[0] for ax in axes]
@@ -152,18 +153,19 @@ def add_legend(fig, axes, envs, shrink):
     bbox = axes[len(envs)].get_position().get_points()
     x, y = (bbox[0][0]+bbox[1][0])/2.0, (bbox[0][1]+bbox[1][1])/2.0
     # Put the legend in the center of the next subplot
-    fig.legend(by_label.values(), by_label.keys(), loc="center", bbox_to_anchor=(x, y))
+    leg = fig.legend(by_label.values(), by_label.keys(), loc="center", bbox_to_anchor=(x, y))
 
     # Use different legend label size and make lines bolder
     # leg = fig.legend(by_label.values(), by_label.keys(), loc="center", bbox_to_anchor=(x, y),
     #                  prop={'size': 32})
-    # for handle in leg.legendHandles:
-    #   handle.set_linewidth(10.0)
 
   # Otherwise place as a row on top and shrink subplots
   else:
-    fig.legend(by_label.values(), by_label.keys(), loc="upper left", ncol=len(by_label.keys()))
+    leg = fig.legend(by_label.values(), by_label.keys(), loc="upper left", ncol=len(by_label.keys()))
     fig.subplots_adjust(top=shrink)
+
+  for handle in leg.legendHandles:
+    handle.set_linewidth(linewidth)
 
 
 def limit_model_steps(model_dir, model_data, args):
@@ -397,7 +399,7 @@ def group_models(legend):
   return groups
 
 
-def plot_model(axes, x, y, label, color):
+def plot_model(axes, x, y, label, color, linewidth):
   """
   Args:
     axes: matplotlib.axes.Axes. Axes object which should handle plotting
@@ -406,7 +408,7 @@ def plot_model(axes, x, y, label, color):
     label: str. Label for the plotted line
     color: str. MPL color for the plotted line
   """
-  axes.plot(x, y["mean"], label=label, color=color)
+  axes.plot(x, y["mean"], label=label, color=color, linewidth=linewidth)
   if y["lo"] is not None and y["hi"] is not None:
     axes.fill_between(x, y["lo"], y["hi"], color=color, alpha=0.3)
 
@@ -476,9 +478,9 @@ def plot_figure(args):
       print("Processing env: '%s', label: '%s'" % (env, label))
       scores[env][label] = average_max(y)
       y = average_models(x, y)
-      plot_model(ax, x, y, label, color)
+      plot_model(ax, x, y, label, color, args.linewidth)
 
-  add_legend(fig, axes, envs, args.shrink)
+  add_legend(fig, axes, envs, args.shrink, args.linewidth)
 
   return fig, scores
 
