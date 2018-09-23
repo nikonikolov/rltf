@@ -178,6 +178,9 @@ class C51(BaseDQN):
     center  = self.bins - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
     z_var   = tf.square(center) * agent_net               # out: [None, n_actions, N]
     z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
+    # Normalize the variance
+    mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
+    z_var   = z_var / mean                                    # out: [None, n_actions]
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 

@@ -3,6 +3,7 @@ import os
 from collections import OrderedDict
 
 import numpy as np
+import tensorflow as tf
 import tabulate
 
 CODE_DIR   = os.path.abspath(os.path.dirname(__file__))
@@ -93,66 +94,6 @@ def read_conf(file):
   return conf
 
 
-def read_npy(file):
-  if os.path.exists(file):
-    return np.load(file)
-  return None
-
-
-def read_model_data(model_dir):
-  assert os.path.exists(model_dir)
-
-  ep_lens = read_npy(os.path.join(model_dir, "env_monitor/data/eval_ep_lens.npy"))
-  ep_rews = read_npy(os.path.join(model_dir, "env_monitor/data/eval_ep_rews.npy"))
-
-  scores_steps = read_npy(os.path.join(model_dir, "env_monitor/data/eval_scores_steps.npy"))
-  scores_inds  = read_npy(os.path.join(model_dir, "env_monitor/data/eval_scores_inds.npy"))
-
-  if scores_steps is not None and scores_inds is not None:
-    assert len(scores_steps) == len(scores_inds)
-    assert ep_lens is not None
-    assert ep_rews is not None
-
-  return dict(
-              scores_steps=scores_steps,
-              scores_inds=scores_inds,
-              ep_rews=ep_rews,
-              ep_lens=ep_lens,
-             )
-
-
-# TODO: Allow for reading histograms
-def read_tb_file(model_dir, tag):
-  """Read data from a tensorboard file
-  Args:
-    model_dir: str. Just the model directory path, without the TB addition
-    tag: str. Tag which to fetch. Must start with train/ or eval/
-  """
-  import tensorflow as tf
-
-  tb_dir = os.path.join(model_dir, "tf/tb")
-  files  = os.listdir(tb_dir)
-  files  = [os.path.join(tb_dir, file) for file in files]
-  x, y   = [], []
-
-  # Check tag for correctness
-  assert tag.startswith("train/") or tag.startswith("eval/") or tag.startswith("debug/")
-
-  # Read TB file
-  for file in files:
-    # Traverse events/summaries
-    for e in tf.train.summary_iterator(file):
-      # Traverse every value in the summary
-      for v in e.summary.value:
-        if tag in v.tag:
-          x.append(e.step)
-          y.append(v.simple_value)
-
-  # Sort the lists by step
-  x, y = (list(t) for t in zip(*sorted(zip(x, y), key=lambda t: t[0])))
-  return x, y
-
-
 def write_tb_file(tb_dir, steps, data):
   """
   Args:
@@ -166,7 +107,7 @@ def write_tb_file(tb_dir, steps, data):
     assert tag.startswith("train/") or tag.startswith("eval/")
     assert len(steps) == len(vals)
 
-  import tensorflow as tf
+  # import tensorflow as tf
   writer = tf.summary.FileWriter(tb_dir)
 
   for i, s in enumerate(steps):

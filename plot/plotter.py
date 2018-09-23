@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import dataio
+import dataproc
 
 PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FIG_DIR     = os.path.join(PROJECT_DIR, "figures")
@@ -26,7 +27,9 @@ def parse_cmd_args():
   parser.add_argument('--conf',       required=True,    type=str,   help='path for conf file')
   parser.add_argument('--filename',   default=None,     type=str,   help='output filename; default is `conf`')
   parser.add_argument('--score-mode', default=None,     type=str,   help='what statistic to plot',
-                      choices=["eval_score", "n_eps"])
+                      choices=["mean_score", "n_eps"])
+  parser.add_argument('--run',        default=None,     type=str,   help='plot or log table',
+                      choices=["plot", "log"])
 
   # Matplotlib arguments
   parser.add_argument('--ncols',      default=2,        type=int,   help='number of cols in the fig')
@@ -36,19 +39,20 @@ def parse_cmd_args():
   parser.add_argument('--subscale',   default=0.5,      type=float, help='scale factor for subplot size')
   # parser.add_argument('--fwidth',     default=None,     type=int,   help='width of the figure')
   # parser.add_argument('--fheight',    default=None,     type=int,   help='height of the figure')
-  parser.add_argument('--fontsize',   default=16,       type=int,   help='fontsize for all plots')
+  parser.add_argument('--fontsize',   default=20,       type=int,   help='fontsize for all plots')
+  parser.add_argument('--linewidth',  default=2.0,      type=float, help='linewidth for all plots')
   parser.add_argument('--shrink',     default=0.9,      type=float, help='shrink factor to fit legend')
   parser.add_argument('--pad',        default=3,        type=int,   help='pad between subplots and fig margins')
   parser.add_argument('--hpad',       default=3,        type=int,   help='horizonal pad between subplots')
   parser.add_argument('--wpad',       default=3,        type=int,   help='vertical pad between subplots')
 
   # Model runtime arguments
-  parser.add_argument('--max-step',   default=30*10**6, type=int,   help='max train step for data')
-  parser.add_argument('--eval-freq',  default=250000,   type=int,   help='freq of eval in # *agent* steps')
-  parser.add_argument('--eval-len',   default=125000,   type=int,   help='len of eval in # *agent* steps')
-  parser.add_argument('--n-eps',      default=100,      type=int,   help='number of eps to average')
-  parser.add_argument('--tb-tag',     default=None,     type=str,   help='TensorBoard tag to read if numpy '
-                      'data is missing from disk. Default is determined based on --score-mode')
+  parser.add_argument('--max-step',   default=50*10**6, type=int,   help='max train step for data')
+  # parser.add_argument('--eval-freq',  default=250000,   type=int,   help='freq of eval in # *agent* steps')
+  # parser.add_argument('--eval-len',   default=125000,   type=int,   help='len of eval in # *agent* steps')
+  # parser.add_argument('--n-eps',      default=100,      type=int,   help='number of eps to average')
+  parser.add_argument('--tb-tag',     default=None,     type=str,   help='TensorBoard tag to read')
+  parser.add_argument('--np-data',    default=None,     type=str,   help='Read train or eval npy data', choices=["t", "e"])
 
   parser.add_argument('--tb-filter',  default=True,     type=bool,  help='filter TB data based on eval-freq')
   parser.add_argument('--boldmax',    default=True,     type=bool,  help='bold max scores in table output')
@@ -73,6 +77,7 @@ def parse_args():
     newargs  = conf["args"]
     argnames = vars(args)
     for newarg, value in newargs.items():
+      print(newarg, value)
       if newarg in argnames:
         oldval = getattr(args, newarg)
         warnings.warn("Overwriting command line argument {}={} with conf file value {}".format(
@@ -84,34 +89,19 @@ def parse_args():
         assert type(value) == type(oldval)
       setattr(args, newarg, value)
 
-  # Score mode must be provided
-  assert args.score_mode in ["eval_score", "n_eps"], "--score-mode argument must be set"
-
-  # Default to correct TensorBoard tag if not provided
-  if args.tb_tag is None:
-    if args.score_mode == "n_eps":
-      args.tb_tag = "eval/mean_ep_rew"
-    elif args.score_mode == "eval_score":
-      args.tb_tag = "eval/score"
-    else:
-      raise ValueError("Unknown --score_mode argument")
-
   # Compute correct values for Figure
   args.width  = int(args.width  * args.subscale)
   args.height = int(args.height * args.subscale)
 
-  # Compute max step in terms of eval and a step scaling factor
-  # NOTE: Need to keep max step in terms of eval due to TensorBoard
-  assert args.eval_freq % args.eval_len == 0
-  args.step_scale = int(args.eval_freq / args.eval_len)
-  args.max_step   = int(args.max_step / args.step_scale)
+  # Assert that the mode for reading data is provided
+  assert (args.tb_tag is None) != (args.np_data is None)
 
   args.conf = conf
 
   return args
 
 
-def make_figure(args):
+def make_figure(args, nplots):
   dpi = 100.0
 
   # TODO: If custom figure values, take them into account
@@ -125,6 +115,13 @@ def make_figure(args):
   # Make a list of the axes - otherwise it is 2D array
   axes = [ax for r in axes for ax in r]
 
+  # Make unnecessary subplots not visible
+  if len(axes) < nplots:
+    raise ValueError("Number of available subplots is less than the amount of data to be plotted")
+  elif len(axes) > nplots:
+    for i in range(nplots,len(axes)):
+      axes[i].set_visible(False)
+
   # Apply the style properties to every subplot
   for ax in axes:
     ax.grid()
@@ -137,7 +134,7 @@ def make_figure(args):
   return fig, axes
 
 
-def add_legend(fig, axes, envs, shrink):
+def add_legend(fig, axes, nplots, shrink, linewidth):
   # Get line handles and labels and remove duplicates
   # handles, labels = fig.gca().get_legend_handles_labels()
   handles = [ax.get_legend_handles_labels()[0] for ax in axes]
@@ -147,177 +144,28 @@ def add_legend(fig, axes, envs, shrink):
   by_label = OrderedDict(zip(labels, handles))
 
   # Place in lower-right corner when no plot there
-  if len(axes) > len(envs):
+  if len(axes) > nplots:
     # Get the center position of the next subplot
-    bbox = axes[len(envs)].get_position().get_points()
+    bbox = axes[nplots].get_position().get_points()
     x, y = (bbox[0][0]+bbox[1][0])/2.0, (bbox[0][1]+bbox[1][1])/2.0
     # Put the legend in the center of the next subplot
-    fig.legend(by_label.values(), by_label.keys(), loc="center", bbox_to_anchor=(x, y))
+    leg = fig.legend(by_label.values(), by_label.keys(), loc="center", bbox_to_anchor=(x, y))
 
     # Use different legend label size and make lines bolder
     # leg = fig.legend(by_label.values(), by_label.keys(), loc="center", bbox_to_anchor=(x, y),
     #                  prop={'size': 32})
-    # for handle in leg.legendHandles:
-    #   handle.set_linewidth(10.0)
 
   # Otherwise place as a row on top and shrink subplots
   else:
-    fig.legend(by_label.values(), by_label.keys(), loc="upper left", ncol=len(by_label.keys()))
+    leg = fig.legend(by_label.values(), by_label.keys(), loc="upper left", ncol=len(by_label.keys()))
     fig.subplots_adjust(top=shrink)
 
+  # # For testing
+  # leg = fig.legend(by_label.values(), by_label.keys(), loc="upper left", ncol=len(by_label.keys()))
+  # fig.subplots_adjust(top=shrink)
 
-def limit_model_steps(model_dir, model_data, args):
-  """Assumes model_data is in proper format:
-    - len(scores_steps) == len(scores_inds)
-    - each index in the score arrays corresponds to a single eval run
-    - the values in score_inds correspond to correct indices in ep_rews and ep_lens
-  Args:
-    model_dir: str. The model directory
-    model_data: dict. The model data
-    args: ArgumentParser. The command-line arguments
-  Returns:
-    dict. Contains the input data limited to args.max_step. Steps are scaled to match train agent steps
-  """
-  scores_steps  = model_data["scores_steps"]
-  max_step      = args.max_step
-  step_scale    = args.step_scale
-
-  # TODO: This assumes that max_step is contained in scores_step. Otherwise, additional index is kept
-  inds = np.where(scores_steps >= max_step)[0]
-  try:
-    i = inds[0]+1
-    model_data["scores_steps"] = model_data["scores_steps"][:i] * step_scale
-    model_data["scores_inds"]  = model_data["scores_inds"][:i]
-
-    # Remember that indices are exclusive
-    i = model_data["scores_inds"][-1]
-
-    model_data["ep_lens"] = model_data["ep_lens"][:i]
-    model_data["ep_rews"] = model_data["ep_rews"][:i]
-
-  # Append garbage data if max_step not reached
-  except IndexError:
-    warnings.warn("The recorded data for model '%s' has not reached max_step=%d. Appending -inf values"
-                  % (model_dir, max_step))
-
-    ep_lens       = list(model_data["ep_lens"])
-    ep_rews       = list(model_data["ep_rews"])
-    scores_steps  = list(model_data["scores_steps"] * step_scale)
-    scores_inds   = list(model_data["scores_inds"])
-
-    period = args.eval_freq
-
-    while True:
-      s = scores_steps[-1] + period
-      if s > max_step * step_scale:
-        break
-      ep_rews.append(-float("inf"))
-      ep_lens.append(0)
-      scores_steps.append(s)
-      scores_inds.append(len(ep_rews))
-
-    model_data["ep_lens"]      = np.asarray(ep_lens, dtype=np.int32)
-    model_data["ep_rews"]      = np.asarray(ep_rews, dtype=np.float32)
-    model_data["scores_steps"] = np.asarray(scores_steps, dtype=np.int32)
-    model_data["scores_inds"]  = np.asarray(scores_inds,  dtype=np.int32)
-
-  return model_data
-
-
-def compute_score(model_data, score_mode, n_eps=100):
-  """Average episode rewards in a window of n_eps"""
-
-  ep_rews = model_data["ep_rews"]
-  inds    = model_data["scores_inds"]
-  # Extract windows of n_eps
-  if score_mode == "n_eps":
-    rews    = [ep_rews[i-n_eps:i] for i in inds]
-  # Extract episodes from the same evaluation run
-  elif score_mode == "eval_score":
-    rews    = [ep_rews[lo:hi] for lo, hi in zip(np.concatenate([[0],inds]), inds)]
-  else:
-    raise ValueError("Unknown --score-mode")
-  # Average over the extracted episodes
-  rews    = [np.mean(eps) if len(eps) > 0 else -float("inf") for eps in rews]
-  rews    = np.asarray(rews)
-
-  assert len(rews) > 0
-
-  return dict(
-              steps=model_data["scores_steps"],
-              scores=rews,
-             )
-
-
-def filter_tb_data(x, y, args, model_dir):
-  assert len(x) == len(y)
-  steps, rews = [], []
-
-  max_step    = args.max_step
-  step_scale  = args.step_scale
-  period      = args.eval_len
-
-  # TB data is logged with a fixed freqency. Do not filter it in this case
-  if not args.tb_filter:
-    if x[-1] < max_step:
-      sdiff = x[-1] - x[-2]
-      steps, scores = list(x), list(y)
-      for s in range(steps[-1], max_step, sdiff):
-        steps.append(s + sdiff)
-        scores.append(-float("inf"))
-    elif x[-1] > max_step:
-      data = [(step, score) for step, score in zip(x,y) if step <= max_step]
-      steps, scores = zip(*data)
-      steps, scores = list(steps), list(scores)
-    return dict(steps=steps, scores=scores)
-
-  # Filter the TB data, since it is logged with a fixed freqency
-  for s, r, s1, r1 in zip(x, y, x[1:], y[1:]):
-    if s > max_step:
-      break
-    if s % period == 0:
-      # Avoid duplicates
-      if len(steps) == 0 or (len(steps) > 0 and steps[-1] != s):
-        steps.append(s)
-        rews.append(r)
-    if s % period == period-5000:
-      s = s + 5000
-      r = (r+r1)/2
-      # Avoid duplicates
-      if len(steps) == 0 or (len(steps) > 0 and steps[-1] != s):
-        steps.append(s)
-        rews.append(r)
-
-  # Check for correct parsing
-  if len(rews) == 0 or len(steps) == 0:
-    print(len(rews), len(steps))
-    print(x)
-    print(y)
-    raise AssertionError
-
-  # Append garbage y to max_step until max_step
-  if steps[-1] < max_step:
-    warnings.warn("The recorded data for model '%s' has not reached max_step=%d. Appending -inf values"
-                  % (model_dir, max_step))
-    while True:
-      s = (len(steps)+1)*period
-      if s > max_step:
-        break
-      steps.append(s)
-      rews.append(-float("inf"))
-
-  # Double check correct step values
-  for i, s in enumerate(steps):
-    if (i+1)*period != s:
-      print((i+1)*period, s)
-      print(steps)
-      print(x)
-      print((rews[i]+rews[i-1])/2)
-      raise AssertionError
-
-  steps = np.asarray(steps) * step_scale
-  rews  = np.asarray(rews)
-  return dict(steps=steps, scores=rews)
+  for handle in leg.legendHandles:
+    handle.set_linewidth(linewidth*2)
 
 
 def process_run(model_dir, args):
@@ -331,22 +179,13 @@ def process_run(model_dir, args):
   """
   print("Processing '%s'" % model_dir)
 
-  model_path  = dataio.get_model_dir(model_dir, args)
-  model_data  = dataio.read_model_data(model_path)
-  steps       = model_data["scores_steps"]
-  inds        = model_data["scores_inds"]
-  use_tb      = steps is None or inds is None
+  path = dataio.get_model_dir(model_dir, args)
+  datawrap = dataproc.DataWrapper(path, args.max_step, tb_tag=args.tb_tag, data_type=args.np_data)
+  datawrap.read_data()
+  datawrap.data.compute_y(mode=args.score_mode)
+  data = datawrap.get_data()
 
-  # Compute model data from TensorBoard
-  if use_tb:
-    x, y       = dataio.read_tb_file(model_path, tag=args.tb_tag)
-    model_data = filter_tb_data(x, y, args, model_dir)
-  # Compute model data from stats
-  else:
-    model_data = limit_model_steps(model_dir, model_data, args)
-    model_data = compute_score(model_data, score_mode=args.score_mode, n_eps=args.n_eps)
-
-  return model_data
+  return data
 
 
 def process_group(groups, args):
@@ -397,7 +236,7 @@ def group_models(legend):
   return groups
 
 
-def plot_model(axes, x, y, label, color):
+def plot_model(axes, x, y, label, color, linewidth):
   """
   Args:
     axes: matplotlib.axes.Axes. Axes object which should handle plotting
@@ -406,9 +245,28 @@ def plot_model(axes, x, y, label, color):
     label: str. Label for the plotted line
     color: str. MPL color for the plotted line
   """
-  axes.plot(x, y["mean"], label=label, color=color)
+  axes.plot(x, y["mean"], label=label, color=color, linewidth=linewidth)
   if y["lo"] is not None and y["hi"] is not None:
     axes.fill_between(x, y["lo"], y["hi"], color=color, alpha=0.3)
+
+
+def plot_histogram(axes, x, y, label, color, linewidth):
+  # https://github.com/tensorflow/tensorboard/blob/1.5/tensorboard/plugins/distribution/vz_distribution_chart/vz-distribution-chart.ts
+  # opacities = [0.0912, 0.5436, 0.5992, 0.766, 0.766, 0.5992, 0.5436, 0.0912]
+  opacities = [0.0912, 0.5436, 0.5992, 0.766, 0.9, 0.766, 0.5992, 0.5436, 0.0912]
+
+  middle = 4
+  linewidth = 0.5
+
+  for i in range(len(opacities)):
+    if i < middle:
+      axes.plot(x, y[:,i], color=color, alpha=opacities[i], linewidth=linewidth)
+      axes.fill_between(x, y[:,i], y[:,i+1], color=color, alpha=opacities[i])
+    if i == middle:
+      axes.plot(x, y[:,i], label=label, color=color, alpha=opacities[i], linewidth=linewidth)
+    if i > middle:
+      axes.plot(x, y[:,i], color=color, alpha=opacities[i], linewidth=linewidth)
+      axes.fill_between(x, y[:,i-1], y[:,i], color=color, alpha=opacities[i])
 
 
 def average_models(x, y):
@@ -432,76 +290,124 @@ def average_max(y):
   return np.mean(best, axis=0)
 
 
-def plot_figure(args):
-  """Read data, process it, create a Figure and plot the data
-  Args:
-    args: ArgumentParser. Contains the command-line arguments. Must also have member `conf` which holds
-    the configuration
-  Returns:
-    tuple (Figure, dict). First entry is the plotted figure, second entry is a dict of the best scores
-  """
-
-  conf    = args.conf
-  legend  = conf["legend"]
-
+def process_data(args):
+  """Group models, read their data and process it"""
+  legend  = args.conf["legend"]
   groups  = group_models(legend)
   print("Groups:")
   pprint.pprint(groups)
   print()
   groups  = process_group(groups, args)
+  return groups
+
+
+def plot_histos(args, groups):
+  """Create a Figure and plot the data
+  Returns:
+    Figure: the plotted figure
+  """
+  legend  = args.conf["legend"]
   envs    = sorted(groups.keys())
-  scores  = dict()
+  nplots  = sum([len(labels) for env, labels in groups.items()])
 
   # TODO: Add functionality for plotting on separate figures
-  fig, axes = make_figure(args)
+  fig, axes = make_figure(args, nplots)
 
-  # Make unnecessary subplots not visible
-  if len(axes) > len(envs):
-    for i in range(len(envs),len(axes)):
-      axes[i].set_visible(False)
+  i = 0
+  for env in envs:
+    labels = groups[env]
+    for label, runs in labels.items():
+      color = legend[label]["color"]
+      # Only the first entry is plotted for histograms, the rest are ignored
+      print("Processing env: '%s', label: '%s'" % (env, label))
+      data = runs[0]
+      x, y = data.x, data.y
+
+      ax = axes[i]
+      ax.set_title(label=env)
+      plot_histogram(ax, x, y, label, color, args.linewidth)
+      i = i+1
+
+  add_legend(fig, axes, nplots, args.shrink, args.linewidth)
+
+  return fig
+
+
+def plot_figure(args, groups):
+  """Create a Figure and plot the data
+  Returns:
+    Figure: the plotted figure
+  """
+  legend  = args.conf["legend"]
+  envs    = sorted(groups.keys())
+  nplots  = len(envs)
+
+  # TODO: Add functionality for plotting on separate figures
+  fig, axes = make_figure(args, nplots)
 
   # Plot each figure
   for env, ax in zip(envs, axes):
-    scores[env] = dict()
     # Set the title to the environment name
     ax.set_title(label=env)
     labels = groups[env]
-    # Traverse legends so that labels are always plotted in the same order
-    # for model in legend:
-      # runs = labels[model]
     for label, runs in labels.items():
       color = legend[label]["color"]
-      x = runs[0]["steps"]
-      y = [mdata["scores"] for mdata in runs]
+      x = runs[0].x
+      y = [mdata.y for mdata in runs]
       print("Processing env: '%s', label: '%s'" % (env, label))
-      scores[env][label] = average_max(y)
       y = average_models(x, y)
-      plot_model(ax, x, y, label, color)
+      plot_model(ax, x, y, label, color, args.linewidth)
 
-  add_legend(fig, axes, envs, args.shrink)
+  add_legend(fig, axes, nplots, args.shrink, args.linewidth)
 
-  return fig, scores
+  return fig
+
+
+def benchmark_scores(groups, compute_score=average_max):
+  """Read data, process it, create a Figure and plot the data
+  Returns:
+    dict of the best scores
+  """
+  envs    = sorted(groups.keys())
+  scores  = dict()
+
+  # Traverse all environments
+  for env in envs:
+    scores[env] = dict()
+    labels = groups[env]
+    for label, runs in labels.items():
+      y = [mdata.y for mdata in runs]
+      print("Processing env: '%s', label: '%s'" % (env, label))
+      scores[env][label] = compute_score(y)
+
+  return scores
 
 
 def main():
   # Process args and conf
   args = parse_args()
 
-  # Set the global fontsize for all plots
-  plt.rc('font', size=args.fontsize)
+  groups = process_data(args)
 
-  # Plot figure
-  fig, scores = plot_figure(args)
+  if args.run == "plot":
+    # Set the global fontsize for all plots
+    plt.rc('font', size=args.fontsize)
 
-  # Save figure
-  pngpath = os.path.join(FIG_DIR, args.filename + ".png")
-  plt.savefig(pngpath)
+    # Plot figure
+    fig = plot_figure(args, groups)
+    # fig = plot_histos(args, groups)
 
-  # Save scores
-  txtfile = os.path.join(FIG_DIR, args.filename)
-  dataio.save_scores(scores, txtfile, args)
+    # Save figure
+    pngpath = os.path.join(FIG_DIR, args.filename + ".png")
+    plt.savefig(pngpath)
 
-  plt.show()
+    plt.show()
+
+  elif args.run == "log":
+    scores  = benchmark_scores(groups)
+
+    txtfile = os.path.join(FIG_DIR, args.filename)
+    dataio.save_scores(scores, txtfile, args)
 
 
 if (__name__ == "__main__"):
