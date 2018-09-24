@@ -4,6 +4,20 @@ from rltf.models.tf_utils import woodburry_inverse
 
 
 class BLR(tf.layers.Layer):
+  """Bayesian Linear Regression Layer
+  By default:
+    - Uses tf.float64 for internal variables since higher precision is required for inverting matrices
+    - Inverts the precision matrix using the woodburry formula - more stable and efficient
+    -
+  NOTE:
+    - Internal variables are not captured by `tf.trainable_variables()` and by optimizers
+      - This is because `self.trainable_variables` returns an empty list
+      - The fact that variables are set as trainable at instantiation does not affect this
+    - Internal variables are captured when selecting variables from a given scope
+      - This means that if an agent and a target network with identical structures contain BLR layers,
+        the BLR variables will get updated, if all variables within the relevant scopes are captured
+    - For training variables, one needs to use the op returned by `self.train()`
+  """
 
   def __init__(self, tau, sigma_e, mode="mean", w_dim=None, bias=False, dtype=tf.float64, name=None):
 

@@ -30,7 +30,7 @@ class BDQN(DDQN):
     self._phi       = None    # BLR features
     self.train_blr  = None    # Op for updating the BLR weight posterior
     self.reset_blr  = None    # Op for reseting the BLR to initial weights
-    self.a_var      = None    # Tensor with BLR stds
+    self.a_var      = None    # Tensor with BLR var
 
 
   # def build(self):
@@ -63,7 +63,7 @@ class BDQN(DDQN):
       # Remember phi and the stds
       if "agent_net" in tf.get_variable_scope().name and self._phi is None:
         self._phi  = x
-        self.a_var = tf.concat([std for (_, std) in blr_out], axis=-1)
+        self.a_var = tf.concat([var for (_, var) in blr_out], axis=-1)
       # Group the mean predictions
       x = [mean for (mean, _) in blr_out]
       x = tf.concat(x, axis=-1)
