@@ -96,18 +96,8 @@ class DDPG(Model):
     actor_opt       = self.actor_opt_conf.build()
     critic_opt      = self.critic_opt_conf.build()
 
-    actor_grads     = actor_opt.compute_gradients(actor_loss,   var_list=actor_vars)
-    critic_grads    = critic_opt.compute_gradients(critic_loss, var_list=critic_vars)
-
-    control_deps    = self._group_control_deps(actor_grads, critic_grads)
-
-    # Apply gradients only after both actor and critic have been differentiated
-    with tf.control_dependencies(control_deps):
-      train_actor   = actor_opt.apply_gradients(actor_grads)
-      train_critic  = critic_opt.apply_gradients(critic_grads)
-
     # Create train Op
-    self._train_op  = tf.group(train_actor, train_critic, name="train_op")
+    self._train_op  = self._build_train_op(actor_opt, critic_opt, actor_loss, critic_loss, actor_vars, critic_vars)
 
     # Create the Op that updates the target
     logger.debug("Creating target net update Op")
@@ -123,6 +113,10 @@ class DDPG(Model):
     # Rememeber the model variables
     self._variables = agent_vars + target_vars
 
+    self._add_summaries(actor_loss, critic_loss, act_t_q, target_q)
+
+
+  def _add_summaries(self, actor_loss, critic_loss, act_t_q, target_q):
     # Summaries
     tf.summary.scalar("train/actor_loss",   actor_loss)
     tf.summary.scalar("train/critic_loss",  critic_loss)
@@ -200,6 +194,23 @@ class DDPG(Model):
     return control_deps
 
 
+  def _build_train_op(self, actor_opt, critic_opt, actor_loss, critic_loss, actor_vars, critic_vars):
+    actor_grads     = actor_opt.compute_gradients(actor_loss,   var_list=actor_vars)
+    critic_grads    = critic_opt.compute_gradients(critic_loss, var_list=critic_vars)
+
+    control_deps    = self._group_control_deps(actor_grads, critic_grads)
+
+    # Apply gradients only after both actor and critic have been differentiated
+    with tf.control_dependencies(control_deps):
+      train_actor   = actor_opt.apply_gradients(actor_grads)
+      train_critic  = critic_opt.apply_gradients(critic_grads)
+
+    # Create train Op
+    train_op  = tf.group(train_actor, train_critic, name="train_op")
+
+    return train_op
+
+
   def initialize(self, sess):
     """Initialize the model. See Model.initialize()"""
     sess.run(self._init_op)
@@ -211,7 +222,9 @@ class DDPG(Model):
 
   def action_train(self, sess, state):
     feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
-    return sess.run(self._action, feed_dict=feed_dict)[0]
+    action    = sess.run(self._action, feed_dict=feed_dict)
+    action    = action[0]
+    return action
 
 
   def action_eval(self, sess, state):
