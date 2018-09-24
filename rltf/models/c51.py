@@ -129,7 +129,8 @@ class C51(BaseDQN):
     done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)
     done_mask   = tf.expand_dims(done_mask, axis=-1)
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
-    bins        = tf.squeeze(self.bins, axis=0)
+    # bins        = tf.squeeze(self.bins, axis=0)
+    bins        = tf.reshape(self.bins, [1, self.N])
     target_bins = rew_t + self.gamma * done_mask * bins
     target_bins = tf.clip_by_value(target_bins, self.V_min, self.V_max)
 
