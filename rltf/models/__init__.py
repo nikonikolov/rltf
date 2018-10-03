@@ -17,7 +17,3 @@ from rltf.models.dqn          import DQN
 from rltf.models.model        import Model
 from rltf.models.qr_dqn       import QRDQN
 from rltf.models.qr_ddpg      import QRDDPG
-from rltf.models.dubstrap_c51 import DUBstrapC51
-from rltf.models.dubstrap_c51 import DUBstrapC51_IDS
-from rltf.models.dubstrap_qrdqn import DUBstrapQRDQN
-from rltf.models.dubstrap_qrdqn import DUBstrapQRDQN_IDS
