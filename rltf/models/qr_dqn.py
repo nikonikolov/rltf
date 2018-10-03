@@ -33,8 +33,8 @@ class QRDQN(BaseDQN):
     n_actions = self.n_actions
     N         = self.N
     # init      = tf_utils.init_dqn
-    init    = tf_utils.init_glorot_normal
-    # init    = tf_utils.init_default
+    init      = tf_utils.init_glorot_normal
+    # init      = tf_utils.init_default
 
     with tf.variable_scope("conv_net"):
       # original architecture
