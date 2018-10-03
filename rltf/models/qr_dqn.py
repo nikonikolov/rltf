@@ -32,22 +32,24 @@ class QRDQN(BaseDQN):
     """
     n_actions = self.n_actions
     N         = self.N
-    k_init    = tf_utils.init_dqn
-    # k_init    = tf_utils.init_glorot_normal
-    # k_init    = tf_utils.init_default
+    # init      = tf_utils.init_dqn
+    init    = tf_utils.init_glorot_normal
+    # init    = tf_utils.init_default
 
     with tf.variable_scope("conv_net"):
       # original architecture
       x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu,
-                           kernel_initializer=k_init())
+                           kernel_initializer=init(), bias_initializer=init())
       x = tf.layers.conv2d(x, filters=64, kernel_size=4, strides=2, padding="SAME", activation=tf.nn.relu,
-                           kernel_initializer=k_init())
+                           kernel_initializer=init(), bias_initializer=init())
       x = tf.layers.conv2d(x, filters=64, kernel_size=3, strides=1, padding="SAME", activation=tf.nn.relu,
-                           kernel_initializer=k_init())
+                           kernel_initializer=init(), bias_initializer=init())
     x = tf.layers.flatten(x)
     with tf.variable_scope("action_value"):
-      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,  kernel_initializer=k_init())
-      x = tf.layers.dense(x, N*n_actions, activation=None,        kernel_initializer=k_init())
+      x = tf.layers.dense(x, 512,         activation=tf.nn.relu,
+                           kernel_initializer=init(), bias_initializer=init())
+      x = tf.layers.dense(x, N*n_actions, activation=None,
+                           kernel_initializer=init(), bias_initializer=init())
 
     x = tf.reshape(x, [-1, n_actions, N])
     return x
