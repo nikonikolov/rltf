@@ -157,10 +157,8 @@ def make_agent():
 
   kwargs = {**ddpg_agent_kwargs, **agent_kwargs}
 
-  # Log the parameters for model
-  log_info = [("seed", args.seed), ("extra_info", args.extra_info)]
-  log_info += kwargs.items()
-  rltf_log.log_params(log_info, args)
+  # Log the model parameters
+  rltf_log.log_params(kwargs.items(), args)
 
   # Create the agent
   ddpg_agent = AgentDDPG(**kwargs)

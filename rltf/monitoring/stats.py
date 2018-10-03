@@ -115,6 +115,7 @@ class StatsRecorder:
     case for calling reset() in the middle of the episode is that evaluation run has reached max steps
     without being able to complete the episode.
     """
+    # Ignore at initial reset
     if self.done is None:
       return
 
