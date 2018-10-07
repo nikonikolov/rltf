@@ -99,12 +99,12 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
     pass
 
 
-def log_params(params, args=None):
+def log_params(params, args):
   """Log the runtime parameters for the model to a file on disk
   Args:
-    model_dir: str. The path where to save the log file
     params: list. Each entry must be a tuple of (name, value). Value can also
       be any time of object, but it should have an implementation of __str__
+    args: ArgumentParser. The command line arguments
   """
   params  = pad_log_data(params, sort=True)
   date    = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -113,6 +113,7 @@ def log_params(params, args=None):
   branch  = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
   branch  = branch.decode("utf-8").strip("\n")
 
+  param_logger.info("")
   param_logger.info("TIME: %s", date)
   param_logger.info("GIT COMMIT: %s", commit)
   param_logger.info("GIT BRANCH: %s", branch)

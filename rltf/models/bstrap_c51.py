@@ -77,8 +77,8 @@ class BaseBstrapC51(BaseBstrapDQN):
       x = tf.layers.dense(x, N*n_actions, activation=None)
       x = tf.reshape(x, [-1, n_actions, N])
       # Compute Softmax probabilities in numerically stable way
-      C = tf.stop_gradient(tf.reduce_max(x, axis=-1, keepdims=True))
-      x = tf.nn.softmax(x-C, axis=-1)
+      # C = tf.stop_gradient(tf.reduce_max(x, axis=-1, keepdims=True))
+      # x = tf.nn.softmax(x-C, axis=-1)
       return x
 
     with tf.variable_scope("conv_net"):
@@ -111,10 +111,7 @@ class BaseBstrapC51(BaseBstrapDQN):
     """
     q, z = agent_net
     q = super()._compute_estimate(q)
-    z = C51._compute_estimate(self, z)
-    # a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
-    # a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
-    # z       = tf.reduce_sum(z * a_mask, axis=1)                             # out: [None, N]
+    z = C51._compute_estimate(self, z)    # logits; out: [None, N]
     return q, z
 
 
@@ -158,15 +155,12 @@ class BaseBstrapC51(BaseBstrapDQN):
 
 
   def _compute_loss(self, estimate, target, name):
-    estimate_q, z       = estimate
+    q, logits_z         = estimate
     target_q, target_z  = target
 
     head_loss = super()._compute_loss(estimate_q, target_q, name)
 
-    z_loss    = C51._compute_loss(self, z, target_z, "train/z_loss")
-    # entropy   = -tf.reduce_sum(target_z * tf.log(z), axis=-1)
-    # z_loss    = tf.reduce_mean(entropy)
-    # tf.summary.scalar("train/z_loss", z_loss)
+    z_loss    = C51._compute_loss(self, logits_z, target_z, "train/z_loss")
 
     return head_loss, z_loss
 
@@ -186,7 +180,8 @@ class BaseBstrapC51(BaseBstrapDQN):
 
 
   def _compute_z_variance(self, agent_net):
-    z       = agent_net[1]
+    logits  = agent_net[1]
+    z       = tf_utils.softmax(logits, axis=-1)
 
     # Var(X) = sum_x p(X)*[X - E[X]]^2
     q       = tf.reduce_sum(z * self.bins, axis=-1)       # out: [None, n_actions]

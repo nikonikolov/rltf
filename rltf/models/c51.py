@@ -2,6 +2,7 @@ import numpy      as np
 import tensorflow as tf
 
 from rltf.models.dqn  import BaseDQN
+from rltf.models      import tf_utils
 
 
 class C51(BaseDQN):
@@ -61,8 +62,8 @@ class C51(BaseDQN):
 
     # Compute Softmax probabilities in numerically stable way
     x = tf.reshape(x, [-1, n_actions, N])
-    C = tf.stop_gradient(tf.reduce_max(x, axis=-1, keepdims=True))
-    x = tf.nn.softmax(x-C, axis=-1)
+    # C = tf.stop_gradient(tf.reduce_max(x, axis=-1, keepdims=True))
+    # x = tf.nn.softmax(x-C, axis=-1)
     return x
 
 
@@ -89,7 +90,7 @@ class C51(BaseDQN):
       `tf.Tensor` of shape `[None, N]`
     """
     n_actions   = self.n_actions
-    target_z    = target_net
+    target_z    = tf_utils.softmax(target_net, axis=-1)
 
     # Get the target Q probabilities for the greedy action; output shape [None, N]
     target_q    = tf.reduce_sum(target_z * self.bins, axis=-1)            # out: [None, n_actions]
@@ -160,9 +161,10 @@ class C51(BaseDQN):
 
 
   def _compute_loss(self, estimate, target, name):
-    z         = estimate
+    logits_z  = estimate
     target_z  = target
-    entropy   = -tf.reduce_sum(target_z * tf.log(z), axis=-1)
+    # entropy   = -tf.reduce_sum(target_z * tf.log(z), axis=-1)
+    entropy   = -tf.reduce_sum(target_z * tf_utils.log_softmax(logits_z, axis=-1), axis=-1)
     loss      = tf.reduce_mean(entropy)
 
     tf.summary.scalar(name, loss)
@@ -172,7 +174,8 @@ class C51(BaseDQN):
 
   def _act_train(self, agent_net, name):
     # Compute the Q-function as expectation of Z; output shape [None, n_actions]
-    q       = tf.reduce_sum(agent_net * self.bins, axis=-1)
+    z       = tf_utils.softmax(agent_net, axis=-1)
+    q       = tf.reduce_sum(z * self.bins, axis=-1)
     action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
 
     # Add debugging plot for the variance of the return
