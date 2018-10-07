@@ -119,3 +119,17 @@ def sherman_morrison_inverse(A_inv, u, v):
   inverse = A_inv - num / denom
 
   return inverse
+
+
+def softmax(logits, axis=None, name=None):
+  """Perform stable softmax"""
+  C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
+  x = tf.nn.softmax(logits-C, axis=axis)
+  return x
+
+
+def log_softmax(logits, axis=None, name=None):
+  """Perform stable log_softmax"""
+  C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
+  x = tf.nn.log_softmax(logits-C, axis=axis)
+  return x
