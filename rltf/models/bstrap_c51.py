@@ -158,7 +158,7 @@ class BaseBstrapC51(BaseBstrapDQN):
     q, logits_z         = estimate
     target_q, target_z  = target
 
-    head_loss = super()._compute_loss(estimate_q, target_q, name)
+    head_loss = super()._compute_loss(q, target_q, name)
 
     z_loss    = C51._compute_loss(self, logits_z, target_z, "train/z_loss")
 
