@@ -1,9 +1,11 @@
 import os
+import warnings
 import numpy as np
 import tensorflow as tf
 
 from tensorboard.plugins.distribution.compressor import compress_histogram_proto
 # from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+
 
 def read_npy(file):
   if os.path.exists(file):
@@ -96,12 +98,12 @@ class CurveData:
       # else:
       #   y = np.ones([x.shape[0]] + list(self.y.shape[1:]), dtype=np.float32) * -np.inf
 
-      x = np.concatenate(self.x, np.asarray(x, dtype=np.int32))
-      y = np.concatenate(self.y, np.asarray(y, dtype=np.float32))
+      self.x = np.concatenate([self.x, np.asarray(x, dtype=np.int32)])
+      self.y = np.concatenate([self.y, np.asarray(y, dtype=np.float32)])
 
       if self.i is not None:
-        i = np.arange(0, len(x)) + 1 + self.i[-1]
-        i = np.concatenate(self.i, np.asarray(i, dtype=np.int32))
+        i       = np.arange(0, len(x)) + 1 + self.i[-1]
+        self.i  = np.concatenate([self.i, np.asarray(i, dtype=np.int32)])
 
     # max_step reached; cutoff data
     else:

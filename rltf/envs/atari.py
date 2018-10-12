@@ -55,7 +55,7 @@ class NoopResetEnv(gym.Wrapper):
     for _ in range(noops):
       obs, _, done, _ = self.env.step(0)
       if done:
-        logger.warning("Environment reset during initial NOOPs")
+        # logger.warning("Environment reset during initial NOOPs")
         obs = self.env.reset(**kwargs)
     return obs
 
