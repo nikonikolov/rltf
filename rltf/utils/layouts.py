@@ -201,7 +201,7 @@ ids_heteroscedastic_layout = {
           },
           a_rho2={
             "tick_params": dict(axis='y', labelsize=5.5),
-            "set_title": dict(label="RHO2", size=6),
+            "set_title": dict(label=r'$RHO^2$', size=6),
           },
           a_ids={
             "tick_params": dict(axis='y', labelsize=5.5),
