@@ -212,6 +212,7 @@ class C51(BaseDQN):
     if q is None:
       q = tf.reduce_sum(z * self.bins, axis=-1)
 
+    # Var(X) = sum_x p(X)*[X - E[X]]^2
     center  = self.bins - tf.expand_dims(q, axis=-1)          # out: [None, n_actions, N]
     z_var   = tf.square(center) * z                           # out: [None, n_actions, N]
     z_var   = tf.reduce_sum(z_var, axis=-1)                   # out: [None, n_actions]
