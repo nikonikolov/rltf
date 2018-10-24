@@ -179,22 +179,6 @@ class BaseBstrapC51(BaseBstrapDQN):
     return train_op
 
 
-  def _compute_z_variance(self, agent_net):
-    logits  = agent_net[1]
-    z       = tf_utils.softmax(logits, axis=-1)
-
-    # Var(X) = sum_x p(X)*[X - E[X]]^2
-    q       = tf.reduce_sum(z * self.bins, axis=-1)       # out: [None, n_actions]
-    center  = self.bins - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
-    z_var   = tf.square(center) * z                       # out: [None, n_actions, N]
-    z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
-
-    # Normalize the variance
-    mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-    z_var   = z_var / mean                                    # out: [None, n_actions]
-    return z_var
-
-
 
 class BstrapC51_IDS(BaseBstrapC51):
   """IDS policy from Boostrapped DQN-C51"""
@@ -209,7 +193,7 @@ class BstrapC51_IDS(BaseBstrapC51):
   def _act_train(self, agent_net, name):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
-    z_var     = self._compute_z_variance(agent_net)           # out: [None, n_actions]
+    z_var     = C51._compute_z_variance(self, logits=agent_net[1], normalize=True)  # [None, n_actions]
     self.rho2 = tf.maximum(z_var, 0.25)
 
     # Compute the IDS action - ugly way
