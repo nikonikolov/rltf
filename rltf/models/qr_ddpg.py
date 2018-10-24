@@ -34,7 +34,7 @@ class QRDDPG(DDPG):
 
 
   # def _compute_target(self, target_q):
-  #   done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+  #   done_mask = tf.cast(tf.logical_not(self.done_ph), tf.float32)
   #   done_mask = tf.expand_dims(done_mask, axis=-1)
   #   rew_t_ph  = tf.expand_dims(self.rew_t_ph, axis=-1)
   #   return rew_t_ph + done_mask * self.gamma * target_q

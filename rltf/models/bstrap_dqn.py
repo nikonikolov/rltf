@@ -1,7 +1,7 @@
 import tensorflow as tf
 
-from rltf.models.dqn  import BaseDQN
-from rltf.models      import tf_utils
+from rltf.models import BaseDQN
+from rltf.models import tf_utils
 
 
 class BaseBstrapDQN(BaseDQN):
@@ -65,7 +65,7 @@ class BaseBstrapDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
-    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)
+    a_mask  = tf.one_hot(self.act_t_ph, self.n_actions, dtype=tf.float32)
     a_mask  = tf.tile(tf.expand_dims(a_mask, axis=-2), [1, self.n_heads, 1])
     q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
     return q
@@ -82,7 +82,7 @@ class BaseBstrapDQN(BaseDQN):
     n_actions   = self.n_actions
 
     # Compute the Q-estimate with the agent network variables and select the maximizing action
-    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")      # out: [None, n_heads, n_actions]
+    agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")       # out: [None, n_heads, n_actions]
     target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)   # out: [None, n_heads]
 
     # Select the target Q-function
@@ -99,7 +99,7 @@ class BaseBstrapDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
-    done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)  # out: [None]
+    done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)   # out: [None]
     done_mask   = tf.expand_dims(done_mask, axis=-1)                  # out: [None, 1]
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)              # out: [None, 1]
     target_q    = rew_t + self.gamma * done_mask * target             # out: [None, n_heads]

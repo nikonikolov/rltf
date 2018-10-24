@@ -1,8 +1,8 @@
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models.dqn  import BaseDQN
-from rltf.models      import tf_utils
+from rltf.models import BaseDQN
+from rltf.models import tf_utils
 
 
 class QRDQN(BaseDQN):
@@ -63,7 +63,7 @@ class QRDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
-    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    a_mask  = tf.one_hot(self.act_t_ph, self.n_actions, dtype=tf.float32)   # out: [None, n_actions]
     a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
     z       = tf.reduce_sum(agent_net * a_mask, axis=1)                     # out: [None, N]
     return z

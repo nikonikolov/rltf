@@ -7,23 +7,17 @@ logger = logging.getLogger(__name__)
 
 
 class Model:
-  """The base class for operating a Reinforcement Learning deep net in
-  TensorFlow. All networks descend from this class
+  """The base class for operating a Reinforcement Learning deep net in TensorFlow.
+  All network estimators descend from this class
   """
 
   def __init__(self):
-    # Input TF placeholders that must be set
-    self._obs_t_ph      = None
-    self._act_t_ph      = None
-    self._rew_t_ph      = None
-    self._obs_tp1_ph    = None
-    self._done_ph       = None
 
     # Properties that should be set by the subclass
-    self.obs_dtype      = None
-    self.obs_shape      = None
-    self.act_dtype      = None
-    self.act_shape      = None
+    self.obs_dtype  = None
+    self.obs_shape  = None
+    self.act_dtype  = None
+    self.act_shape  = None
 
     # plot_train: UserDict of `tf.Tensor`(or `np.array`) objects that have to be run in the session
     # plot_data: UserDict of `np.array`s that contain the actual data to be plotted
@@ -39,22 +33,12 @@ class Model:
     # restored and reused from an already trained model
     self.notrain_re = None
 
-    # TF Ops that should be set
-    self._train_op      = None
-    self._update_target = None  # Optional
-    self._variables     = None
+    # List of all model variables
+    self._variables = None
 
 
   def build(self):
     raise NotImplementedError()
-
-
-  def _build(self):
-    self._obs_t_ph    = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_t_ph")
-    self._act_t_ph    = tf.placeholder(self.act_dtype,  [None] + self.act_shape, name="act_t_ph")
-    self._rew_t_ph    = tf.placeholder(tf.float32,      [None],                  name="rew_t_ph")
-    self._obs_tp1_ph  = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_tp1_ph")
-    self._done_ph     = tf.placeholder(tf.bool,         [None],                  name="done_ph")
 
 
   def initialize(self, sess):
@@ -144,88 +128,6 @@ class Model:
     """
     return self.__class__.__name__
 
-  @property
-  def train_op(self):
-    """
-    Returns:
-      `tf.Op` that trains the network. Requires that `self.obs_t_ph`,
-      `self.act_t_ph`, `self.obs_tp1_ph`, `self.done_ph` placeholders
-      are set via feed_dict. Might require other placeholders as well.
-    """
-    if self._train_op is not None:
-      return self._train_op
-    else:
-      raise NotImplementedError()
-
-  @property
-  def update_target(self):
-    """
-    Returns:
-      `tf.Op` that updates the target network (if one is used).
-    """
-    if self._update_target is not None:
-      return self._update_target
-    else:
-      raise NotImplementedError()
-
-  @property
-  def obs_t_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for observations at time t from the training batch
-    """
-    if self._obs_t_ph is not None:
-      return self._obs_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def act_t_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for actions at time t from the training batch
-    """
-    if self._act_t_ph is not None:
-      return self._act_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def rew_t_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for actions at time t from the training batch
-    """
-    if self._rew_t_ph is not None:
-      return self._rew_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def obs_tp1_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for observations at time t+1 from the training batch
-    """
-    if self._obs_tp1_ph is not None:
-      return self._obs_tp1_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def done_ph(self):
-    """
-    Returns:
-      `tf.placeholder` to indicate end of episode for examples in the training batch
-    """
-    if self._done_ph is not None:
-      return self._done_ph
-    else:
-      raise NotImplementedError()
-
-  # @property
-  # def training_ph(self):
-  #   return self._training_ph
 
   @property
   def variables(self):

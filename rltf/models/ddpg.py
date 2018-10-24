@@ -1,8 +1,8 @@
 import logging
 import tensorflow as tf
 
-from rltf.models.model  import Model
-from rltf.models        import tf_utils
+from rltf.models import BaseQlearn
+from rltf.models import tf_utils
 
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ def init_output_uniform_conv():
   return tf.random_uniform_initializer(-3e-4, 3e-4)
 
 
-class DDPG(Model):
+class DDPG(BaseQlearn):
 
   def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
                tau, gamma, batch_norm, obs_norm, huber_loss=False):
@@ -67,17 +67,15 @@ class DDPG(Model):
 
   def build(self):
 
-    super()._build()
-
-    # Placehodler for the running mode - training or evaluation
-    self._training  = tf.placeholder_with_default(True, (), name="training")
+    # Build the input placeholders
+    self._build_ph()
 
     # Preprocess the observations
     obs_t, obs_tp1  = self._preprocess_obs()
 
     actor           = self._actor(obs_t,                  scope="agent_net/actor")
     actor_critic_q  = self._critic(obs_t, actor,          scope="agent_net/critic")
-    act_t_q         = self._critic(obs_t, self._act_t_ph, scope="agent_net/critic")
+    act_t_q         = self._critic(obs_t, self.act_t_ph,  scope="agent_net/critic")
 
     target_act      = self._actor(obs_tp1,                scope="target_net/actor")
     target_q        = self._critic(obs_tp1, target_act,   scope="target_net/critic")
@@ -116,6 +114,14 @@ class DDPG(Model):
     self._add_summaries(actor_loss, critic_loss, act_t_q, target_q)
 
 
+  def _build_ph(self):
+    super()._build_ph(self)
+    # BaseQlearn._build_ph(self)
+
+    # Placehodler for the running mode - training or evaluation
+    self._training  = tf.placeholder_with_default(True, (), name="training")
+
+
   def _add_summaries(self, actor_loss, critic_loss, act_t_q, target_q):
     # Summaries
     tf.summary.scalar("train/actor_loss",   actor_loss)
@@ -130,8 +136,8 @@ class DDPG(Model):
     # Image observations
     if len(self.obs_shape) == 3 and self.obs_dtype == tf.uint8:
       # Normalize observations
-      obs_t   = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
-      obs_tp1 = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
+      obs_t   = tf.cast(self.obs_t_ph,   tf.float32) / 255.0
+      obs_tp1 = tf.cast(self.obs_tp1_ph, tf.float32) / 255.0
 
       self._actor   = self._actor_conv_net
       self._critic  = self._critic_conv_net
@@ -141,11 +147,11 @@ class DDPG(Model):
       if self.obs_norm:
         # Normalize observations
         bnorm_args = dict(axis=-1, center=False, scale=False, trainable=False, training=self._training)
-        obs_t   = tf.layers.batch_normalization(self._obs_t_ph,   **bnorm_args)
-        obs_tp1 = tf.layers.batch_normalization(self._obs_tp1_ph, **bnorm_args)
+        obs_t   = tf.layers.batch_normalization(self.obs_t_ph,   **bnorm_args)
+        obs_tp1 = tf.layers.batch_normalization(self.obs_tp1_ph, **bnorm_args)
       else:
-        obs_t   = self._obs_t_ph
-        obs_tp1 = self._obs_tp1_ph
+        obs_t   = self.obs_t_ph
+        obs_tp1 = self.obs_tp1_ph
 
       self._actor   = self._actor_net
       self._critic  = self._critic_net
@@ -157,9 +163,9 @@ class DDPG(Model):
 
 
   def _compute_target(self, target_q):
-    done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+    done_mask = tf.cast(tf.logical_not(self.done_ph), tf.float32)
     done_mask = tf.expand_dims(done_mask, axis=-1)
-    reward    = tf.expand_dims(self._rew_t_ph, axis=-1)
+    reward    = tf.expand_dims(self.rew_t_ph, axis=-1)
     target_q  = reward + done_mask * self.gamma * target_q
     target_q  = tf.stop_gradient(target_q)
     return target_q
@@ -221,7 +227,7 @@ class DDPG(Model):
 
 
   def action_train(self, sess, state):
-    feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
+    feed_dict = {self.obs_t_ph: state[None,:], self._training: False}
     action    = sess.run(self._action, feed_dict=feed_dict)
     action    = action[0]
     return action
