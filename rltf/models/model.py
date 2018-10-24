@@ -112,6 +112,7 @@ class Model:
       list of `tf.Variable`s that should be trained
     """
     train_vars = tf.trainable_variables(scope=scope)
+    # Exlude variables that are explicitly exluded from training
     if self.notrain_re is not None:
       exlcude = [v for v in train_vars if self.notrain_re.search(v.name)]
       if len(exlcude) > 0:

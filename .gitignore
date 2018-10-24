@@ -4,3 +4,5 @@ trained_models/
 Notes.md
 plot/conf
 plot/restore.py
+.directory
+.pylintrc

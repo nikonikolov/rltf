@@ -4,9 +4,9 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from rltf.agents.off_pi import ParallelOffPolicyAgent
-from rltf.agents.off_pi import SequentialOffPolicyAgent
-from rltf.memory        import ReplayBuffer
+from rltf.agents.base_agents  import ParallelOffPolicyAgent
+from rltf.agents.base_agents  import SequentialOffPolicyAgent
+from rltf.memory              import ReplayBuffer
 
 
 class AgentDDPG(ParallelOffPolicyAgent):

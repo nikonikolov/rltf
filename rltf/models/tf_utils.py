@@ -5,6 +5,9 @@ import tensorflow as tf
 logger = logging.getLogger(__name__)
 
 
+# ------------------------------------ VARIABLES ------------------------------------
+
+
 def assign_vars(dest_vars, source_vars, weight=1.0, name=None):
   """Create a `tf.Op` that assigns the values of source_vars to dest_vars.
   `source_vars` and `dest_vars` must have variables with matching names,
@@ -50,6 +53,9 @@ def scope_vars(var_list, scope):
   return [v for v in var_list if v.name.startswith(scope)]
 
 
+# ------------------------------------ OPERATIONS ------------------------------------
+
+
 def huber_loss(x, delta=1.0):
   """Apply the function:
   ```
@@ -63,6 +69,23 @@ def huber_loss(x, delta=1.0):
     delta * (abs_x - 0.5 * delta),
     name="huber_loss"
   )
+
+
+def softmax(logits, axis=None, name=None):
+  """Perform stable softmax"""
+  C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
+  x = tf.nn.softmax(logits-C, axis=axis)
+  return x
+
+
+def log_softmax(logits, axis=None, name=None):
+  """Perform stable log_softmax"""
+  C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
+  x = tf.nn.log_softmax(logits-C, axis=axis)
+  return x
+
+
+# ------------------------------------ INITIALIZERS ------------------------------------
 
 
 def init_he_relu():
@@ -88,6 +111,9 @@ def init_dqn():
   return tf.variance_scaling_initializer(scale=1./3.0, mode="fan_in", distribution="uniform")
 
 
+# ------------------------------------ INVERSES ------------------------------------
+
+
 def cholesky_inverse(A):
   """Compute the inverse of `A` using Choselky decomposition. NOTE: `A` must be
   symmetric positive definite. This method of inversion is not completely stable since
@@ -109,8 +135,8 @@ def sherman_morrison_inverse(A_inv, u, v):
     v: tf.Tensor. (Batch of) column vector(s). Last two dimensions should have shape [N, 1]
   Returns: (A + uv^T)^{-1} with the same shape as `A_inv`
   """
-  assert u.shape.as_list()[-1] == 1 and len(u.shape) >= 2
-  assert v.shape.as_list()[-1] == 1 and len(v.shape) >= 2
+  assert u.shape.as_list()[-1] == 1 and u.shape.ndims >= 2
+  assert v.shape.as_list()[-1] == 1 and v.shape.ndims >= 2
 
   A_inv_u = tf.matmul(A_inv, u)
   num     = tf.matmul(A_inv_u, tf.matmul(v, A_inv, transpose_a=True))
@@ -119,17 +145,3 @@ def sherman_morrison_inverse(A_inv, u, v):
   inverse = A_inv - num / denom
 
   return inverse
-
-
-def softmax(logits, axis=None, name=None):
-  """Perform stable softmax"""
-  C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
-  x = tf.nn.softmax(logits-C, axis=axis)
-  return x
-
-
-def log_softmax(logits, axis=None, name=None):
-  """Perform stable log_softmax"""
-  C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
-  x = tf.nn.log_softmax(logits-C, axis=axis)
-  return x
