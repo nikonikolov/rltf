@@ -1,15 +1,14 @@
 import numpy as np
 import tensorflow as tf
 
-from rltf.models.bstrap_dqn import BaseBstrapDQN
 from rltf.models.bstrap_dqn import BstrapDQN_IDS
 from rltf.models.c51        import C51
 from rltf.models            import tf_utils
 
 
-class BaseBstrapC51(BaseBstrapDQN):
+class BstrapC51_IDS(BstrapDQN_IDS):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N):
+  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, n_stds):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -20,8 +19,10 @@ class BaseBstrapC51(BaseBstrapDQN):
       V_min: float. lower bound for histrogram range
       V_max: float. upper bound for histrogram range
       N: int. number of histogram bins
+      n_stds: float. Standard deviation scale for computing regret
     """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, False, n_heads)
+    super().__init__(obs_shape, n_actions, opt_conf, gamma, False, n_heads, n_stds)
+    # BstrapDQN_IDS.__init__(self, obs_shape, n_actions, opt_conf, gamma, False, n_heads, n_stds)
 
     self.N      = N
     self.V_min  = V_min
@@ -30,6 +31,7 @@ class BaseBstrapC51(BaseBstrapDQN):
 
     # Custom TF Tensors and Ops
     self.bins   = None
+    self.rho2   = None
 
 
   def build(self):
@@ -179,17 +181,6 @@ class BaseBstrapC51(BaseBstrapDQN):
     return train_op
 
 
-
-class BstrapC51_IDS(BaseBstrapC51):
-  """IDS policy from Boostrapped DQN-C51"""
-
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, n_stds=0.1):
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N)
-
-    self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
-    self.rho2   = None
-
-
   def _act_train(self, agent_net, name):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
@@ -197,7 +188,8 @@ class BstrapC51_IDS(BaseBstrapC51):
     self.rho2 = tf.maximum(z_var, 0.25)
 
     # Compute the IDS action - ugly way
-    action    = BstrapDQN_IDS._act_train(self, agent_net[0], name)
+    # action    = BstrapDQN_IDS._act_train(self, agent_net[0], name)
+    action    = super()._act_train(agent_net[0], name)
 
     # Add debugging data for TB
     tf.summary.histogram("debug/a_rho2", self.rho2)
@@ -215,3 +207,35 @@ class BstrapC51_IDS(BaseBstrapC51):
   def _act_eval(self, agent_net, name):
     q = agent_net[0]
     return self._act_eval_greedy(q, name)
+
+
+  def _project_distribution(self, atoms, p):
+    """Project the distribution given by (atoms, p) onto the support of self.bins
+      using Eq. (7) from the Categorical DQN paper (Bellemare et. al. 2017)
+    Args:
+      atoms: tf.Tensor, shape `[None, N]`. Atoms for the support of the distribution
+      p: tf.Tensor, shape `[None, N]`. Probability of each atom of the distribution
+    Returns:
+      tf.Tensor of shape `[None, N]`, which contains the projected distribution
+    """
+
+    # Clip the atom supports in [V_min, V_max]
+    atoms = tf.clip_by_value(atoms, self.V_min, self.V_max)   # [None, N]
+
+    # Compute the temporal difference between atoms and bins
+    td_z  = tf.expand_dims(atoms, axis=-2) - self.bins        # [None, N, N]
+    # td_z[0] =
+    # [ [tz1-z1, tz2-z1, ..., tzN-z1],
+    #   [tz1-z2, tz2-z2, ..., tzN-z2],
+    #   ...
+    #   [tz1-zN, tzN-zN, ..., tzN-zN]  ]
+
+    # Compute the projection weights and clip them between 0 and 1
+    # Corresponds to `[1 - |[\hat{T}z_j]_{V_min}^{V_max} - z_i| / (\Delta z) ]_0^1` in Eq. (7)
+    weights = tf.clip_by_value(1 - tf.abs(td_z) / self.dz, 0, 1)
+
+    # Compute the projected probabilities
+    p       = tf.expand_dims(p, axis=1)                     # [None, 1, N]
+    proj_p  = tf.reduce_sum(weights * p, axis=-1)           # [None, N]
+
+    return proj_p
