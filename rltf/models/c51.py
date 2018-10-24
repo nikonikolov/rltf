@@ -108,56 +108,103 @@ class C51(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
-
-    def build_inds_tensors(bin_inds_lo, bin_inds_hi):
-      batch       = tf.shape(self.done_ph)[0]
-
-      batch_inds  = tf.range(0, limit=batch, delta=1, dtype=tf.int32)
-      batch_inds  = tf.expand_dims(batch_inds, axis=-1)               # out: [None, 1]
-      batch_inds  = tf.tile(batch_inds, [1, self.N])                  # out: [None, N]
-      batch_inds  = tf.expand_dims(batch_inds, axis=-1)               # out: [None, N, 1]
-
-      bin_inds_lo = tf.expand_dims(tf.to_int32(bin_inds_lo), axis=-1) # out: [None, N, 1]
-      bin_inds_hi = tf.expand_dims(tf.to_int32(bin_inds_hi), axis=-1) # out: [None, N, 1]
-      bin_inds_lo = tf.concat([batch_inds, bin_inds_lo], axis=-1)     # out: [None, N, 2]
-      bin_inds_hi = tf.concat([batch_inds, bin_inds_hi], axis=-1)     # out: [None, N, 2]
-
-      return bin_inds_lo, bin_inds_hi
-
     target_z    = target
 
-    # Compute projected bin support; output shape [None, N]
+    # Compute the target atoms support; output shape [None, N]
     done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)
     done_mask   = tf.expand_dims(done_mask, axis=-1)
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
     # bins        = tf.squeeze(self.bins, axis=0)
     bins        = tf.reshape(self.bins, [1, self.N])
     target_bins = rew_t + self.gamma * done_mask * bins
-    target_bins = tf.clip_by_value(target_bins, self.V_min, self.V_max)
 
-    # Projected bin indices; output shape [None, N], dtype=float
-    bin_inds    = (target_bins - self.V_min) / self.dz
-    bin_inds_lo = tf.floor(bin_inds)
-    bin_inds_hi = tf.ceil(bin_inds)
+    return self._project_distribution(target_bins, target_z)
 
-    lo_add      = target_z * (bin_inds_hi - bin_inds)
-    hi_add      = target_z * (bin_inds - bin_inds_lo)
 
-    # Initialize the Variable holding the target distribution - gets reset to 0 every time
-    zeros       = tf.zeros_like(target_bins, dtype=tf.float32)
-    target_z    = tf.Variable(0, trainable=False, dtype=tf.float32, validate_shape=False)
-    target_z    = tf.assign(target_z, zeros, validate_shape=False)
+  def _project_distribution(self, atoms, p):
+    """Project the distribution given by (atoms, p) onto the support of self.bins
+      using Eq. (7) from the Categorical DQN paper (Bellemare et. al. 2017)
+    Args:
+      atoms: tf.Tensor, shape `[None, N]`. Atoms for the support of the distribution
+      p: tf.Tensor, shape `[None, N]`. Probability of each atom of the distribution
+    Returns:
+      tf.Tensor of shape `[None, N]`, which contains the projected distribution
+    """
 
-    # Compute indices for scatter_nd_add
-    inds        = build_inds_tensors(bin_inds_lo, bin_inds_hi)
-    bin_inds_lo = inds[0]     # out: [None, N, 2]
-    bin_inds_hi = inds[1]     # out: [None, N, 2]
+    # Clip the atom supports in [V_min, V_max]
+    atoms = tf.clip_by_value(atoms, self.V_min, self.V_max)   # [None, N]
 
-    with tf.control_dependencies([target_z]):
-      target_z  = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
-      target_z  = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
+    # Compute the temporal difference between atoms and bins
+    td_z  = tf.expand_dims(atoms, axis=-2) - self.bins        # [None, N, N]
+    # td_z[0] =
+    # [ [tz1-z1, tz2-z1, ..., tzN-z1],
+    #   [tz1-z2, tz2-z2, ..., tzN-z2],
+    #   ...
+    #   [tz1-zN, tzN-zN, ..., tzN-zN]  ]
 
-    return target_z
+    # Compute the projection weights and clip them between 0 and 1
+    # Corresponds to `[1 - |[\hat{T}z_j]_{V_min}^{V_max} - z_i| / (\Delta z) ]_0^1` in Eq. (7)
+    weights = tf.clip_by_value(1 - tf.abs(td_z) / self.dz, 0, 1)
+
+    # Compute the projected probabilities
+    p       = tf.expand_dims(p, axis=1)                     # [None, 1, N]
+    proj_p  = tf.reduce_sum(weights * p, axis=-1)           # [None, N]
+
+    return proj_p
+
+
+  # def _project_distribution(self, atoms, p):
+  #   """Project the distribution given by (atoms, p) onto the support of self.bins
+  #     using the loop in Algorithm 1 from the Categorical DQN paper (Bellemare et. al. 2017)
+  #   Args:
+  #     atoms: tf.Tensor, shape `[None, N]`. Atoms for the support of the distribution
+  #     p: tf.Tensor, shape `[None, N]`. Probability of each atom of the distribution
+  #   Returns:
+  #     tf.Tensor of shape `[None, N]`, which contains the projected distribution
+  #   """
+  #   def build_inds_tensors(bin_inds_lo, bin_inds_hi):
+  #     batch       = tf.shape(self.done_ph)[0]
+
+  #     batch_inds  = tf.range(0, limit=batch, delta=1, dtype=tf.int32)
+  #     batch_inds  = tf.expand_dims(batch_inds, axis=-1)               # out: [None, 1]
+  #     batch_inds  = tf.tile(batch_inds, [1, self.N])                  # out: [None, N]
+  #     batch_inds  = tf.expand_dims(batch_inds, axis=-1)               # out: [None, N, 1]
+
+  #     bin_inds_lo = tf.expand_dims(tf.to_int32(bin_inds_lo), axis=-1) # out: [None, N, 1]
+  #     bin_inds_hi = tf.expand_dims(tf.to_int32(bin_inds_hi), axis=-1) # out: [None, N, 1]
+  #     bin_inds_lo = tf.concat([batch_inds, bin_inds_lo], axis=-1)     # out: [None, N, 2]
+  #     bin_inds_hi = tf.concat([batch_inds, bin_inds_hi], axis=-1)     # out: [None, N, 2]
+
+  #     return bin_inds_lo, bin_inds_hi
+
+  #   target_z    = p
+
+  #   # Project the target distribution onto the support [V_min, V_max]
+  #   atoms       = tf.clip_by_value(atoms, self.V_min, self.V_max)
+
+  #   # Projected bin indices; output shape [None, N], dtype=float
+  #   bin_inds    = (atoms - self.V_min) / self.dz
+  #   bin_inds_lo = tf.floor(bin_inds)
+  #   bin_inds_hi = tf.ceil(bin_inds)
+
+  #   lo_add      = target_z * (bin_inds_hi - bin_inds)
+  #   hi_add      = target_z * (bin_inds - bin_inds_lo)
+
+  #   # Initialize the Variable holding the target distribution - gets reset to 0 every time
+  #   zeros       = tf.zeros_like(atoms, dtype=tf.float32)
+  #   target_z    = tf.Variable(0, trainable=False, dtype=tf.float32, validate_shape=False)
+  #   target_z    = tf.assign(target_z, zeros, validate_shape=False)
+
+  #   # Compute indices for scatter_nd_add
+  #   inds        = build_inds_tensors(bin_inds_lo, bin_inds_hi)
+  #   bin_inds_lo = inds[0]     # out: [None, N, 2]
+  #   bin_inds_hi = inds[1]     # out: [None, N, 2]
+
+  #   with tf.control_dependencies([target_z]):
+  #     target_z  = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
+  #     target_z  = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
+
+  #   return target_z
 
 
   def _compute_loss(self, estimate, target, name):
