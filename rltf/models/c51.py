@@ -163,8 +163,12 @@ class C51(BaseDQN):
   def _compute_loss(self, estimate, target, name):
     logits_z  = estimate
     target_z  = target
-    # entropy   = -tf.reduce_sum(target_z * tf.log(z), axis=-1)
-    entropy   = -tf.reduce_sum(target_z * tf_utils.log_softmax(logits_z, axis=-1), axis=-1)
+    # Working version
+    entropy   = -tf.reduce_sum(target_z * tf.log(tf_utils.softmax(logits_z, axis=-1)), axis=-1)
+    # Other version - not working
+    # entropy   = -tf.reduce_sum(target_z * tf_utils.log_softmax(logits_z, axis=-1), axis=-1)
+    # Other version - not learning
+    # entropy   = tf.nn.softmax_cross_entropy_with_logits_v2(labels=target_z, logits=logits_z)
     loss      = tf.reduce_mean(entropy)
 
     tf.summary.scalar(name, loss)
@@ -179,12 +183,7 @@ class C51(BaseDQN):
     action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
 
     # Add debugging plot for the variance of the return
-    center  = self.bins - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
-    z_var   = tf.square(center) * agent_net               # out: [None, n_actions, N]
-    z_var   = tf.reduce_sum(z_var, axis=-1)               # out: [None, n_actions]
-    # Normalize the variance
-    mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-    z_var   = z_var / mean                                    # out: [None, n_actions]
+    z_var   = self._compute_z_variance(z=z, q=q, normalize=True)  # [None, n_actions]
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 
@@ -193,3 +192,33 @@ class C51(BaseDQN):
 
   def _act_eval(self, agent_net, name):
     return tf.identity(self.a_train, name=name)
+
+
+  def _compute_z_variance(self, z=None, logits=None, q=None, normalize=True):
+    """Compute the return distribution variance. Only one of `z` and `logits` must be set
+    Args:
+      z: tf.Tensor, shape `[None, n_actions, N]`. Return atoms probabilities
+      logits: tf.Tensor, shape `[None, n_actions, N]`. Logits of the return
+      q: tf.Tensor, shape `[None, n_actions]`. Optionally provide a tensor for the Q-function
+      normalize: bool. If True, normalize the variance values such that the mean of the
+        return variances of all actions in a given state is 1.
+    Returns:
+      tf.Tensor of shape `[None, n_actions]`
+    """
+    assert (z is None) != (logits is None), "Only one of 'z' and 'logits' must be set"
+
+    if logits is not None:
+      z = tf_utils.softmax(logits, axis=-1)
+    if q is None:
+      q = tf.reduce_sum(z * self.bins, axis=-1)
+
+    center  = self.bins - tf.expand_dims(q, axis=-1)          # out: [None, n_actions, N]
+    z_var   = tf.square(center) * z                           # out: [None, n_actions, N]
+    z_var   = tf.reduce_sum(z_var, axis=-1)                   # out: [None, n_actions]
+
+    # Normalize the variance across the action axis
+    if normalize:
+      mean  = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
+      z_var = z_var / (mean + 1e-6)                           # out: [None, n_actions]
+
+    return z_var
