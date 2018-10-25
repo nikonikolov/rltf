@@ -160,36 +160,40 @@ class StatsRecorder:
 
     n = self.n_ep_stats
 
-    default_info = [
-      ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
+    if self._mode == "t":
+      default_info = [
+        ("train/mean_steps_per_sec",              ".3f",  lambda t: self.steps_p_s),
 
-      ("train/agent_steps",                     "d",    lambda t: t),
-      ("train/env_steps",                       "d",    lambda t: self.train_steps+self.ep_steps),
-      ("train/episodes",                        "d",    lambda t: self.train_ep_id),
-      ("train/best_episode_rew",                ".3f",  lambda t: self.train_stats["best_ep_rew"]),
-      ("train/best_mean_ep_rew (%d eps)"%n,     ".3f",  lambda t: self.train_stats["best_mean_rew"]),
-      ("train/ep_len_mean (%d eps)"%n,          ".3f",  lambda t: self.train_stats["ep_len_mean"]),
-      ("train/ep_len_std  (%d eps)"%n,          ".3f",  lambda t: self.train_stats["ep_len_std"]),
-      ("train/mean_ep_reward (%d eps)"%n,       ".3f",  lambda t: self.train_stats["mean_ep_rew"]),
-      ("train/std_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.train_stats["std_ep_rew"]),
+        ("train/agent_steps",                     "d",    lambda t: t),
+        ("train/env_steps",                       "d",    lambda t: self.train_steps+self.ep_steps),
+        ("train/episodes",                        "d",    lambda t: self.train_ep_id),
+        ("train/best_episode_rew",                ".3f",  lambda t: self.train_stats["best_ep_rew"]),
+        ("train/best_mean_ep_rew (%d eps)"%n,     ".3f",  lambda t: self.train_stats["best_mean_rew"]),
+        ("train/ep_len_mean (%d eps)"%n,          ".3f",  lambda t: self.train_stats["ep_len_mean"]),
+        ("train/ep_len_std  (%d eps)"%n,          ".3f",  lambda t: self.train_stats["ep_len_std"]),
+        ("train/mean_ep_reward (%d eps)"%n,       ".3f",  lambda t: self.train_stats["mean_ep_rew"]),
+        ("train/std_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.train_stats["std_ep_rew"]),
+      ]
 
+      log_info = default_info + custom_log_info
 
-      ("eval/agent_steps",                      "d",    lambda t: t),
-      ("eval/env_steps",                        "d",    lambda t: self.eval_steps+self.ep_steps),
-      ("eval/episodes",                         "d",    lambda t: self.eval_ep_id),
-      ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
-      ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
-      ("eval/ep_len_mean (%d eps)"%n,           ".3f",  lambda t: self.eval_stats["ep_len_mean"]),
-      ("eval/ep_len_std  (%d eps)"%n,           ".3f",  lambda t: self.eval_stats["ep_len_std"]),
-      ("eval/mean_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.eval_stats["mean_ep_rew"]),
-      ("eval/std_ep_reward (%d eps)"%n,         ".3f",  lambda t: self.eval_stats["std_ep_rew"]),
-      ("eval/best_score",                       ".3f",  lambda t: self.eval_stats["best_score"]),
-      ("eval/score_episodes",                   "d",    lambda t: self.eval_stats["score_episodes"]),
-      ("eval/score_mean",                       ".3f",  lambda t: self.eval_stats["score_mean"]),
-      ("eval/score_std",                        ".3f",  lambda t: self.eval_stats["score_std"]),
-    ]
+    else:
+      log_info = [
+        ("eval/agent_steps",                      "d",    lambda t: t),
+        ("eval/env_steps",                        "d",    lambda t: self.eval_steps+self.ep_steps),
+        ("eval/episodes",                         "d",    lambda t: self.eval_ep_id),
+        ("eval/best_episode_rew",                 ".3f",  lambda t: self.eval_stats["best_ep_rew"]),
+        ("eval/best_mean_ep_rew (%d eps)"%n,      ".3f",  lambda t: self.eval_stats["best_mean_rew"]),
+        ("eval/ep_len_mean (%d eps)"%n,           ".3f",  lambda t: self.eval_stats["ep_len_mean"]),
+        ("eval/ep_len_std  (%d eps)"%n,           ".3f",  lambda t: self.eval_stats["ep_len_std"]),
+        ("eval/mean_ep_reward (%d eps)"%n,        ".3f",  lambda t: self.eval_stats["mean_ep_rew"]),
+        ("eval/std_ep_reward (%d eps)"%n,         ".3f",  lambda t: self.eval_stats["std_ep_rew"]),
+        ("eval/best_score",                       ".3f",  lambda t: self.eval_stats["best_score"]),
+        ("eval/score_episodes",                   "d",    lambda t: self.eval_stats["score_episodes"]),
+        ("eval/score_mean",                       ".3f",  lambda t: self.eval_stats["score_mean"]),
+        ("eval/score_std",                        ".3f",  lambda t: self.eval_stats["score_std"]),
+      ]
 
-    log_info = default_info + custom_log_info
     self.log_info = rltf_log.format_tabular(log_info, sort=False)
 
 
@@ -253,10 +257,7 @@ class StatsRecorder:
 
     stats_logger.info("")
     for s, lambda_v in self.log_info:
-      if self._mode == 't' and not s.startswith("| eval/"):
-        stats_logger.info(s.format(lambda_v(t)))
-      elif self._mode == 'e' and not s.startswith("| train/"):
-        stats_logger.info(s.format(lambda_v(t)))
+      stats_logger.info(s.format(lambda_v(t)))
     stats_logger.info("")
 
 

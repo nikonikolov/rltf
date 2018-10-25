@@ -29,7 +29,7 @@ import os
 from gym          import Wrapper
 from gym.wrappers import TimeLimit
 from gym.utils    import closer
-from gym          import error
+from gym.error    import ResetNeeded
 from gym          import __version__ as GYM_VERSION
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 
@@ -37,8 +37,7 @@ from rltf.monitoring.stats import StatsRecorder
 from rltf.monitoring.vplot import VideoPlotter
 
 
-logger          = logging.getLogger(__name__)
-monitor_closer  = closer.Closer()
+logger = logging.getLogger(__name__)
 
 
 class Monitor(Wrapper):
@@ -69,8 +68,6 @@ class Monitor(Wrapper):
 
     super().__init__(env)
 
-    self._enabled       = False
-
     self.videos         = []      # List of files for the recorded videos and their manifests
     self.log_dir        = log_dir
     self.done           = None
@@ -84,9 +81,12 @@ class Monitor(Wrapper):
     # Create the monitor directory
     self._make_log_dir()
 
-    # Get the unique object ID - used by gym for autoclosing
-    self._monitor_id    = monitor_closer.register(self)
-    self._enabled       = True    # Data is recorded only if this is True
+    # Attach StatsRecorder methods
+    self.define_log_info  = self.stats_recorder.define_log_info
+    self.log_stats        = self.stats_recorder.log_stats
+    self.start_eval_run   = self.stats_recorder.start_eval_run
+    self.save             = self.stats_recorder.save
+    self.end_eval_run     = self.stats_recorder.end_eval_run
 
 
   def _get_video_callable(self, video_callable):
@@ -96,8 +96,8 @@ class Monitor(Wrapper):
     elif video_callable is False:
       video_callable = lambda e_id: False
     elif not callable(video_callable):
-      raise error.Error('You must provide a function, None, or False for video_callable,'
-                        'not {}: {}'.format(type(video_callable), video_callable))
+      raise ValueError("You must provide a function, None, or False for 'video_callable', "
+                       "not {}: {}".format(type(video_callable), video_callable))
     return video_callable
 
 
@@ -139,20 +139,8 @@ class Monitor(Wrapper):
     return obs
 
 
-  @property
-  def mode(self):
-    return self.stats_recorder.mode
-
-
-  def save(self):
-    # Save the stats
-    self.stats_recorder.save()
-
-
   def close(self):
     """Flush all monitor data to disk and close any open rending windows."""
-    if not self._enabled:
-      return
 
     # First save all the data
     # self.save()
@@ -162,18 +150,11 @@ class Monitor(Wrapper):
     if self.video_recorder is not None:
       self._close_video_recorder()
 
-    # Stop tracking this for autoclose
-    monitor_closer.unregister(self._monitor_id)
-    self._enabled = False
-
     # logger.info("Monitor successfully closed and saved at %s", self.log_dir)
     # logger.info("Monitor successfully closed")
 
 
   def _before_step(self, action):
-    if not self._enabled:
-      return
-
     if self.done:
       raise error.ResetNeeded("Trying to step environment which is currently done."
         "While the monitor is active for {}, you cannot step beyond the end of an episode."
@@ -186,9 +167,6 @@ class Monitor(Wrapper):
 
 
   def _after_step(self, obs, reward, done, info):
-    if not self._enabled:
-      return done
-
     # Record stats and video
     self.stats_recorder.after_step(obs, reward, done, info)
     self.video_recorder.capture_frame()
@@ -198,11 +176,6 @@ class Monitor(Wrapper):
 
 
   def _after_reset(self, obs):
-    if not self._enabled:
-      return
-
-    # self.stats_recorder.reset()
-
     self.env_started = True
     self.done = False
 
@@ -243,64 +216,17 @@ class Monitor(Wrapper):
       self.videos.append((self.video_recorder.path, self.video_recorder.metadata_path))
 
 
-  def _env_info(self):
-    env_info = {
-      "gym_version": GYM_VERSION,
-      "env_id": self.env_id
-    }
-    return env_info
-
-
   def __del__(self):
     # Make sure we've closed up shop when garbage collecting
     self.close()
-
-
-  def define_log_info(self, custom_log_info):
-    self.stats_recorder.define_log_info(custom_log_info)
-
-
-  def log_stats(self, t):
-    self.stats_recorder.log_stats(t)
 
 
   def conf_video_plots(self, **kwargs):
     self.env.conf_plots(**kwargs)
 
 
-  def start_eval_run(self):
-    self.stats_recorder.start_eval_run()
-
-
-  def end_eval_run(self, t):
-    return self.stats_recorder.end_eval_run(t)
-
-
-  @property
-  def episode_id(self):
-    return self.stats_recorder.episode_id
-
-
-  @property
-  def total_steps(self):
-    return self.stats_recorder.total_steps
-
-
-  @property
-  def mean_ep_rew(self):
-    return self.stats_recorder.mean_ep_rew
-
-
-  @property
-  def eval_score(self):
-    return self.stats_recorder.eval_score
-
-
-  @property
-  def episode_rewards(self):
-    return self.stats_recorder.episode_rewards
-
-
-  @property
-  def episode_lens(self):
-    return self.stats_recorder.episode_lens
+  def __getattr__(self, attr):
+    if attr in ["mode", "episode_id", "total_steps", "mean_ep_rew", "eval_score",
+      "episode_rewards", "episode_lens",]:
+      return getattr(self.stats_recorder, attr)
+    raise AttributeError("%r object has no attribute %r" % (self.__class__, attr))
