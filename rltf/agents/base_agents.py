@@ -7,41 +7,37 @@ from rltf.agents.agent import Agent
 logger = logging.getLogger(__name__)
 
 
-class OffPolicyAgent(Agent):
-  """The base class for Off-policy agents. train() and eval() procedures *cannot* run in parallel
-  (because only 1 environment used). Assumes usage of target network and replay buffer.
-  """
+class ThreadedAgent(Agent):
+  """Abstract agent which can run the main process in several python threads.
+  Allows for a standardized way of exiting cleanly, without losing any data at Ctrl+C"""
 
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args, confirm_kill=False, **kwargs):
+    """
+    Args:
+      confirm_kill: bool. If True, you will be asked to confirm Ctrl+C
+    """
     super().__init__(*args, **kwargs)
 
-    self.update_target_freq = None
-    self.replay_buf = None
-    self._terminate = False
-    # NOTE: Keep the eval thread always as the first entry. Used in self.eval()
-    self.threads    = [threading.Thread(name='eval_thread', target=self._eval)]
-
-    self._eval_start = threading.Event()
-    self._eval_done  = threading.Event()
-
-    self._eval_start.clear()
-    self._eval_done.clear()
-
-    # Trick to avoid thread synchronization when no evaluation should be run
-    if self.eval_len <= 0 or self.eval_freq <=0:
-      self.eval_freq = self.stop_step + 2
+    self._terminate   = False         # Internal termination signal for the agent
+    self.confirm_kill = confirm_kill
 
 
-  def train(self):
+  def _run_threads(self, threads):
+    """Safely run `threads` by sending an internal termination signal and joinining all threads
+    before exiting. At Ctrl+C signal, optinally confirm that program must exit if confirm_kill is set.
+    Args:
+      threads: list of threads to start and join
+    """
+
     # Start threads
-    for t in self.threads:
+    for t in threads:
       t.start()
 
     # Wait for threads
     stop = False
     while not stop:
       try:
-        for t in self.threads:
+        for t in threads:
           t.join()
         stop = True
       except KeyboardInterrupt:
@@ -50,41 +46,15 @@ class OffPolicyAgent(Agent):
           logger.info("CONTINUING EXECUTION")
           continue
         logger.info("EXITING")
+        # Raise the internal termination signal
         self._terminate = True
-        for t in self.threads:
+        for t in threads:
           t.join()
-        stop = True
-
-
-  def eval(self):
-    # Overwrite stop step in order to have correct running length
-    self.stop_step = self.eval_freq
-
-    # Use a thread to avoid accidental KeyboardInterrupt
-    eval_thread = self.threads[0]
-
-    eval_thread.start()
-    self._signal_eval_start()
-
-    # Wait for eval thread
-    stop = False
-    while not stop:
-      try:
-        eval_thread.join()
-        stop = True
-      except KeyboardInterrupt:
-        # Confirm the kill
-        if not self._kill_confirmed():
-          logger.info("CONTINUING EXECUTION")
-          continue
-        logger.info("EXITING")
-        self._terminate = True
-        eval_thread.join()
         stop = True
 
 
   def _kill_confirmed(self):
-    """Check if Ctrl+C was genuine and if the buffer should be saved.
+    """Ask for confirmation for Ctrl+C or any additional termination signal
     Returns:
       `bool`. If True, kill. If False, continue
     """
@@ -101,6 +71,45 @@ class OffPolicyAgent(Agent):
       elif y == 's':
         self.save_buf = True
     return True
+
+
+
+class OffPolicyAgent(ThreadedAgent):
+  """The base class for Off-policy agents. train() and eval() procedures *cannot* run in parallel
+  (because only 1 environment used). Assumes usage of target network and replay buffer.
+  """
+
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+
+    self.update_target_freq = None
+    self.replay_buf = None
+    # NOTE: Keep the eval thread always as the first entry. Used in self.eval()
+    self.threads    = [threading.Thread(name='eval_thread', target=self._eval)]
+
+    self._eval_start = threading.Event()
+    self._eval_done  = threading.Event()
+
+    self._eval_start.clear()
+    self._eval_done.clear()
+
+    # Trick to avoid thread synchronization when no evaluation should be run
+    if self.eval_len <= 0 or self.eval_freq <=0:
+      self.eval_freq = self.stop_step + 2
+
+
+  def train(self):
+    self._run_threads(self.threads)
+
+
+  def eval(self):
+    # Overwrite stop step in order to have correct running length
+    self.stop_step = self.eval_freq
+
+    self._signal_eval_start()
+
+    # Use a thread to avoid accidental KeyboardInterrupt
+    self._run_threads(self.threads[:1])
 
 
   def _restore(self):

@@ -1,4 +1,5 @@
 from rltf.agents.agent        import Agent
+from rltf.agents.base_agents  import ThreadedAgent
 from rltf.agents.base_agents  import OffPolicyAgent
 from rltf.agents.base_agents  import ParallelOffPolicyAgent
 from rltf.agents.base_agents  import SequentialOffPolicyAgent

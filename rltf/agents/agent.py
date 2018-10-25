@@ -29,7 +29,6 @@ class Agent:
                save_buf=False,
                restore_dir=None,
                plots_layout=None,
-               confirm_kill=False,
                reuse_regex=None,
               ):
     """
@@ -50,7 +49,6 @@ class Agent:
         the existing model is overwritten. Otherwise, the saved weights are used but training
         starts from step 0 and the model is saved in `model_dir`. If `None`, no restoring
       plots_layout: dict or None. Used to configure the layout for video plots
-      confirm_kill: bool. If True, you will be asked to confirm Ctrl+C
       reuse_regex: str or None. Regular expression for matching variables whose values should be reused.
         If None, all model variables are reused
     """
@@ -67,7 +65,6 @@ class Agent:
     self.log_freq       = log_freq
     self.restore_dir    = restore_dir
     self.prng           = seeding.get_prng()
-    self.confirm_kill   = confirm_kill
     self.reuse_regex    = None if reuse_regex is None else re.compile(reuse_regex)
 
     self.warm_up        = warm_up       # Step from which training starts

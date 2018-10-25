@@ -3,9 +3,9 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from rltf.agents.base_agents  import ParallelOffPolicyAgent
-from rltf.agents.base_agents  import SequentialOffPolicyAgent
-from rltf.memory              import ReplayBuffer
+from rltf.agents  import ParallelOffPolicyAgent
+from rltf.agents  import SequentialOffPolicyAgent
+from rltf.memory  import ReplayBuffer
 
 
 logger = logging.getLogger(__name__)

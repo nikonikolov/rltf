@@ -9,9 +9,7 @@ class BaseQlearn(Model):
 
   def __init__(self):
 
-    # TODO: Fix this after super() is removed everywhere
-    # Model.__init__(self)
-    super().__init__(self)
+    super().__init__()
 
     # Input TF placeholders that must be set
     self._obs_t_ph    = None
@@ -106,11 +104,6 @@ class BaseDQN(BaseQlearn):
       opt_conf: rltf.optimizers.OptimizerConf. Configuration for the optimizer
       gamma: float. Discount factor
     """
-    # TODO: Uncomment these after super() is removed everywhere
-    # Prevent calling constructor twice in the case of Diamond inheritance
-    # if hasattr(self, _initialized):
-    #   return
-    # self._initialized = True
 
     assert len(obs_shape) == 3 or len(obs_shape) == 1
 

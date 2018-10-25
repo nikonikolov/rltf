@@ -115,8 +115,7 @@ class DDPG(BaseQlearn):
 
 
   def _build_ph(self):
-    super()._build_ph(self)
-    # BaseQlearn._build_ph(self)
+    super()._build_ph()
 
     # Placehodler for the running mode - training or evaluation
     self._training  = tf.placeholder_with_default(True, (), name="training")
