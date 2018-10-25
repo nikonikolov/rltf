@@ -30,7 +30,6 @@ from gym          import Wrapper
 from gym.wrappers import TimeLimit
 from gym.utils    import closer
 from gym.error    import ResetNeeded
-from gym          import __version__ as GYM_VERSION
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 
 from rltf.monitoring.stats import StatsRecorder
