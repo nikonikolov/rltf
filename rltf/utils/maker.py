@@ -13,26 +13,29 @@ import rltf.envs
 logger = logging.getLogger(__name__)
 
 
-def _make_env(env_id, seed, model_dir, video_callable, mode, max_ep_steps):
+def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_callable, max_ep_steps):
   if "Roboschool" in env_id:
     import roboschool
 
   if "Bullet" in env_id:
     import pybullet_envs
 
-  monitor_dir = os.path.join(model_dir, "env_monitor")
-
   env = gym.make(env_id)
   if seed >= 0:
     env.seed(seed)
 
-  # NOTE: Episode steps limit wrapper must be set before the Monitor. Otherwise, statistics of
-  # reported reward will be wrong
+  # NOTE: Episode steps limit wrapper must be set before any other wrapper, including the Monitor.
+  # Otherwise, statistics of reported reward will be wrong
   if max_ep_steps is not None:
   # if max_ep_steps is not None and max_ep_steps > 0:
     # env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
     env = rltf.envs.MaxEpisodeLen(env, max_episode_steps=max_ep_steps)
-  env = rltf.monitoring.Monitor(env, monitor_dir, video_callable, mode)
+
+  if wrap is not None:
+    env = wrap(env, mode=mode)
+
+  # Apply monitor at the very top
+  env = rltf.monitoring.Monitor(env, model_dir, log_period, mode, video_callable)
 
   return env
 
@@ -52,8 +55,8 @@ def _set_seeds(seed):
   rltf.utils.seeding.set_global_seeds()     # Set other module's seeds
 
 
-def make_envs(env_id, seed, model_dir, video_freq=None, wrap=None,
-              max_ep_steps_train=None, max_ep_steps_eval=None):
+def make_envs(env_id, seed, model_dir, log_period_train, log_period_eval,
+              video_freq=None, wrap=None, max_ep_steps_train=None, max_ep_steps_eval=None):
   """Create two instances of a gym environment, wrap them in a Monitor class and
   set seeds for the environments and for other modules (tf, np, random). Both
   environments are not allowed to be in dual mode. One env is for train, one for eval
@@ -73,12 +76,8 @@ def make_envs(env_id, seed, model_dir, video_freq=None, wrap=None,
   _set_seeds(seed)
   video_callable = _get_video_callable(video_freq)
 
-  env_train = _make_env(env_id, seed,   model_dir, video_callable, 't', max_ep_steps_train)
-  env_eval  = _make_env(env_id, seed+1, model_dir, video_callable, 'e', max_ep_steps_eval)
-
-  if wrap is not None:
-    env_train = wrap(env_train, mode='t')
-    env_eval  = wrap(env_eval,  mode='e')
+  env_train = _make_env(env_id, seed,   model_dir, wrap, 't', log_period_train, video_callable, max_ep_steps_train)
+  env_eval  = _make_env(env_id, seed+1, model_dir, wrap, 'e', log_period_eval,  video_callable, max_ep_steps_eval)
 
   return env_train, env_eval
 

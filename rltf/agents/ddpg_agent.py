@@ -68,7 +68,7 @@ class AgentDDPG(ParallelOffPolicyAgent):
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_len)
 
     # Configure what information to log
-    self._define_log_info()
+    self._set_stdout_logs()
 
     # Custom TF Tensors and Ops
     self.actor_learn_rate_ph  = None

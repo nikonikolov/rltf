@@ -63,7 +63,7 @@ class AgentDQN(ParallelOffPolicyAgent):
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, np.uint8, [], np.uint8, obs_len)
 
     # Configure what information to log
-    self._define_log_info()
+    self._set_stdout_logs()
 
     # Custom TF Tensors and Ops
     self.learn_rate_ph  = None

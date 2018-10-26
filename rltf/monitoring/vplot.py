@@ -10,12 +10,11 @@ from matplotlib.backends.backend_tkagg import FigureCanvasAgg as FigureCanvas
 logger = logging.getLogger(__name__)
 
 
-class VideoPlotter(gym.Wrapper):
+class VideoPlotter:
 
   def __init__(self, env):
 
-    super().__init__(env)
-
+    self.env      = env         # Save a reference to the environment
     self.enabled  = False       # True if enabled for the episode
     self.allowed  = False       # True if layout is configured. If False, no rendering
     self.changed  = True
@@ -81,9 +80,9 @@ class VideoPlotter(gym.Wrapper):
     self.allowed  = True
 
 
-  def reset(self, enabled, mode, **kwargs):
+  def reset(self, enabled, mode):
     if not self.allowed:
-      return self.env.reset(**kwargs)
+      return
 
     # If this is the first episode, clear the plottable tensors for the current mode
     if self.first_t and mode == 't':
@@ -120,23 +119,21 @@ class VideoPlotter(gym.Wrapper):
 
     # self.mode = mode
     self.enabled = enabled
-    return self.env.reset(**kwargs)
 
 
-  def step(self, action):
-    return self.env.step(action)
-
-
-  def render(self, mode):
+  def render(self, obs, mode):
+    """
+    Args:
+      obs: np.array of shape (height, width, 3). The result of env.render() at this step
+      mode: str. Render mode of env
+    """
     if (not self.enabled) or (not self.allowed):
-      return self.env.render(mode)
+      return obs
 
-    assert mode == "rgb_array"
-
-    # Render the environment as np.array of shape (height, width, 3)
-    obs = self.env.render(mode)
     if obs is None:
       return None
+
+    assert mode == "rgb_array"
 
     # Fix the observation alignment if necessary
     self._fix_obs_align(obs)
@@ -340,8 +337,8 @@ class VideoPlotter(gym.Wrapper):
 
   def _configure_obs_align(self, spec):
     # Check if observation size is already known
-    if isinstance(self.observation_space, gym.spaces.Box):
-      obs_shape = self.observation_space.shape
+    if isinstance(self.env.observation_space, gym.spaces.Box):
+      obs_shape = self.env.observation_space.shape
       if len(obs_shape) == 3:
         height, width = obs_shape[0], obs_shape[1]
         assert height <= self.height and width <= self.width

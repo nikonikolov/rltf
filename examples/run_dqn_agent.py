@@ -92,6 +92,8 @@ def make_agent():
     model_dir=model_dir,
     video_freq=args.video_freq,
     wrap=lambda env, mode: wrap_dqn(env, mode, stack=args.stack_frames),
+    log_period_train=args.log_freq,
+    log_period_eval=args.eval_len,
     max_ep_steps_train=args.train_ep_steps,
     max_ep_steps_eval=args.eval_ep_steps,
   )

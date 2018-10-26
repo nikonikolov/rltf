@@ -154,7 +154,6 @@ class OffPolicyAgent(ThreadedAgent):
 
     self._wait_eval_start()             # Wait for the eval run to start
     obs = self.env_eval.reset()         # Reset the environment
-    self.env_eval_mon.start_eval_run()  # Start new eval run
 
     for t in range(start_step, stop_step+1):
       if self._terminate:
@@ -162,7 +161,7 @@ class OffPolicyAgent(ThreadedAgent):
         break
 
       action = self._action_eval(obs, t)
-      next_obs, rew, done, _ = self.env_eval.step(action)
+      next_obs, rew, done, info = self.env_eval.step(action)
 
       # Reset the environment if end of episode
       if done:
@@ -170,7 +169,7 @@ class OffPolicyAgent(ThreadedAgent):
       obs = next_obs
 
       if t % self.eval_len == 0:
-        best_agent = self.env_eval_mon.end_eval_run(t)
+        best_agent = info["rltf_mon"]["best_agent"]
         self._log_stats(t, 'e')               # Log stats only at the end of the run
         self._save_best(best_agent)           # Save agent if the best so far
         self.eval_step = t                    # Update the eval step
@@ -178,7 +177,6 @@ class OffPolicyAgent(ThreadedAgent):
         if t < stop_step:
           self._wait_eval_start()             # Wait for the next eval run
           obs = self.env_eval.reset()         # Reset the environment
-          self.env_eval_mon.start_eval_run()  # Start new eval run
 
 
   def _complete_stopped_eval(self):

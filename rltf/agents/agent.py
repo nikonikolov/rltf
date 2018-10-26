@@ -284,10 +284,10 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _define_log_info(self):
+  def _set_stdout_logs(self):
     custom_log_info = self._append_log_info()
-    self.env_train_mon.define_log_info(custom_log_info)
-    self.env_eval_mon.define_log_info(custom_log_info)
+    self.env_train_mon.set_stdout_logs(custom_log_info)
+    self.env_eval_mon.set_stdout_logs(custom_log_info)
 
 
   def _append_log_info(self):
@@ -325,7 +325,7 @@ class Agent:
 
     if mode == 't' and self.learn_started:
       # Log the statistics from the environment Monitor
-      self.env_train_mon.log_stats(t)
+      # self.env_train_mon.log_stats(t)
 
       if self.summary:
         # Append the summary with custom data
@@ -340,7 +340,7 @@ class Agent:
 
     elif mode == 'e':
       # Log the statistics from the environment Monitor
-      self.env_eval_mon.log_stats(t)
+      # self.env_eval_mon.log_stats(t)
 
       # Add a TB summary
       summary = tf.Summary()
