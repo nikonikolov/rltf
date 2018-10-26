@@ -133,9 +133,11 @@ class C51(BaseDQN):
 
     # Clip the atom supports in [V_min, V_max]
     atoms = tf.clip_by_value(atoms, self.V_min, self.V_max)   # [None, N]
+    atoms = tf.expand_dims(atoms, axis=-2)                    # [None, 1, N]
+    atoms = tf.tile(atoms, [1, self.N, 1])                    # [None, N, N]
 
     # Compute the temporal difference between atoms and bins
-    td_z  = tf.expand_dims(atoms, axis=-2) - self.bins        # [None, N, N]
+    td_z  = atoms - self.bins                                 # [None, N, N]
     # td_z[0] =
     # [ [tz1-z1, tz2-z1, ..., tzN-z1],
     #   [tz1-z2, tz2-z2, ..., tzN-z2],
