@@ -350,7 +350,12 @@ class DataWrapper:
 
 
   def _get_tb_files(self):
-    tb_dir = os.path.join(self.model_path, "tf/tb")
+    # Get the TB directory
+    tb_dir = os.path.join(self.model_path, "monitor/tb")
+    # Check if the model follows the old directory structure
+    if not os.path.exists(tb_dir):
+      tb_dir = os.path.join(self.model_path, "tf/tb")
+
     files  = os.listdir(tb_dir)
     if self.data_type == "t":
       files = [file for file in files if file.endswith("train")]

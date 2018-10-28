@@ -1,28 +1,3 @@
-# Partially based on https://github.com/openai/gym under the following license:
-#
-# The MIT License
-#
-# Copyright (c) 2016 OpenAI (http://openai.com)
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-#
-
 import logging
 import os
 
@@ -40,14 +15,34 @@ logger = logging.getLogger(__name__)
 
 
 class Monitor(Wrapper):
-  """Custom implementation of a Monitor class which has more functionality than gym.Monitor.
-  Supports logging training and evaluation statistics in real time, video recording, clear separation
-  between train and evaluation mode, saving statistrics to disk in numpy format.
+  """A Monitor class which automatically tracks training or evaluation statistics and saves them to disk.
+  Supports logging statistics to stdout and to a file in real time, video recording, adding plots to
+  the video, saving TensorBoard summaries, printing selected entries of the summary to stdout,
+  saving statistics to disk in numpy format so they can be easily plotted later.
 
-  NOTE: For total safety, this wrapper must be applied directly on top of the environment, without
-  any other wrappers in between. Otherwise, the reported statistics might be incorrect.
+  NOTE: This wrapper must be applied directly on top of the environment, without any other wrappers
+  between the agent and the monitor. Otherwise, the reported statistics might be incorrect. The monitor
+  gets the unwrapped environment or its TimeLimit wrapper and attaches to the corresponding `step()`,
+  `reset()` and `render()` functions in order to be able to passively collect statistics (the actual
+  functions are left intact).
 
-  Based on `gym/gym/wrappers/monitor.py`
+  The monitor supports only a single mode of operation - either training or evaluation. This means
+  that the agent should use different environment instances for training and evaluation.
+  Statistics are tracked by StatsRecorder and it autmatically outputs basic data such as
+  current agent and environment steps (not always equal), number of episodes, the mean and the std
+  of the reward and of the episode length over the last 100 episodes, the best score so far, etc.
+  Additional data can also easily be included in the output logs or the TensorBoard summary.
+
+  Any TensorBoard scalar summary whose tag starts with "stdout/" and is added to the default summary list
+  (tf.GraphKeys.SUMMARIES) is automatically included in the stdout logs (and removed from TensorBoard).
+  However, the user needs to provide a method for fetching the most recent result of running all summary
+  ops in a tf.Session. Be careful with running the environment in a thread, as the TensorFlow graph
+  is not automatically shared between threads.
+
+  Assumptions:
+    - The environment has no other wrapper other than gym.TimeLimit or rltf.envs.MaxEpisodeLen
+      that modifies the true episode length
+    - The TF graph is available in the thread running `env.step()`
   """
 
   def __init__(self, env, log_dir, log_period, mode, video_callable=None):
@@ -66,7 +61,6 @@ class Monitor(Wrapper):
     super().__init__(env)
 
     log_dir   = os.path.join(log_dir, "monitor")
-    stats_dir = os.path.join(log_dir, "data")
     video_dir = os.path.join(log_dir, "videos")
 
     # Member data
@@ -78,7 +72,7 @@ class Monitor(Wrapper):
     self._make_log_dir()
 
     # Composition objects
-    self.stats_recorder = StatsRecorder(stats_dir, log_period, mode)
+    self.stats_recorder = StatsRecorder(log_dir, log_period, mode)
     self.video_plotter  = VideoPlotter(self.env)
     self.video_recorder = None
 
@@ -95,9 +89,10 @@ class Monitor(Wrapper):
     self._attach_env_methods()
 
     # Attach member methods
-    self.conf_video_plots = self.video_plotter.conf_plots
-    self.set_stdout_logs  = self.stats_recorder.set_stdout_logs
-    self.save             = self.stats_recorder.save
+    self.conf_video_plots   = self.video_plotter.conf_plots
+    self.set_stdout_logs    = self.stats_recorder.set_stdout_logs
+    self.set_summary_getter = self.stats_recorder.set_summary_getter
+    self.save               = self.stats_recorder.save
 
 
   def _attach_env_methods(self):
@@ -187,7 +182,10 @@ class Monitor(Wrapper):
   def close(self):
     """Flush all monitor data to disk and close any open rending windows."""
 
-    # Close stats and video recorders
+    # Close stats recorder
+    self.stats_recorder.close()
+
+    # Close video recorder
     if self.video_recorder is not None:
       self._close_video_recorder()
 
@@ -210,7 +208,7 @@ class Monitor(Wrapper):
 
     ep_id = self.episode_id
     mode  = self.stats_recorder.mode
-    video_file = "openaigym_video_{}_episode_{:06}".format("train" if mode == 't' else "eval", ep_id)
+    video_file = "{}_video_episode_{:06}".format("train" if mode == 't' else "eval", ep_id)
     video_file = os.path.join(self.video_dir, video_file)
 
     # Start recording the next video
@@ -243,9 +241,14 @@ class Monitor(Wrapper):
 
 
   def __getattr__(self, attr):
-    if attr in ["mode", "mean_ep_rew", "episode_rews", "episode_lens", "eval_score",]:
+    if attr in ["mode", "episode_rews", "episode_lens"]:
       return getattr(self.stats_recorder, attr)
     raise AttributeError("%r object has no attribute %r" % (self.__class__, attr))
+
+
+  @property
+  def monitor(self):
+    return self
 
 
   @property

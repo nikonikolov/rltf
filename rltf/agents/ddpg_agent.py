@@ -67,9 +67,6 @@ class AgentDDPG(ParallelOffPolicyAgent):
     self.model      = model(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_len)
 
-    # Configure what information to log
-    self._set_stdout_logs()
-
     # Custom TF Tensors and Ops
     self.actor_learn_rate_ph  = None
     self.critic_learn_rate_ph = None
@@ -92,15 +89,13 @@ class AgentDDPG(ParallelOffPolicyAgent):
     tf.summary.scalar("train/critic_learn_rate", self.critic_learn_rate_ph)
 
 
-  def _append_log_info(self):
+  def _append_log_spec(self):
     t = self.log_freq
-    log_info = [
-      ( "train/actor_learn_rate",           "f", self.actor_opt_conf.lr_value   ),
-      ( "train/critic_learn_rate",          "f", self.critic_opt_conf.lr_value  ),
-      ( "mean/act_noise_mean (%d steps)"%t, "f", self._stats_act_noise_mean     ),
-      ( "mean/act_noise_std  (%d steps)"%t, "f", self._stats_act_noise_std      ),
+    log_spec = [
+      ( "mean_act_noise_mean (%d steps)"%t, "f", self._stats_act_noise_mean     ),
+      ( "mean_act_noise_std  (%d steps)"%t, "f", self._stats_act_noise_std      ),
     ]
-    return log_info
+    return log_spec
 
 
   def _append_summary(self, summary, t):

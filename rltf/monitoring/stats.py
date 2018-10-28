@@ -3,8 +3,8 @@ import logging
 import os
 import time
 import numpy as np
+import tensorflow as tf
 
-# from gym        import error
 from gym.utils  import atomic_write
 
 from rltf.utils import rltf_log
@@ -29,10 +29,22 @@ class StatsRecorder:
     """
 
     # Member data
-    self.log_dir    = log_dir
+    self.log_dir    = os.path.join(log_dir, "data")
+    self.tb_dir     = os.path.join(log_dir, "tb/")
     self.log_period = log_period
-    self.log_info   = None
     self._mode      = mode      # Running mode: either 't' (train) or 'e' (eval)
+
+    # Stdout data
+    self.log_spec     = None    # Tuples containing the specification for fetching stdout data
+    self.stdout_set   = False   # Track whether log_spec has been compiled
+
+    # TensorBoard data
+    suffix            = ".train" if self.mode == 't' else ".eval"
+    self.tb_writer    = tf.summary.FileWriter(self.tb_dir, filename_suffix=suffix)
+    self.summary_dict = None
+    self.summary      = None
+    self._get_summary = self._default_summary_getter  # Function that fetches the summary
+
 
     # Status
     # NOTE: self._env_eps is the episode ID, counted based on calls to env.unwrapped.reset().
@@ -65,8 +77,9 @@ class StatsRecorder:
     self.ep_steps   = None      # Track the episode environment steps so far
     self.env_done   = None      # Track whether the environment is done
 
-    # Initialize self.stats
+    # Initialize self.stats and the default self.log_spec
     self._init_stats()
+    self._init_stdout()
 
     # Create log_dir or resume with saved data if log_dir exists
     if not os.path.exists(self.log_dir):
@@ -75,29 +88,6 @@ class StatsRecorder:
     elif len(os.listdir(self.log_dir)) > 0:
       logger.info('Resuming with stats data from %s', self.log_dir)
       self._resume()
-
-
-  def _init_stats(self):
-    self.stats = {
-      "mean_ep_rew":    np.nan,
-      "std_ep_rew":     np.nan,
-      "ep_len_mean":    np.nan,
-      "ep_len_std":     np.nan,
-      "best_mean_rew":  -np.inf,
-      "best_ep_rew":    -np.inf,
-      "last_log_ep":  0,
-    }
-
-    if self.mode == 't':
-      self.stats["steps_per_sec"] = None          # Mean steps per second
-      self.stats["last_log_time"] = time.time()   # Time at which the last runtime log happened
-      self.stats["last_log_step"] = 0             # Step at which the last runtime log happened
-
-    else:
-      self.stats["best_score"]     = -np.inf
-      self.stats["score_mean"]     = -np.inf
-      self.stats["score_std"]      = -np.nan
-      self.stats["score_episodes"] = 0
 
 
   def before_agent_step(self, action):
@@ -180,36 +170,36 @@ class StatsRecorder:
     self._env_eps   += 1
 
 
-  def set_stdout_logs(self, custom_log_info):
-    """Build a list of tuples `(name, modifier, lambda)`. This list is
-    used to print the runtime statistics logs to stdout. The tuple is defined as:
-      `name`: `str`, the name of the reported value
-      `modifier`: `str`, the type modifier for printing the value, e.g. `d` for int
-      `lambda`: A function that takes the current **agent** timestep as argument
-        and returns the value to be printed.
-    Args:
-      custom_log_info: `list`. Must have the same structure as the above list. Allows
-        for logging custom data coming from the agent
-    """
+  def _init_stats(self):
+    self.stats = {
+      "mean_ep_rew":    np.nan,
+      "std_ep_rew":     np.nan,
+      "ep_len_mean":    np.nan,
+      "ep_len_std":     np.nan,
+      "best_mean_rew":  -np.inf,
+      "best_ep_rew":    -np.inf,
+      "last_log_ep":  0,
+    }
 
-    # Correct custom_log_info
-    correct_info = []
-    for log in custom_log_info:
-      assert len(log) == 3
-      assert callable(log[-1])
-      assert not log[0].startswith("eval/")
-      if not log[0].startswith("train/"):
-        name = "train/" + log[0]
-        log = (name,) + log[1:]
-      correct_info.append(log)
-    custom_log_info = correct_info
+    if self.mode == 't':
+      self.stats["steps_per_sec"] = None          # Mean steps per second
+      self.stats["last_log_time"] = time.time()   # Time at which the last runtime log happened
+      self.stats["last_log_step"] = 0             # Step at which the last runtime log happened
+
+    else:
+      self.stats["best_score"]     = -np.inf
+      self.stats["score_mean"]     = -np.inf
+      self.stats["score_std"]      = -np.nan
+      self.stats["score_episodes"] = 0
+
+
+  def _init_stdout(self):
 
     N = N_EPS_STATS
 
     if self.mode == "t":
-      log_info = [
+      self.log_spec = [
         ("train/mean_steps_per_sec",              ".3f",  lambda t: self.stats["steps_per_sec"]),
-
         ("train/agent_steps",                     "d",    lambda t: t),
         ("train/env_steps",                       "d",    lambda t: self._env_steps+self.ep_steps),
         ("train/episodes",                        "d",    lambda t: self._env_eps),
@@ -221,10 +211,8 @@ class StatsRecorder:
         ("train/std_ep_reward (%d eps)"%N,        ".3f",  lambda t: self.stats["std_ep_rew"]),
       ]
 
-      log_info = log_info + custom_log_info
-
     else:
-      log_info = [
+      self.log_spec = [
         ("eval/agent_steps",                      "d",    lambda t: t),
         ("eval/env_steps",                        "d",    lambda t: self._env_steps+self.ep_steps),
         ("eval/episodes",                         "d",    lambda t: self._env_eps),
@@ -240,11 +228,161 @@ class StatsRecorder:
         ("eval/score_std",                        ".3f",  lambda t: self.stats["score_std"]),
       ]
 
-    self.log_info = rltf_log.format_tabular(log_info, sort=False)
+
+  def set_stdout_logs(self, stdout_spec):
+    """Build a list of tuples `(name, modifier, lambda)`. This list is
+    used to print the runtime statistics logs to stdout. The tuple is defined as:
+      `name`: `str`, the name of the reported value
+      `modifier`: `str`, the type modifier for printing the value, e.g. `d` for int
+      `lambda`: A function that takes the current **agent** timestep as argument
+        and returns the value to be printed.
+    Args:
+      stdout_spec: `list`. Must have the same structure as the above list. Allows
+        for logging custom data coming from the agent
+    """
+    if self.mode == 'e':
+      return
+
+    # Correct stdout_info
+    filter_spec = []
+    for log in stdout_spec:
+      assert len(log) == 3
+      assert callable(log[-1])
+      assert not log[0].startswith("eval/")
+      if not log[0].startswith("train/"):
+        name = "train/" + log[0]
+        log = (name,) + log[1:]
+      filter_spec.append(log)
+    stdout_spec = filter_spec
+
+    # Update the stdout data
+    self.log_spec = self.log_spec + stdout_spec
+
+
+  def _build_stdout(self):
+    """Build self.log_spec table"""
+    if self.stdout_set:
+      return
+    self.stdout_set = True
+
+    # Configure the TensorBoard stdout entries
+    # Note that evaluation monitors don't output any TB data to stdout
+    if self.mode == 't':
+
+      # Get all summary Ops in the graph and their names
+      summary_ops = tf.get_collection(tf.GraphKeys.SUMMARIES)
+      names = []
+      # Select the tag names which start with "stdout/" and correspond to scalar summaries
+      for tensor in summary_ops:
+        if not tensor.name.startswith("stdout/"):
+          continue
+        else:
+          name = tensor.name[:tensor.name.rfind(":")]
+          if tensor.op.node_def.op != "ScalarSummary":
+            logger.warning("Cannot output non-scalar summary field %s to stdout", name)
+            continue
+          else:
+            names.append(name)
+
+      # Build the list of tuples for printing TB summary data to stdout
+      # Make names appear with "debug/" prefix on stdout
+      names   = sorted(names)
+      # tb_spec = [(name, ".4f", lambda t: self.summary_dict[name]) for name in names]
+      tb_spec = [("debug" + name[6:], ".4f", lambda t: self.summary_dict[name]) for name in names]
+
+      # Initialize the summary dictionary
+      self.summary_dict = {name: np.nan for name in names}
+
+    else:
+      tb_spec = []
+
+    # Do not include the TensorBoard data in stdout if no way to get the summary
+    if len(tb_spec) > 0 and self._get_summary == self._default_summary_getter:
+      logger.warning(
+        "Found TensorFlow summary ops that need to be added to stdout, but cannot fetch "
+        "the result of running the ops in a tf.Session(). Call %s to provide a method for "
+        "fetching the summary data", self.__class__.__name__ + ".set_summary_getter()"
+      )
+    else:
+      self.log_spec = self.log_spec + tb_spec
+
+    # Format the stdout tuples
+    self.log_spec = rltf_log.format_tabular(self.log_spec, sort=False)
+
+    # Hacky - write the graph here because now we are sure the graph is ready
+    # Write the graph to TensorBoard
+    if self.mode == 't':
+      graph = tf.get_default_graph()
+      if len(graph.get_operations()) == 0:
+        return
+      graph_writer = tf.summary.FileWriter(self.tb_dir, filename_suffix=".graph")
+      graph_writer.add_graph(graph)
+      graph_writer.flush()
+      graph_writer.close()
+
+
+
+  def set_summary_getter(self, f):
+    """Set a function that returns the TensorBoard summary to be saved to disk.
+    The summaries need to be updated only at each logging period. The function must
+    return an instance of tf.Summary or None, if no summary is available"""
+    if self.mode == 't':
+      self._get_summary = f
+    else:
+      logger.warning("Evaluation monitor does not support custom summary getters.")
+
+
+  def _default_summary_getter(self):
+    return tf.Summary()
+
+
+  def _update_summary(self):
+    # Get the most recent summary
+    summary = self._get_summary()
+
+    if self.mode == 't':
+      summary = self._filter_summary(summary)
+
+    self.summary = summary
+
+
+  def _filter_summary(self, summary):
+    # Do NOT filter if nothing from the summary needs to be redirected to stdout
+    if len(self.summary_dict) == 0 or summary is None:
+      return summary
+
+    inds = []
+
+    # Now remove all summary tags which start with "stdout/" and instead redirect them to stdout.
+    # NOTE: This will ignore all manually added TB summary entries which start with "stdout/" and do
+    # not actually exist as summary Ops in the TensorFlow graph. This is the expected behavior and
+    # one should instead use set_stdout_logs(), since manually added data is most likely not dependent
+    # on the graph and can be computed with a simple function, which is independent of sess.run()
+
+    # Update the most recent values that need to be printed to stdout
+    for i, v in enumerate(summary.value):
+      if v.tag.startswith("stdout/"):
+        if v.tag in self.summary_dict:
+          self.summary_dict[v.tag] = v.simple_value
+        # Make sure to remove all "stdout/" summary entries
+        inds.append(i)
+
+    # Remove the stdout summary entries so they don't clutter TB
+    for i, j in enumerate(inds):
+      summary.value.pop(j-i)
+
+    return summary
 
 
   def _update_stats(self, info):
     """Update the values of the runtime statistics variables"""
+
+    # Configure the stdout on the first logging event
+    if not self.stdout_set:
+      self._build_stdout()
+
+    # Fetch and update the TensorBoard summary
+    self._update_summary()
 
     stats = self.stats
 
@@ -285,6 +423,14 @@ class StatsRecorder:
     self.stats_steps.append(self._agent_steps)
     self.stats_inds.append(len(self.ep_rews))
 
+    # Append the TensorBoard summary data
+    if self.summary is not None:
+      if self.mode == 't':
+        self.summary.value.add(tag="train/mean_ep_rew", simple_value=stats["mean_ep_rew"])
+      else:
+        self.summary.value.add(tag="eval/mean_ep_rew",  simple_value=stats["mean_ep_rew"])
+        self.summary.value.add(tag="eval/score",        simple_value=stats["score_mean"])
+
 
   def log_stats(self, info):
     """Log the training progress if the **agent** step is appropriate
@@ -295,20 +441,22 @@ class StatsRecorder:
     if self._agent_steps % self.log_period != 0:
       return
 
-    # TODO: Add TB here
-
     # Update the statistics
     self._update_stats(info)
 
     # Log the data to stdout
     stats_logger.info("")
     if self.mode == 't':
-      for s, lambda_v in self.log_info:
+      for s, lambda_v in self.log_spec:
         stats_logger.info(s.format(lambda_v(self._agent_steps)))
     else:
-      for s, lambda_v in self.log_info:
+      for s, lambda_v in self.log_spec:
         stats_logger.info(rltf_log.colorize(s.format(lambda_v(self._agent_steps)), "yellow"))
     stats_logger.info("")
+
+    # Log the summary to TensorBoard
+    if self.summary is not None:
+      self.tb_writer.add_summary(self.summary, global_step=self._agent_steps)
 
 
   def save(self):
@@ -350,6 +498,9 @@ class StatsRecorder:
     self._write_npy(stats_inds_file,  np.asarray(self.stats_inds, dtype=np.int32))
     self._write_npy(stats_steps_file, np.asarray(self.stats_steps, dtype=np.int32))
 
+    # Flush the TB writer
+    self.tb_writer.flush()
+
 
   def _resume(self):
 
@@ -386,6 +537,10 @@ class StatsRecorder:
     self.ep_lens      = self._read_npy(ep_lens_file)
     self.stats_inds   = self._read_npy(stats_inds_file)
     self.stats_steps  = self._read_npy(stats_steps_file)
+
+
+  def close(self):
+    self.tb_writer.close()
 
 
   def _read_npy(self, file):
@@ -437,16 +592,6 @@ class StatsRecorder:
     return self._env_eps
 
   @property
-  def mean_ep_rew(self):
-    return stats_mean(self.ep_rews)
-
-  # TODO: Remove this - currently used in Agent log_stats
-  @property
-  def eval_score(self):
-    assert self.mode == 'e'
-    return self.stats["score_mean"]
-
-  @property
   def episode_rews(self):
     return list(self.ep_rews)
 
@@ -472,8 +617,3 @@ def stats_best(best, data, i):
     data_best = np.max(data[i:])
     return max(best, data_best)
   return best
-
-# def stats_max(data, i=0):
-#   if len(data[i:]) > 0:
-#     return np.max(data[i:])
-#   return -np.inf

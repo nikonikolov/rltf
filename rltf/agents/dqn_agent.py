@@ -62,9 +62,6 @@ class AgentDQN(ParallelOffPolicyAgent):
     self.model      = model(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, np.uint8, [], np.uint8, obs_len)
 
-    # Configure what information to log
-    self._set_stdout_logs()
-
     # Custom TF Tensors and Ops
     self.learn_rate_ph  = None
 
@@ -80,12 +77,8 @@ class AgentDQN(ParallelOffPolicyAgent):
     tf.summary.scalar("train/learn_rate", self.learn_rate_ph)
 
 
-  def _append_log_info(self):
-    log_info = [
-      ( "train/learn_rate", "f", self.opt_conf.lr_value ),
-      ( "train/epsilon",    "f", self.exploration.value ),
-    ]
-    return log_info
+  def _append_log_spec(self):
+    return []
 
 
   def _append_summary(self, summary, t):

@@ -1,5 +1,7 @@
 import logging
+import os
 import threading
+import tensorflow as tf
 
 from rltf.agents.agent import Agent
 
@@ -62,30 +64,147 @@ class ThreadedAgent(Agent):
       y = ''
       while True:
         y = input("Do you really want to exit? [y/n]. If you want to exit and save buffer, type 's'")
-        if y not in ['y', 'n', 's']:
-          print("Response not recognized. Expected 'y', 'n' or 's'.")
+        if y not in ['y', 'n']:
+          print("Response not recognized. Expected 'y' or 'n'.")
         else:
           break
       if y == 'n':
         return False
-      elif y == 's':
-        self.save_buf = True
     return True
 
 
+  def _thread(self, f):
+    """Share the default graph over threads"""
+    assert self.sess is not None
+    with self.sess.graph.as_default():
+      f()
 
-class OffPolicyAgent(ThreadedAgent):
+
+
+class LoggingAgent(Agent):
+  """Abstract Agent which takes care of logging training and evaluation progress to stdout
+  and TensorBoard. Also takes care of saving data to disk and restoring it"""
+
+  def __init__(self, *args, log_freq=10000, plots_layout=None, **kwargs):
+    """
+    Args:
+      log_freq: int. Add TensorBoard summary and print progress every log_freq agent steps
+      plots_layout: dict or None. Used to configure the layout for video plots
+    """
+    super().__init__(*args, **kwargs)
+
+    self.log_freq     = log_freq
+    self.plots_layout = plots_layout
+    self.summary      = None    # The most recent summary
+    self.summary_op   = None    # TF op that contains all summaries
+
+
+  def build(self):
+    # Build the actual graph
+    super().build()
+
+    # Create an Op for all summaries
+    self.summary_op = tf.summary.merge_all()
+
+    # Configure the monitors
+    self._configure_monitors()
+
+
+  def _configure_monitors(self):
+    # Set stdout data to log during training
+    self.env_train.monitor.set_stdout_logs(self._append_log_spec())
+
+    # Set the function to fetch TensorBoard summaries during training
+    self.env_train.monitor.set_summary_getter(self._fetch_summary)
+
+    # Configure the plot layout for recorded videos
+    if self.plots_layout is not None:
+      self._plots_layout()
+    else:
+      self.model.clear_plot_tensors()
+
+
+  def _plots_layout(self):
+    self.env_train.monitor.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
+      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
+    self.env_eval.monitor.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
+      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
+
+
+  def _fetch_summary(self):
+    byte_summary = self.summary
+    summary = tf.Summary()
+    if byte_summary is not None:
+      summary.ParseFromString(byte_summary)
+    # Pass the real current training step
+    self._append_summary(summary, self.train_step+1)
+
+    return summary
+
+
+  def _save(self):
+    # Save the monitor statistics
+    self.env_train.monitor.save()
+    self.env_eval.monitor.save()
+
+
+  def _run_summary_op(self, t):
+    """Return True if summary has to be run at this step, False otherwise.
+    NOTE:
+      - For significant computation efficiency, summaries should be run only each log_period,
+        otherwise the data is thrown away and causes unnecessary computations
+      - Careful with implementation. Remember that the summary is actually fetched by the
+        environment monitor, at every log_period, **during the call to env.step()**. Importantly,
+        this means that the summary has to be run **before** the corresponding call to env.step()
+    Args:
+      t: int. Current time step
+    """
+    raise NotImplementedError()
+
+
+  def _append_log_spec(self):
+    """
+    Returns:
+      List of tuples `(name, format, lambda)` with information of custom subclass
+      parameters to log during training. `name`: `str`, the name of the reported
+      value. `modifier`: `str`, the type modifier for printing the value.
+      `lambda`: A function that takes the current timestep as argument and
+      returns the value to be printed.
+    """
+    raise NotImplementedError()
+
+
+  def _append_summary(self, summary, t):
+    """Append the tf.Summary that will be written to disk at timestep t with custom data.
+    Used only in train mode. The resulting summary is passed to rltf.Monitor for saving.
+    Args:
+      summary: tf.Summary. The summary to append
+      t: int. Current time step
+    """
+    raise NotImplementedError()
+
+
+
+class OffPolicyAgent(LoggingAgent, ThreadedAgent):
   """The base class for Off-policy agents. train() and eval() procedures *cannot* run in parallel
   (because only 1 environment used). Assumes usage of target network and replay buffer.
   """
 
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args, save_buf=True, **kwargs):
+    """
+    Args:
+      save_buf: bool. If True, save the buffer during calls to `self.save()`. Can also be disabled
+        by setting the 'RLTFBUF' environment variable to `/dev/null`.
+    """
     super().__init__(*args, **kwargs)
+
+    self.save_buf = save_buf
 
     self.update_target_freq = None
     self.replay_buf = None
     # NOTE: Keep the eval thread always as the first entry. Used in self.eval()
-    self.threads    = [threading.Thread(name='eval_thread', target=self._eval)]
+    # self.threads    = [threading.Thread(name='eval_thread', target=self._eval)]
+    self.threads    = [threading.Thread(name='eval_thread', target=self._thread, args=[self._eval])]
 
     self._eval_start = threading.Event()
     self._eval_done  = threading.Event()
@@ -117,14 +236,16 @@ class OffPolicyAgent(ThreadedAgent):
 
 
   def _save(self):
+    super()._save()
     if self.save_buf:
       self.replay_buf.save(self.model_dir)
 
 
-  def _run_train_step(self, t, run_summary):
+  def _run_train_step(self, t):
     # Compose feed_dict
-    batch     = self.replay_buf.sample(self.batch_size)
-    feed_dict = self._get_feed_dict(batch, t)
+    batch       = self.replay_buf.sample(self.batch_size)
+    feed_dict   = self._get_feed_dict(batch, t)
+    run_summary = self._run_summary_op(t)
 
     # Wait for synchronization if necessary
     self._wait_act_chosen()
@@ -170,8 +291,7 @@ class OffPolicyAgent(ThreadedAgent):
 
       if t % self.eval_len == 0:
         best_agent = info["rltf_mon"]["best_agent"]
-        self._log_stats(t, 'e')               # Log stats only at the end of the run
-        self._save_best(best_agent)           # Save agent if the best so far
+        self._save_best_agent(best_agent)     # Save agent if the best so far
         self.eval_step = t                    # Update the eval step
         self._signal_eval_done()              # Signal end of eval run to training thread
         if t < stop_step:
@@ -189,6 +309,13 @@ class OffPolicyAgent(ThreadedAgent):
       if self.eval_step != eval_step:
         self._signal_eval_start()
         self._wait_eval_done()
+
+
+  def _run_summary_op(self, t):
+    # Remember this is called only each training period
+    # Make sure to run the summary right before t gets to a log_period so as to make sure
+    # that the summary will be updated on time
+    return t % self.log_freq + self.train_freq >= self.log_freq
 
 
   def _signal_eval_start(self):
@@ -257,8 +384,10 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     self._act_chosen.clear()
     self._train_done.set()
 
-    env_thread    = threading.Thread(name='env_thread', target=self._run_env)
-    nn_thread     = threading.Thread(name='net_thread', target=self._train_model)
+    # env_thread    = threading.Thread(name='env_thread', target=self._run_env)
+    # nn_thread     = threading.Thread(name='net_thread', target=self._train_model)
+    env_thread    = threading.Thread(name='env_thread', target=self._thread, args=[self._run_env])
+    nn_thread     = threading.Thread(name='net_thread', target=self._thread, args=[self._train_model])
     self.threads  = self.threads + [nn_thread, env_thread]
 
 
@@ -296,8 +425,6 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 
       # Store the effect of the action taken upon obs
       self.replay_buf.store(obs, action, reward, done)
-
-      self._log_stats(t, 't')
 
       # Wait until net_thread is done
       self._wait_train_done()
@@ -338,8 +465,7 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
         self.learn_started = True
 
         # Run a training step
-        run_summary = t % self.log_freq + self.train_freq >= self.log_freq
-        self._run_train_step(t, run_summary=run_summary)
+        self._run_train_step(t)
 
       else:
         # Synchronize
@@ -379,7 +505,8 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
     super().__init__(*args, **kwargs)
 
     # Use a thread in order to exit cleanly on KeyboardInterrupt
-    train_thread  = threading.Thread(name='train_thread', target=self._train)
+    # train_thread  = threading.Thread(name='train_thread', target=self._train)
+    train_thread  = threading.Thread(name='train_thread', target=self._thread, args=[self._train])
     self.threads  = self.threads + [train_thread]
 
 
@@ -419,11 +546,7 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
         self.learn_started = True
 
         # Run a training step
-        run_summary = t % self.log_freq == 0
-        self._run_train_step(t, run_summary=run_summary)
-
-      # Log data
-      self._log_stats(t, 't')
+        self._run_train_step(t)
 
       # Stop and run evaluation procedure
       if self.eval_len > 0 and t % self.eval_freq == 0:
