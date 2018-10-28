@@ -33,6 +33,9 @@ class BstrapC51_IDS(BstrapDQN_IDS):
     self.bins   = None
     self.rho2   = None
 
+    # Ugly temporary fix for project_distribution
+    self._project_distribution = lambda *args, **kwargs: C51._project_distribution(self, *args, **kwargs)
+
 
   def build(self):
     # Costruct the tensor of the bins for the probability distribution
@@ -209,33 +212,35 @@ class BstrapC51_IDS(BstrapDQN_IDS):
     return self._act_eval_greedy(q, name)
 
 
-  def _project_distribution(self, atoms, p):
-    """Project the distribution given by (atoms, p) onto the support of self.bins
-      using Eq. (7) from the Categorical DQN paper (Bellemare et. al. 2017)
-    Args:
-      atoms: tf.Tensor, shape `[None, N]`. Atoms for the support of the distribution
-      p: tf.Tensor, shape `[None, N]`. Probability of each atom of the distribution
-    Returns:
-      tf.Tensor of shape `[None, N]`, which contains the projected distribution
-    """
+  # def _project_distribution(self, atoms, p):
+  #   """Project the distribution given by (atoms, p) onto the support of self.bins
+  #     using Eq. (7) from the Categorical DQN paper (Bellemare et. al. 2017)
+  #   Args:
+  #     atoms: tf.Tensor, shape `[None, N]`. Atoms for the support of the distribution
+  #     p: tf.Tensor, shape `[None, N]`. Probability of each atom of the distribution
+  #   Returns:
+  #     tf.Tensor of shape `[None, N]`, which contains the projected distribution
+  #   """
 
-    # Clip the atom supports in [V_min, V_max]
-    atoms = tf.clip_by_value(atoms, self.V_min, self.V_max)   # [None, N]
+  #   # Clip the atom supports in [V_min, V_max]
+  #   atoms = tf.clip_by_value(atoms, self.V_min, self.V_max)   # [None, N]
+  #   atoms = tf.expand_dims(atoms, axis=-2)                    # [None, 1, N]
+  #   atoms = tf.tile(atoms, [1, self.N, 1])                    # [None, N, N]
 
-    # Compute the temporal difference between atoms and bins
-    td_z  = tf.expand_dims(atoms, axis=-2) - self.bins        # [None, N, N]
-    # td_z[0] =
-    # [ [tz1-z1, tz2-z1, ..., tzN-z1],
-    #   [tz1-z2, tz2-z2, ..., tzN-z2],
-    #   ...
-    #   [tz1-zN, tzN-zN, ..., tzN-zN]  ]
+  #   # Compute the temporal difference between atoms and bins
+  #   td_z  = atoms - tf.reshape(self.bins, [1, self.N, 1])     # [None, N, N]
+  #   # td_z[0] =
+  #   # [ [tz1-z1, tz2-z1, ..., tzN-z1],
+  #   #   [tz1-z2, tz2-z2, ..., tzN-z2],
+  #   #   ...
+  #   #   [tz1-zN, tzN-zN, ..., tzN-zN]  ]
 
-    # Compute the projection weights and clip them between 0 and 1
-    # Corresponds to `[1 - |[\hat{T}z_j]_{V_min}^{V_max} - z_i| / (\Delta z) ]_0^1` in Eq. (7)
-    weights = tf.clip_by_value(1 - tf.abs(td_z) / self.dz, 0, 1)
+  #   # Compute the projection weights and clip them between 0 and 1
+  #   # Corresponds to `[1 - |[\hat{T}z_j]_{V_min}^{V_max} - z_i| / (\Delta z) ]_0^1` in Eq. (7)
+  #   weights = tf.clip_by_value(1 - tf.abs(td_z) / self.dz, 0, 1)
 
-    # Compute the projected probabilities
-    p       = tf.expand_dims(p, axis=1)                     # [None, 1, N]
-    proj_p  = tf.reduce_sum(weights * p, axis=-1)           # [None, N]
+  #   # Compute the projected probabilities
+  #   p       = tf.expand_dims(p, axis=1)                     # [None, 1, N]
+  #   proj_p  = tf.reduce_sum(weights * p, axis=-1)           # [None, N]
 
-    return proj_p
+  #   return proj_p
