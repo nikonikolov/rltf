@@ -151,7 +151,7 @@ class BaseDQN(BaseQlearn):
     target_vars   = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_net")
 
     # Build the optimizer and the train op
-    optimizer     = self.opt_conf.build()
+    optimizer     = self.opt_conf.build(lr_tb_name="train/learn_rate")
     train_op      = self._build_train_op(optimizer, loss, train_vars, name="train_op")
 
     # Create the Op to update the target

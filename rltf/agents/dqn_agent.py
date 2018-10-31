@@ -16,7 +16,6 @@ class AgentDQN(ParallelOffPolicyAgent):
   def __init__(self,
                model,
                model_kwargs,
-               opt_conf,
                exploration,
                update_target_freq=10000,
                memory_size=int(1e6),
@@ -28,7 +27,6 @@ class AgentDQN(ParallelOffPolicyAgent):
     Args:
       model: rltf.models.Model. TF implementation of a model network
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
-      opt_conf: rltf.optimizers.OptimizerConf. Config for the network optimizer
       exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
       update_target_freq: Period in number of agent steps at which to update the target net
       memory_size: int. Size of the replay buffer
@@ -41,7 +39,6 @@ class AgentDQN(ParallelOffPolicyAgent):
     assert isinstance(self.env_train.observation_space, gym.spaces.Box)
     assert isinstance(self.env_train.action_space,      gym.spaces.Discrete)
 
-    self.opt_conf = opt_conf
     self.exploration = exploration
     self.epsilon_eval = epsilon_eval
     self.update_target_freq = update_target_freq
@@ -57,24 +54,13 @@ class AgentDQN(ParallelOffPolicyAgent):
 
     model_kwargs["obs_shape"] = obs_shape
     model_kwargs["n_actions"] = n_actions
-    model_kwargs["opt_conf"]  = opt_conf
 
     self.model      = model(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, np.uint8, [], np.uint8, obs_len)
 
-    # Custom TF Tensors and Ops
-    self.learn_rate_ph  = None
-
 
   def _build(self):
-    # Create Learning rate placeholders
-    self.learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="learn_rate_ph")
-
-    # Set the learn rate placeholders for the model
-    self.opt_conf.lr_ph = self.learn_rate_ph
-
-    # Add summaries
-    tf.summary.scalar("train/learn_rate", self.learn_rate_ph)
+    pass
 
 
   def _append_log_spec(self):
@@ -87,12 +73,12 @@ class AgentDQN(ParallelOffPolicyAgent):
 
   def _get_feed_dict(self, batch, t):
     feed_dict = {
-      self.model.obs_t_ph:       batch["obs"],
-      self.model.act_t_ph:       batch["act"],
-      self.model.rew_t_ph:       batch["rew"],
-      self.model.obs_tp1_ph:     batch["obs_tp1"],
-      self.model.done_ph:        batch["done"],
-      self.learn_rate_ph:        self.opt_conf.lr_value(t),
+      self.model.obs_t_ph:        batch["obs"],
+      self.model.act_t_ph:        batch["act"],
+      self.model.rew_t_ph:        batch["rew"],
+      self.model.obs_tp1_ph:      batch["obs_tp1"],
+      self.model.done_ph:         batch["done"],
+      self.model.opt_conf.lr_ph:  self.model.opt_conf.lr_value(t),
     }
 
     return feed_dict

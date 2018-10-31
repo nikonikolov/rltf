@@ -91,8 +91,8 @@ class DDPG(BaseQlearn):
     critic_loss     = self._get_critic_loss(target_q, act_t_q)
 
     # Build the optimizers
-    actor_opt       = self.actor_opt_conf.build()
-    critic_opt      = self.critic_opt_conf.build()
+    actor_opt       = self.actor_opt_conf.build(lr_tb_name="train/actor_learn_rate")
+    critic_opt      = self.critic_opt_conf.build(lr_tb_name="train/critic_learn_rate")
 
     # Create train Op
     self._train_op  = self._build_train_op(actor_opt, critic_opt, actor_loss, critic_loss, actor_vars, critic_vars)

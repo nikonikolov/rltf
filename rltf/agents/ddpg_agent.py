@@ -14,8 +14,6 @@ class AgentDDPG(ParallelOffPolicyAgent):
   def __init__(self,
                model,
                model_kwargs,
-               actor_opt_conf,
-               critic_opt_conf,
                action_noise,
                update_target_freq=1,
                memory_size=int(1e6),
@@ -28,8 +26,6 @@ class AgentDDPG(ParallelOffPolicyAgent):
         contain all parameters that do not have default values
       model: rltf.models.Model. TF implementation of a model network
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
-      actor_opt_conf: rltf.optimizers.OptimizerConf. Config for the actor network optimizer
-      critic_opt_conf: rltf.optimizers.OptimizerConf. Config for the critic network optimizer
       action_noise: rltf.exploration.ExplorationNoise. Action exploration noise
         to add to the selected action
       update_target_freq: Period in number of agent steps at which to update the target net
@@ -44,8 +40,6 @@ class AgentDDPG(ParallelOffPolicyAgent):
 
     self.action_noise = action_noise
 
-    self.actor_opt_conf   = actor_opt_conf
-    self.critic_opt_conf  = critic_opt_conf
     self.update_target_freq = update_target_freq
 
     # Get environment specs
@@ -61,32 +55,16 @@ class AgentDDPG(ParallelOffPolicyAgent):
 
     model_kwargs["obs_shape"]       = obs_shape
     model_kwargs["n_actions"]       = act_shape[0]
-    model_kwargs["actor_opt_conf"]  = actor_opt_conf
-    model_kwargs["critic_opt_conf"] = critic_opt_conf
 
     self.model      = model(**model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_len)
-
-    # Custom TF Tensors and Ops
-    self.actor_learn_rate_ph  = None
-    self.critic_learn_rate_ph = None
 
     # Custom stats
     self.act_noise_stats = collections.deque([], maxlen=self.log_freq)
 
 
   def _build(self):
-    # Create Learning rate placeholders
-    self.actor_learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="actor_learn_rate_ph")
-    self.critic_learn_rate_ph = tf.placeholder(tf.float32, shape=(), name="critic_learn_rate_ph")
-
-    # Set the learn rate placeholders for the model
-    self.actor_opt_conf.lr_ph  = self.actor_learn_rate_ph
-    self.critic_opt_conf.lr_ph = self.critic_learn_rate_ph
-
-    # Create learn rate summaries
-    tf.summary.scalar("train/actor_learn_rate",  self.actor_learn_rate_ph)
-    tf.summary.scalar("train/critic_learn_rate", self.critic_learn_rate_ph)
+    pass
 
 
   def _append_log_spec(self):
@@ -120,13 +98,13 @@ class AgentDDPG(ParallelOffPolicyAgent):
 
   def _get_feed_dict(self, batch, t):
     feed_dict = {
-      self.model.obs_t_ph:       batch["obs"],
-      self.model.act_t_ph:       batch["act"],
-      self.model.rew_t_ph:       batch["rew"],
-      self.model.obs_tp1_ph:     batch["obs_tp1"],
-      self.model.done_ph:        batch["done"],
-      self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
-      self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
+      self.model.obs_t_ph:              batch["obs"],
+      self.model.act_t_ph:              batch["act"],
+      self.model.rew_t_ph:              batch["rew"],
+      self.model.obs_tp1_ph:            batch["obs_tp1"],
+      self.model.done_ph:               batch["done"],
+      self.model.actor_opt_conf.lr_ph:  self.model.actor_opt_conf.lr_value(t),
+      self.model.critic_opt_conf.lr_ph: self.model.critic_opt_conf.lr_value(t),
     }
     return feed_dict
 
