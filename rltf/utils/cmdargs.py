@@ -34,11 +34,11 @@ def parse_args(custom_args):
     ('--n-evals',      dict(default=0,      type=int,     help='# of separate runs in evaluation mode')),
     ('--log-lvl',      dict(default='INFO', type=str,     help='logger lvl')),
     ('--plot-video',   dict(default=False,  type=str2bool,help='if True, add model plots to video')),
-    ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # *agent* steps')),
-    ('--save-freq',    dict(default=0,      type=int,     help='how often to save the model in # \
+    ('--log-period',   dict(default=10000,  type=int,     help='how often to log stats in # *agent* steps')),
+    ('--save-period',  dict(default=0,      type=int,     help='how often to save the model in # \
       *agent* steps; if <=0, model is saved only at the end')),
     ('--save-buf',     dict(default=True,   type=str2bool,help='whether to save the buffer')),
-    ('--video-freq',   dict(default=500,    type=int,     help='how often to record videos in # \
+    ('--video-period', dict(default=500,    type=int,     help='how often to record videos in # \
       *episodes*; if <=0, do not record any video')),
     ('--restore-model',dict(default=None,   type=str,     help='path to existing dir; if set, will \
       continue training with the network and the env from this dir')),
@@ -73,8 +73,8 @@ def parse_args(custom_args):
   # Parse arguments and perform checks
   args = parser.parse_args()
 
-  # log_freq must be positive
-  assert args.log_freq > 0
+  # log_period must be positive
+  assert args.log_period > 0
 
   assert args.gamma > 0 and args.gamma <= 1
 

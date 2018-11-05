@@ -88,15 +88,15 @@ class LoggingAgent(Agent):
   """Abstract Agent which takes care of logging training and evaluation progress to stdout
   and TensorBoard. Also takes care of saving data to disk and restoring it"""
 
-  def __init__(self, *args, log_freq=10000, plots_layout=None, **kwargs):
+  def __init__(self, *args, log_period=10000, plots_layout=None, **kwargs):
     """
     Args:
-      log_freq: int. Add TensorBoard summary and print progress every log_freq agent steps
+      log_period: int. Add TensorBoard summary and print progress every log_period agent steps
       plots_layout: dict or None. Used to configure the layout for video plots
     """
     super().__init__(*args, **kwargs)
 
-    self.log_freq     = log_freq
+    self.log_period   = log_period
     self.plots_layout = plots_layout
     self.summary      = None    # The most recent summary
     self.summary_op   = None    # TF op that contains all summaries
@@ -201,7 +201,7 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
     """
     super().__init__(*args, **kwargs)
 
-    self.update_target_freq = None
+    self.update_target_period = None
     self.replay_buf = None
 
     self.threads    = []
@@ -245,7 +245,7 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
       self.sess.run(self.model.train_op, feed_dict=feed_dict)
 
     # Update target network
-    if t % self.update_target_freq == 0:
+    if t % self.update_target_period == 0:
       self.sess.run(self.model.update_target)
 
 
@@ -253,7 +253,7 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
     # Remember this is called only each training period
     # Make sure to run the summary right before t gets to a log_period so as to make sure
     # that the summary will be updated on time
-    return t % self.log_freq + self.train_freq >= self.log_freq
+    return t % self.log_period + self.train_period >= self.log_period
 
 
   def _wait_act_chosen(self):
@@ -333,14 +333,14 @@ class QlearnAgent(BaseQlearnAgent):
       obs = next_obs
 
       # Stop and run evaluation procedure
-      if self.eval_len > 0 and t % self.eval_freq == 0:
+      if self.eval_len > 0 and t % self.eval_period == 0:
         self._eval_agent()
 
       # Update the train step
       self.train_step = t
 
       # Save **after** train step is correct and completed
-      if self.save_freq > 0 and t % self.save_freq == 0:
+      if self.save_period > 0 and t % self.save_period == 0:
         self.save()
 
 
@@ -357,7 +357,7 @@ class QlearnAgent(BaseQlearnAgent):
         self._signal_train_done()
         break
 
-      if (t >= self.warm_up and t % self.train_freq == 0):
+      if (t >= self.warm_up and t % self.train_period == 0):
 
         self.learn_started = True
 
@@ -435,7 +435,7 @@ class SequentialQlearnAgent(BaseQlearnAgent):
       obs = next_obs
 
       # Train the model
-      if (t >= self.warm_up and t % self.train_freq == 0):
+      if (t >= self.warm_up and t % self.train_period == 0):
 
         self.learn_started = True
 
@@ -443,14 +443,14 @@ class SequentialQlearnAgent(BaseQlearnAgent):
         self._run_train_step(t)
 
       # Stop and run evaluation procedure
-      if self.eval_len > 0 and t % self.eval_freq == 0:
+      if self.eval_len > 0 and t % self.eval_period == 0:
         self._eval_agent()
 
       # Update the train step
       self.train_step = t
 
       # Save **after** train step is correct and completed
-      if self.save_freq > 0 and t % self.save_freq == 0:
+      if self.save_period > 0 and t % self.save_period == 0:
         self.save()
 
 

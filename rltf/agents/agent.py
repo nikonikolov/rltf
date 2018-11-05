@@ -16,14 +16,14 @@ class Agent:
   def __init__(self,
                env_train,
                env_eval,
-               train_freq,
+               train_period,
                warm_up,
                stop_step,
-               eval_freq,
+               eval_period,
                eval_len,
                batch_size,
                model_dir,
-               save_freq=1000000,
+               save_period=1000000,
                n_evals=0,
                load_model=None,
                load_regex=None,
@@ -31,17 +31,17 @@ class Agent:
     """
     Args:
       env: gym.Env. Environment in which the model will be trained.
-      train_freq: int. How many environment actions to take between every 2 learning steps
+      train_period: int. How many environment actions to take between every 2 learning steps
       warm_up: int. Number of random steps before training starts
       stop_step: int. Training step at which learning stops
-      eval_freq: int. How many agent steps to take between every 2 evaluation runs
+      eval_period: int. How many agent steps to take between every 2 evaluation runs
       eval_len: int. How many agent steps an evaluation run lasts. `<=0` means no evaluation
       batch_size: int. Batch size for training the model
       model_dir: str. Directory path for the model, where logs and checkpoints will be saved. If the
         directory is not empty, the agent will restore the model continue training it
       n_evals: int. Number of separate evaluation runs to execute when `Agent.eval()` is called. If `<=0`,
         `Agent.eval()` will raise exception. If `>0`, `Agent.train()` will raise exception
-      save_freq: int. Save the model every `save_freq` training steps. `<=0` means no saving
+      save_period: int. Save the model every `save_period` training steps. `<=0` means no saving
       load_model: str. Path to a directory which contains an existing model. The best_agent weights in
         this model will be loaded (no data in `load_model` will be overwritten)
       load_regex: str. Regular expression for matching variables whose values should be reused.
@@ -60,7 +60,7 @@ class Agent:
     self.model_dir      = model_dir
     self.reuse_model    = load_model
     self.reuse_regex    = None if load_regex is None else re.compile(load_regex)
-    self.save_freq      = save_freq
+    self.save_period    = save_period
     self.train_saver    = None
     self.eval_saver     = None
 
@@ -68,13 +68,13 @@ class Agent:
     self.warm_up        = warm_up       # Step from which training starts
     self.stop_step      = stop_step     # Step at which training stops
     self.learn_started  = False         # Bool: Indicates if learning has started or not
-    self.train_freq     = train_freq    # How often to run a training step
+    self.train_period   = train_period  # How often to run a training step
     self.train_step     = 0             # Current agent train step
     self.batch_size     = batch_size
     self.prng           = seeding.get_prng()
 
     # Evaluation data
-    self.eval_freq      = eval_freq     # How often to take an evaluation run
+    self.eval_period    = eval_period   # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
     self.eval_step      = 0             # Current agent eval step
     self.n_evals        = n_evals       # Number of evaluation runs in Agent.eval()
@@ -137,9 +137,9 @@ class Agent:
 
     # If the agent was restored and it was previously terminated during an evaluation run,
     # complete this unfinished evaluation run before training starts
-    if self.eval_freq > 0 and self.train_step % self.eval_freq == 0:
+    if self.eval_period > 0 and self.train_step % self.eval_period == 0:
       # Compute what eval step would be if eval run was able to complete
-      eval_step = self.train_step / self.eval_freq * self.eval_len
+      eval_step = self.train_step / self.eval_period * self.eval_len
       # Run evaluation if necessary
       if self.eval_step != eval_step:
         self._eval_agent()
@@ -301,7 +301,7 @@ class Agent:
     """Subclass helper function.
     Execute a single evaluation run for the lenght of self.eval_len steps.
     """
-    if self.eval_len <= 0 or self.eval_freq <= 0:
+    if self.eval_len <= 0 or self.eval_period <= 0:
       return
 
     logger.info("Starting evaluation run")

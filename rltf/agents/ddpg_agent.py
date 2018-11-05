@@ -13,7 +13,7 @@ class AgentDDPG(QlearnAgent):
                model,
                model_kwargs,
                action_noise,
-               update_target_freq=1,
+               update_target_period=1,
                memory_size=int(1e6),
                obs_len=1,
                **agent_kwargs
@@ -26,7 +26,7 @@ class AgentDDPG(QlearnAgent):
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
       action_noise: rltf.exploration.ExplorationNoise. Action exploration noise
         to add to the selected action
-      update_target_freq: Period in number of agent steps at which to update the target net
+      update_target_period: Period in number of agent steps at which to update the target net
       memory_size: int. Size of the replay buffer
       obs_len: int. How many environment observations comprise a single state.
     """
@@ -37,8 +37,7 @@ class AgentDDPG(QlearnAgent):
     assert isinstance(self.env_train.action_space,      gym.spaces.Box)
 
     self.action_noise = action_noise
-
-    self.update_target_freq = update_target_freq
+    self.update_target_period = update_target_period
 
     # Get environment specs
     act_shape = list(self.env_train.action_space.shape)
@@ -58,7 +57,7 @@ class AgentDDPG(QlearnAgent):
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_len)
 
     # Custom stats
-    self.act_noise_stats = collections.deque([], maxlen=self.log_freq)
+    self.act_noise_stats = collections.deque([], maxlen=self.log_period)
 
 
   def _build(self):
@@ -66,7 +65,7 @@ class AgentDDPG(QlearnAgent):
 
 
   def _append_log_spec(self):
-    t = self.log_freq
+    t = self.log_period
     log_spec = [
       ( "mean_act_noise_mean (%d steps)"%t, "f", self._stats_act_noise_mean     ),
       ( "mean_act_noise_std  (%d steps)"%t, "f", self._stats_act_noise_std      ),

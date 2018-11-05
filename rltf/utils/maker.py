@@ -14,7 +14,7 @@ from rltf.utils       import seeding
 logger = logging.getLogger(__name__)
 
 
-def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_freq, max_ep_steps):
+def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_period, max_ep_steps):
   if "Roboschool" in env_id:
     import roboschool
 
@@ -36,7 +36,7 @@ def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_freq, max_e
     env = wrap(env, mode=mode)
 
   # Apply monitor at the very top
-  env = Monitor(env, model_dir, log_period, mode, video_freq)
+  env = Monitor(env, model_dir, log_period, mode, video_period)
 
   return env
 
@@ -47,7 +47,7 @@ def _set_seeds(seed):
 
 
 def make_envs(env_id, seed, model_dir, log_period_train, log_period_eval,
-              video_freq=None, wrap=None, max_ep_steps_train=None, max_ep_steps_eval=None):
+              video_period=None, wrap=None, max_ep_steps_train=None, max_ep_steps_eval=None):
   """Create two instances of a gym environment, wrap them in a Monitor class and
   set seeds for the environments and for other modules (tf, np, random). Both
   environments are not allowed to be in dual mode. One env is for train, one for eval
@@ -55,7 +55,7 @@ def make_envs(env_id, seed, model_dir, log_period_train, log_period_eval,
     env_id: str. Full name of the gym environment
     seed: int. Seed for the environment and the modules
     model_dir: std. Path where videos from the Monitor class will be saved
-    video_freq: int. Every `video_freq` episode will be recorded. If `None`,
+    video_period: int. Every `video_period` episode will be recorded. If `None`,
       then the monitor default is used. If `<=0`, then no videos are recorded
     wrap: function. Must take as arguments the environment and its mode and wrap it.
     max_ep_steps_train: int. Set a bound on the max steps in a training episode. If None, no limit
@@ -66,8 +66,8 @@ def make_envs(env_id, seed, model_dir, log_period_train, log_period_eval,
 
   _set_seeds(seed)
 
-  env_train = _make_env(env_id, seed,   model_dir, wrap, 't', log_period_train, video_freq, max_ep_steps_train)
-  env_eval  = _make_env(env_id, seed+1, model_dir, wrap, 'e', log_period_eval,  video_freq, max_ep_steps_eval)
+  env_train = _make_env(env_id, seed,   model_dir, wrap, 't', log_period_train, video_period, max_ep_steps_train)
+  env_eval  = _make_env(env_id, seed+1, model_dir, wrap, 'e', log_period_eval,  video_period, max_ep_steps_eval)
 
   return env_train, env_eval
 

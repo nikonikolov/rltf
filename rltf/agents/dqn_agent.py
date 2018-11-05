@@ -15,7 +15,7 @@ class AgentDQN(QlearnAgent):
                model,
                model_kwargs,
                exploration,
-               update_target_freq=10000,
+               update_target_period=10000,
                memory_size=int(1e6),
                obs_len=4,
                epsilon_eval=0.001,
@@ -26,7 +26,7 @@ class AgentDQN(QlearnAgent):
       model: rltf.models.Model. TF implementation of a model network
       model_kwargs: dict. Model-specific keyword arguments to pass to the model
       exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
-      update_target_freq: Period in number of agent steps at which to update the target net
+      update_target_period: Period in number of agent steps at which to update the target net
       memory_size: int. Size of the replay buffer
       obs_len: int. How many environment observations comprise a single state.
       agent_kwargs: Keyword arguments that will be passed to the Agent base class
@@ -39,7 +39,7 @@ class AgentDQN(QlearnAgent):
 
     self.exploration = exploration
     self.epsilon_eval = epsilon_eval
-    self.update_target_freq = update_target_freq
+    self.update_target_period = update_target_period
 
     # Get environment specs
     n_actions = self.env_train.action_space.n
