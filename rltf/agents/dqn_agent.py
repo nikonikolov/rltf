@@ -1,17 +1,15 @@
 import logging
 import gym
 import numpy as np
-import tensorflow as tf
 
-from rltf.agents  import ParallelOffPolicyAgent
-from rltf.agents  import SequentialOffPolicyAgent
+from rltf.agents  import QlearnAgent
 from rltf.memory  import ReplayBuffer
 
 
 logger = logging.getLogger(__name__)
 
 
-class AgentDQN(ParallelOffPolicyAgent):
+class AgentDQN(QlearnAgent):
 
   def __init__(self,
                model,

@@ -4,16 +4,17 @@ import os
 
 import gym
 
-import rltf.conf
-import rltf.utils.seeding
-import rltf.monitoring
-import rltf.envs
+from rltf.envs        import MaxEpisodeLen
+from rltf.monitoring  import Monitor
+from rltf.utils       import rltf_conf
+from rltf.utils       import rltf_log
+from rltf.utils       import seeding
 
 
 logger = logging.getLogger(__name__)
 
 
-def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_callable, max_ep_steps):
+def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_freq, max_ep_steps):
   if "Roboschool" in env_id:
     import roboschool
 
@@ -29,30 +30,20 @@ def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_callable, m
   if max_ep_steps is not None:
   # if max_ep_steps is not None and max_ep_steps > 0:
     # env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
-    env = rltf.envs.MaxEpisodeLen(env, max_episode_steps=max_ep_steps)
+    env = MaxEpisodeLen(env, max_episode_steps=max_ep_steps)
 
   if wrap is not None:
     env = wrap(env, mode=mode)
 
   # Apply monitor at the very top
-  env = rltf.monitoring.Monitor(env, model_dir, log_period, mode, video_callable)
+  env = Monitor(env, model_dir, log_period, mode, video_freq)
 
   return env
 
 
-def _get_video_callable(video_freq):
-  if video_freq is None:
-    video_callable = None
-  elif video_freq > 0:
-    video_callable = lambda e_id: e_id % video_freq == 0
-  else:
-    video_callable = False
-  return video_callable
-
-
 def _set_seeds(seed):
-  rltf.utils.seeding.set_random_seed(seed)  # Set RLTF seed
-  rltf.utils.seeding.set_global_seeds()     # Set other module's seeds
+  seeding.set_random_seed(seed)  # Set RLTF seed
+  seeding.set_global_seeds()     # Set other module's seeds
 
 
 def make_envs(env_id, seed, model_dir, log_period_train, log_period_eval,
@@ -74,38 +65,52 @@ def make_envs(env_id, seed, model_dir, log_period_train, log_period_eval,
   """
 
   _set_seeds(seed)
-  video_callable = _get_video_callable(video_freq)
 
-  env_train = _make_env(env_id, seed,   model_dir, wrap, 't', log_period_train, video_callable, max_ep_steps_train)
-  env_eval  = _make_env(env_id, seed+1, model_dir, wrap, 'e', log_period_eval,  video_callable, max_ep_steps_eval)
+  env_train = _make_env(env_id, seed,   model_dir, wrap, 't', log_period_train, video_freq, max_ep_steps_train)
+  env_eval  = _make_env(env_id, seed+1, model_dir, wrap, 'e', log_period_eval,  video_freq, max_ep_steps_eval)
 
   return env_train, env_eval
 
 
-def make_model_dir(model_type, env_id, dest=rltf.conf.MODELS_DIR):
-  """
+def make_model_dir(args, base=rltf_conf.MODELS_DIR):
+  """Construct the correct absolute path of the model and create the directory.
   Args:
-    model_type: python class or str. The class of the model
-    env_id: str. The environment name
-    dest: str. The absolute path of the directory where all models are saved
+    args: argparse.ArgumentParser. The command-line arguments
+    base: str. The absolute path of the directory where all models are saved
   Returns:
     The absolute path for the model directory
   """
 
-  if isinstance(model_type, str):
-    model_name  = model_type.lower()
+  # Get the model, the env, values of restore and reuse
+  model_type  = args.model
+  env_id      = args.env_id
+  restore_dir = args.restore_model
+  reuse_dir   = args.load_model
+
+  # If restoring, do not create a new directory
+  if restore_dir is not None:
+    model_dir = restore_dir
+
+  # If evaluating, create a subdirectory
+  elif args.mode == 'eval':
+    assert reuse_dir is not None
+    model_dir = os.path.join(reuse_dir, "eval/")
+    os.makedirs(model_dir)
+
+  # Create a new model directory
   else:
-    model_name  = model_type.__name__.lower()
+    model_id    = datetime.datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
+    model_id    = env_id + "_" + model_id
+    model_name  = model_type.lower()
 
-  model_dir   = os.path.join(dest,      model_name)
-  model_dir   = os.path.join(model_dir, env_id)
+    model_dir   = os.path.join(base,      model_name)
+    model_dir   = os.path.join(model_dir, model_id)
+    model_dir   = os.path.join(model_dir, "")
 
-  model_id    = datetime.datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
-  model_dir   = model_dir + "_" + model_id
-  model_dir   = os.path.join(model_dir, "")
+    # Create the directory for the model
+    os.makedirs(model_dir)
 
-  # Create the directory for the model
-  logger.info('Creating model directory %s', model_dir)
-  os.makedirs(model_dir)
+  # Configure the logger
+  rltf_log.conf_logs(model_dir, args.log_lvl, args.log_lvl)
 
   return model_dir

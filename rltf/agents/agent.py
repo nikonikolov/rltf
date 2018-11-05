@@ -24,8 +24,9 @@ class Agent:
                batch_size,
                model_dir,
                save_freq=1000000,
-               restore_dir=None,
-               reuse_regex=None,
+               n_evals=0,
+               load_model=None,
+               load_regex=None,
               ):
     """
     Args:
@@ -36,14 +37,15 @@ class Agent:
       eval_freq: int. How many agent steps to take between every 2 evaluation runs
       eval_len: int. How many agent steps an evaluation run lasts. `<=0` means no evaluation
       batch_size: int. Batch size for training the model
-      model_dir: string. Directory path for the model logs and checkpoints
+      model_dir: str. Directory path for the model, where logs and checkpoints will be saved. If the
+        directory is not empty, the agent will restore the model continue training it
+      n_evals: int. Number of separate evaluation runs to execute when `Agent.eval()` is called. If `<=0`,
+        `Agent.eval()` will raise exception. If `>0`, `Agent.train()` will raise exception
       save_freq: int. Save the model every `save_freq` training steps. `<=0` means no saving
-      restore_dir: str. Path to a directory which contains an existing model to restore. If
-        `restore_dir==model_dir`, then training is continued from the saved model time step and
-        the existing model is overwritten. Otherwise, the saved weights are used but training
-        starts from step 0 and the model is saved in `model_dir`. If `None`, no restoring
-      reuse_regex: str or None. Regular expression for matching variables whose values should be reused.
-        If None, all model variables are reused
+      load_model: str. Path to a directory which contains an existing model. The best_agent weights in
+        this model will be loaded (no data in `load_model` will be overwritten)
+      load_regex: str. Regular expression for matching variables whose values should be reused.
+        If empty, all model variables are reused
     """
 
     # Environment data
@@ -56,8 +58,8 @@ class Agent:
 
     # Save and restore specs data
     self.model_dir      = model_dir
-    self.restore_dir    = restore_dir
-    self.reuse_regex    = None if reuse_regex is None else re.compile(reuse_regex)
+    self.reuse_model    = load_model
+    self.reuse_regex    = None if load_regex is None else re.compile(load_regex)
     self.save_freq      = save_freq
     self.train_saver    = None
     self.eval_saver     = None
@@ -75,6 +77,7 @@ class Agent:
     self.eval_freq      = eval_freq     # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
     self.eval_step      = 0             # Current agent eval step
+    self.n_evals        = n_evals       # Number of evaluation runs in Agent.eval()
 
     # TensorFlow attributes
     self.sess           = None
@@ -86,20 +89,24 @@ class Agent:
   def build(self):
     """Build the graph. The graph is always built and initialized from scratch. After that, tf.Variables
      are restored (if needed). Meta graphs are not used. Calls `self._build()` and `self.model.build()`.
-    If `restore_dir is None`, the graph will be initialized from scratch.
-    If `restore_dir == model_dir`, all graph variable values will be restored from checkpoint
-    If `restore_dir != model_dir`, variables which match the provided pattern will be restored from
-    checkpoint. The rest of the variables will retain their original random values
+    - If `model_dir` is not empty, all TF variable values will be restored from the latest checkpoint
+    - If `reuse_model is not None`, variables which match `reuse_regex` will be restored from the
+      best agent checkpoint. The rest of the variables will retain their initialized random values
     """
     if self.built:
       return
     self.built = True
 
-    restore = self.restore_dir is not None and self.restore_dir == self.model_dir
-    reuse   = self.restore_dir is not None and self.restore_dir != self.model_dir
+    if os.path.exists(self.state_file):
+      restore = True
+      assert self.n_evals <= 0
+      assert self.reuse_model is None
+      assert self.reuse_regex is None
+    else:
+      restore = False
 
     # Set regex to match variables which should not be trained. Must be done before building the graph
-    if reuse and self.reuse_regex is not None:
+    if self.reuse_model is not None and self.reuse_regex is not None:
       self.model.exclude_train_vars(self.reuse_regex)
 
     # Build the graph from scratch
@@ -111,7 +118,7 @@ class Agent:
       self._restore()       # Execute agent-specific restore, e.g. restore buffer
 
     # Reuse some variables if model is being reused
-    elif reuse:
+    elif self.reuse_model is not None:
       self._reuse_vars()
 
     # NOTE: Create tf.train.Savers **after** building the whole graph
@@ -125,12 +132,34 @@ class Agent:
 
   def train(self):
     """Train the agent"""
-    raise NotImplementedError()
+    assert self.built, "You need to execute Agent.build() before calling Agent.train()"
+    assert self.n_evals <= 0      # Make sure in correct mode
+
+    # If the agent was restored and it was previously terminated during an evaluation run,
+    # complete this unfinished evaluation run before training starts
+    if self.eval_freq > 0 and self.train_step % self.eval_freq == 0:
+      # Compute what eval step would be if eval run was able to complete
+      eval_step = self.train_step / self.eval_freq * self.eval_len
+      # Run evaluation if necessary
+      if self.eval_step != eval_step:
+        self._eval_agent()
+
+    # Run the actual training process
+    self._train()
 
 
   def eval(self):
     """Evaluate the agent"""
-    raise NotImplementedError()
+    assert self.built, "You need to execute Agent.build() before calling Agent.eval()"
+    assert self.n_evals > 0                     # Make sure in the correct mode and best agent restored
+    assert self.eval_step == 0                  # Ensure a single call to eval
+    assert self.reuse_regex is None             # Make sure all variables were restored
+
+    # Run the actual evaluation process
+    self._eval()
+
+    # Execute only agent-specific save, e.g. save statistics
+    self._save()
 
 
   def reset(self):
@@ -180,8 +209,7 @@ class Agent:
     saver.restore(self.sess, self.restore_ckpt)
 
     # Recover the agent state
-    state_file = os.path.join(self.model_dir, "agent_state.json")
-    with open(state_file, 'r') as f:
+    with open(self.state_file, 'r') as f:
       data = json.load(f)
 
     self.train_step = data["train_step"]
@@ -199,7 +227,7 @@ class Agent:
 
 
   def _reuse_vars(self):
-    logger.info("Reusing model variables:")
+    logger.info("Loading model '%s' and reusing variables", self.reuse_model)
 
     # Get the list of variables to restore
     if self.reuse_regex is not None:
@@ -214,6 +242,16 @@ class Agent:
     # Restore the best agent variables
     saver = tf.train.Saver(var_list)
     saver.restore(self.sess, self.reuse_ckpt)
+
+
+  def _train(self):
+    """Evaluate the agent. To be implemented by the inheriting class"""
+    raise NotImplementedError()
+
+
+  def _eval(self):
+    """Evaluate the agent. To be implemented by the inheriting class. Can call Agent._run_eval()"""
+    raise NotImplementedError()
 
 
   def _build(self):
@@ -245,6 +283,65 @@ class Agent:
     raise NotImplementedError()
 
 
+  def _action_eval(self, state, t):
+    """Return action selected by the agent for an evaluation step
+    Args:
+      state: np.array. Current state
+      t: int. Current timestep
+    """
+    raise NotImplementedError()
+
+
+  def _check_terminate(self):
+    """Check if train or eval loop must terminate because of Ctrl+C"""
+    raise NotImplementedError()
+
+
+  def _eval_agent(self):
+    """Subclass helper function.
+    Execute a single evaluation run for the lenght of self.eval_len steps.
+    """
+    if self.eval_len <= 0 or self.eval_freq <= 0:
+      return
+
+    logger.info("Starting evaluation run")
+
+    # Compute the start and the end step
+    start_step  = self.eval_step + 1
+    stop_step   = start_step + self.eval_len
+
+    # Reset the environment at the beginning
+    obs = self.env_eval.reset()
+
+    for t in range(start_step, stop_step):
+      if self._check_terminate():
+        break
+
+      action = self._action_eval(obs, t)
+      next_obs, rew, done, info = self.env_eval.step(action)
+
+      # Reset the environment if end of episode
+      if done:
+        next_obs = self.env_eval.reset()
+      obs = next_obs
+
+    # Execute on successful loop completion
+    else:
+      best_agent = info["rltfmon.best_agent"]
+      self._save_best_agent(best_agent)     # Save agent if the best so far
+      self.eval_step = t                    # Update the eval step
+
+      logger.info("Evaluation run finished")
+
+
+  def _run_eval(self):
+    """Subclass helper function.
+    Run the agent in evaluation mode. Should be called from `Agent._eval()`
+    """
+    for _ in range(self.n_evals):
+      self._eval_agent()
+
+
   def save(self):
     """Save the current agent status to disk. This function needs to be explicitly called.
     It is possible to implement automatic savers which save the data to disk at some period, but
@@ -253,7 +350,7 @@ class Agent:
 
     Calls `self._save()` for any subclass specific save procedures.
     """
-    if not self.learn_started:
+    if not self.learn_started or self.n_evals > 0:
       return
 
     logger.info("Saving the TF model and stats to %s", self.model_dir)
@@ -265,12 +362,11 @@ class Agent:
     self._save()
 
     # Save the agent state
-    state_file = os.path.join(self.model_dir, "agent_state.json")
     data = {
       "train_step": self.train_step,
       "eval_step":  self.eval_step,
     }
-    with open(state_file, 'w') as f:
+    with open(self.state_file, 'w') as f:
       json.dump(data, f, indent=4, sort_keys=True)
 
     logger.info("Save finished successfully")
@@ -285,7 +381,7 @@ class Agent:
     """Save the best-performing agent.
     best_agent: bool. If True, the agent is the best so far. If False, do not save.
     """
-    if not best_agent:
+    if not best_agent or self.n_evals > 0:
       return
 
     save_dir = self.best_agent_dir
@@ -293,6 +389,11 @@ class Agent:
     # Save the model
     self.eval_saver.save(self.sess, save_dir, global_step=self.train_step+1)
     logger.info("Save finished successfully")
+
+
+  @property
+  def state_file(self):
+    return os.path.join(self.model_dir, "agent_state.json")
 
 
   @property
@@ -307,7 +408,7 @@ class Agent:
 
   @property
   def reuse_ckpt(self):
-    return self._ckpt_path(self.best_agent_dir)
+    return self._ckpt_path(os.path.join(self.reuse_model, "tf/best_agent/"))
 
 
   @property

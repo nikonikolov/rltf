@@ -163,11 +163,10 @@ class ReplayBuffer(BaseBuffer):
     # Also the index with invalid next state is either idx-1 (thread has not incremened idx yet) or
     # idx (we have read the incremented idx). In either case, the safe lower bound remains idx-1.
     # If self.sync == True, then `store()` has not begun and the upper bound is idx+obs_len-1
-    # NOTE: OffPolicyAgent can call `store()` only once before `sample()` finishes. If it calls
+    # NOTE: QlearnAgent can call `store()` only once before `sample()` finishes. If it calls
     # `sample()` twice, before `store()` finishes, nothing changes.
 
     idx     = self.next_idx
-    # exclude = np.arange(idx-3, idx+self.obs_len) % self.max_size
     exclude = np.arange(idx-1, idx+self.obs_len) % self.max_size
     return exclude
 

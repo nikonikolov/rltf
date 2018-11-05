@@ -62,16 +62,8 @@ def make_agent():
 
   args = parse_args()
 
-  # Get the model directory path
-  if args.restore_model is None:
-    model_dir   = maker.make_model_dir(args.model, args.env_id)
-    restore_dir = args.reuse_model
-  else:
-    model_dir   = args.restore_model
-    restore_dir = args.restore_model
-
-  # Configure loggers
-  rltf_log.conf_logs(model_dir, args.log_lvl)
+  # Construct the model directory and configure loggers
+  model_dir = maker.make_model_dir(args)
 
   # Set the model-specific keyword arguments
   model_kwargs = dict(
@@ -81,6 +73,8 @@ def make_agent():
     huber_loss=args.huber_loss,
     batch_norm=args.batch_norm,
     obs_norm=args.obs_norm,
+    actor_opt_conf=OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.actor_lr)),
+    critic_opt_conf=OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.critic_lr)),
   )
 
   # Get the model-specific settings
@@ -110,10 +104,6 @@ def make_agent():
   if args.batch_size is None:
     args.batch_size = 16 if len(env_train.observation_space.shape) == 3 else 64
 
-  # Set learning rates and optimizer
-  actor_opt_conf  = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.actor_lr))
-  critic_opt_conf = OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.critic_lr))
-
   # Create the exploration noise
   mu    = np.zeros(env_train.action_space.shape, dtype=np.float32)
   sigma = np.ones(env_train.action_space.shape,  dtype=np.float32) * args.sigma
@@ -141,16 +131,15 @@ def make_agent():
     log_freq=args.log_freq,
     save_freq=args.save_freq,
     save_buf=args.save_buf,
-    restore_dir=restore_dir,
+    n_evals=args.n_evals,
     confirm_kill=args.confirm_kill,
-    reuse_regex=args.reuse_regex,
+    load_model=args.load_model,
+    load_regex=args.load_regex,
   )
 
   ddpg_agent_kwargs = dict(
     model=model,
     model_kwargs=model_kwargs,
-    actor_opt_conf=actor_opt_conf,
-    critic_opt_conf=critic_opt_conf,
     action_noise=action_noise,
     update_target_freq=args.update_freq,
     memory_size=args.memory_size,

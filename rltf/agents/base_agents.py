@@ -1,5 +1,4 @@
 import logging
-import os
 import threading
 import tensorflow as tf
 
@@ -78,6 +77,10 @@ class ThreadedAgent(Agent):
     assert self.sess is not None
     with self.sess.graph.as_default():
       f()
+
+
+  def _check_terminate(self):
+    return self._terminate
 
 
 
@@ -185,9 +188,9 @@ class LoggingAgent(Agent):
 
 
 
-class OffPolicyAgent(LoggingAgent, ThreadedAgent):
-  """The base class for Off-policy agents. train() and eval() procedures *cannot* run in parallel
-  (because only 1 environment used). Assumes usage of target network and replay buffer.
+class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
+  """The base class for a Q-learning based agents. Assumes usage of target network and replay buffer.
+  Runs training and evaluation in python Threads for safe exit when Ctrl+C is pressed
   """
 
   def __init__(self, *args, save_buf=True, **kwargs):
@@ -198,37 +201,22 @@ class OffPolicyAgent(LoggingAgent, ThreadedAgent):
     """
     super().__init__(*args, **kwargs)
 
-    self.save_buf = save_buf
-
     self.update_target_freq = None
     self.replay_buf = None
-    # NOTE: Keep the eval thread always as the first entry. Used in self.eval()
-    # self.threads    = [threading.Thread(name='eval_thread', target=self._eval)]
-    self.threads    = [threading.Thread(name='eval_thread', target=self._thread, args=[self._eval])]
 
-    self._eval_start = threading.Event()
-    self._eval_done  = threading.Event()
-
-    self._eval_start.clear()
-    self._eval_done.clear()
-
-    # Trick to avoid thread synchronization when no evaluation should be run
-    if self.eval_len <= 0 or self.eval_freq <=0:
-      self.eval_freq = self.stop_step + 2
+    self.threads    = []
+    self.save_buf   = save_buf
 
 
-  def train(self):
+  def _train(self):
     self._run_threads(self.threads)
 
 
-  def eval(self):
-    # Overwrite stop step in order to have correct running length
-    self.stop_step = self.eval_freq
+  def _eval(self):
+    # Use a thread for clean exit on KeyboardInterrupt
+    eval_thread = threading.Thread(name='eval_thread', target=self._thread, args=[self._run_eval])
 
-    self._signal_eval_start()
-
-    # Use a thread to avoid accidental KeyboardInterrupt
-    self._run_threads(self.threads[:1])
+    self._run_threads([eval_thread])
 
 
   def _restore(self):
@@ -261,89 +249,11 @@ class OffPolicyAgent(LoggingAgent, ThreadedAgent):
       self.sess.run(self.model.update_target)
 
 
-  def _eval(self):
-
-    start_step  = self.eval_step + 1
-    eval_runs   = int(self.stop_step / self.eval_freq)
-    stop_step   = eval_runs * self.eval_len
-
-    if eval_runs <= 0:
-      return
-
-    if start_step >= stop_step:
-      raise ValueError("Evaluation length too small")
-
-    self._wait_eval_start()             # Wait for the eval run to start
-    obs = self.env_eval.reset()         # Reset the environment
-
-    for t in range(start_step, stop_step+1):
-      if self._terminate:
-        self._signal_eval_done()
-        break
-
-      action = self._action_eval(obs, t)
-      next_obs, rew, done, info = self.env_eval.step(action)
-
-      # Reset the environment if end of episode
-      if done:
-        next_obs = self.env_eval.reset()
-      obs = next_obs
-
-      if t % self.eval_len == 0:
-        best_agent = info["rltf_mon"]["best_agent"]
-        self._save_best_agent(best_agent)     # Save agent if the best so far
-        self.eval_step = t                    # Update the eval step
-        self._signal_eval_done()              # Signal end of eval run to training thread
-        if t < stop_step:
-          self._wait_eval_start()             # Wait for the next eval run
-          obs = self.env_eval.reset()         # Reset the environment
-
-
-  def _complete_stopped_eval(self):
-    """Complete the evaluation run if execution was stopped before it
-    managed to complete and then the model was restored
-    """
-    if self.eval_len > 0 and self.train_step % self.eval_freq == 0:
-      # Compute what eval step would be if eval run was able to complete
-      eval_step = self.train_step / self.eval_freq * self.eval_len
-      if self.eval_step != eval_step:
-        self._signal_eval_start()
-        self._wait_eval_done()
-
-
   def _run_summary_op(self, t):
     # Remember this is called only each training period
     # Make sure to run the summary right before t gets to a log_period so as to make sure
     # that the summary will be updated on time
     return t % self.log_freq + self.train_freq >= self.log_freq
-
-
-  def _signal_eval_start(self):
-    # Signal that evaluation run should start
-    self._eval_start.set()
-
-
-  def _wait_eval_done(self):
-    # Wait until evaluation run finishes
-    while not self._eval_done.is_set():
-      self._eval_done.wait()
-    self._eval_done.clear()
-
-
-  def _wait_eval_start(self):
-    # Wait until a signal that evaluation run should start
-    while not self._eval_start.is_set():
-      self._eval_start.wait()
-    self._eval_start.clear()
-    if not self._terminate:
-      logger.info("Starting evaluation run")
-
-
-  def _signal_eval_done(self):
-    # Signal that the evaluation run has finished
-    if not self._terminate:
-      logger.info("Evaluation run finished")
-    self._eval_done.set()
 
 
   def _wait_act_chosen(self):
@@ -359,17 +269,8 @@ class OffPolicyAgent(LoggingAgent, ThreadedAgent):
     raise NotImplementedError()
 
 
-  def _action_eval(self, state, t):
-    """Return action selected by the agent for an evaluation step
-    Args:
-      state: np.array. Current state
-      t: int. Current timestep
-    """
-    raise NotImplementedError()
 
-
-
-class ParallelOffPolicyAgent(OffPolicyAgent):
+class QlearnAgent(BaseQlearnAgent):
   """Runs the environment and trains the model in parallel using separate threads.
   Provides an easy way to synchronize between the threads. Speeds up training by 20-50%
   """
@@ -388,7 +289,7 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     # nn_thread     = threading.Thread(name='net_thread', target=self._train_model)
     env_thread    = threading.Thread(name='env_thread', target=self._thread, args=[self._run_env])
     nn_thread     = threading.Thread(name='net_thread', target=self._thread, args=[self._train_model])
-    self.threads  = self.threads + [nn_thread, env_thread]
+    self.threads  = [nn_thread, env_thread]
 
 
   def _run_env(self):
@@ -399,14 +300,11 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
     `self._train_model()` thread to start a new training step
     """
 
-    self._complete_stopped_eval()
-
     obs = self.reset()
 
     for t in range(self.train_step+1, self.stop_step+1):
       if self._terminate:
         self._signal_act_chosen()
-        self._signal_eval_start()
         break
 
       # Get an action to run
@@ -436,8 +334,7 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 
       # Stop and run evaluation procedure
       if self.eval_len > 0 and t % self.eval_freq == 0:
-        self._signal_eval_start()
-        self._wait_eval_done()
+        self._eval_agent()
 
       # Update the train step
       self.train_step = t
@@ -498,27 +395,24 @@ class ParallelOffPolicyAgent(OffPolicyAgent):
 
 
 
-class SequentialOffPolicyAgent(OffPolicyAgent):
-  """Runs the environment and trains the model sequentially"""
+class SequentialQlearnAgent(BaseQlearnAgent):
+  """Runs the environment and trains the model sequentially. End result is the same as QlearnAgent.
+  Provided for verifying correctness. if needed."""
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
     # Use a thread in order to exit cleanly on KeyboardInterrupt
-    # train_thread  = threading.Thread(name='train_thread', target=self._train)
-    train_thread  = threading.Thread(name='train_thread', target=self._thread, args=[self._train])
-    self.threads  = self.threads + [train_thread]
+    # train_thread  = threading.Thread(name='train_thread', target=self._train_model)
+    self.threads  = [threading.Thread(name='train_thread', target=self._thread, args=[self._train_model])]
 
 
-  def _train(self):
-
-    self._complete_stopped_eval()
+  def _train_model(self):
 
     obs = self.reset()
 
     for t in range(self.train_step+1, self.stop_step+1):
       if self._terminate:
-        self._signal_eval_start()
         break
 
       # Get an action to run
@@ -550,8 +444,7 @@ class SequentialOffPolicyAgent(OffPolicyAgent):
 
       # Stop and run evaluation procedure
       if self.eval_len > 0 and t % self.eval_freq == 0:
-        self._signal_eval_start()
-        self._wait_eval_done()
+        self._eval_agent()
 
       # Update the train step
       self.train_step = t

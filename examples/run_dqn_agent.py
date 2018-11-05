@@ -58,16 +58,8 @@ def make_agent():
 
   args = parse_args()
 
-  # Get the model directory path
-  if args.restore_model is None:
-    model_dir   = maker.make_model_dir(args.model, args.env_id)
-    restore_dir = args.reuse_model
-  else:
-    model_dir   = args.restore_model
-    restore_dir = args.restore_model
-
-  # Configure loggers
-  rltf_log.conf_logs(model_dir, args.log_lvl, args.log_lvl)
+  # Construct the model directory and configure loggers
+  model_dir = maker.make_model_dir(args)
 
   # Get the model-specific settings
   model = eval(args.model)
@@ -104,7 +96,7 @@ def make_agent():
   learn_rate = ConstSchedule(args.learn_rate)
 
   # Cteate the optimizer configs
-  opt_conf = OptimizerConf(tf.train.AdamOptimizer, learn_rate, epsilon=args.adam_epsilon)
+  model_kwargs["opt_conf"] = OptimizerConf(tf.train.AdamOptimizer, learn_rate, epsilon=args.adam_epsilon)
 
   # Create the exploration schedule
   if args.explore_decay > 0:
@@ -128,16 +120,16 @@ def make_agent():
     log_freq=args.log_freq,
     save_freq=args.save_freq,
     save_buf=args.save_buf,
-    restore_dir=restore_dir,
+    n_evals=args.n_evals,
     plots_layout=plots_layout,
     confirm_kill=args.confirm_kill,
-    reuse_regex=args.reuse_regex,
+    load_model=args.load_model,
+    load_regex=args.load_regex,
   )
 
   dqn_agent_kwargs = dict(
     model=model,
     model_kwargs=model_kwargs,
-    opt_conf=opt_conf,
     exploration=exploration,
     update_target_freq=args.update_freq,
     memory_size=args.memory_size,

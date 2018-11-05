@@ -31,6 +31,7 @@ def parse_args(custom_args):
     ('--gamma',        dict(default=0.99,   type=float,   help='discount factor')),
     ('--seed',         dict(default=42,     type=int,     help='seed for the run; not set if <=0')),
     ('--mode',         dict(default='train',type=str,     choices=['train', 'eval'])),
+    ('--n-evals',      dict(default=0,      type=int,     help='# of separate runs in evaluation mode')),
     ('--log-lvl',      dict(default='INFO', type=str,     help='logger lvl')),
     ('--plot-video',   dict(default=False,  type=str2bool,help='if True, add model plots to video')),
     ('--log-freq',     dict(default=10000,  type=int,     help='how often to log stats in # *agent* steps')),
@@ -40,13 +41,14 @@ def parse_args(custom_args):
     ('--video-freq',   dict(default=500,    type=int,     help='how often to record videos in # \
       *episodes*; if <=0, do not record any video')),
     ('--restore-model',dict(default=None,   type=str,     help='path to existing dir; if set, will \
-      continue training with the network and the env from the the dir')),
-    ('--reuse-model',  dict(default=None,   type=str,     help='path to existing dir; if set, will \
-      use the network weights from the dir, but create a new model and train it on a new env')),
+      continue training with the network and the env from this dir')),
+    ('--load-model',   dict(default=None,   type=str,     help='path to existing dir; if set, will \
+      only load the network weights from the dir, but write a new model and train it on a new env')),
     ('--extra-info',   dict(default="",     type=str,     help='extra info, not captured by command \
       line args that should be added to the program log')),
     ('--confirm-kill', dict(default=False,  type=str2bool,help='if True, Ctrl+C has to be confirmed')),
-    ('--reuse-regex',  dict(default=None,   type=str,     help='regex for matching vars to reuse')),
+    ('--load-regex',   dict(default=None,   type=str,     help='regex for matching vars to load; \
+      used with --load-model')),
   ]
 
   common_args_names = { arg[0]: i for i, arg in enumerate(common_args)}
@@ -76,25 +78,26 @@ def parse_args(custom_args):
 
   assert args.gamma > 0 and args.gamma <= 1
 
-  # Only one of args.restore_model and args.reuse_model can be set
-  assert not (args.restore_model is not None and args.reuse_model is not None)
+  # Only one of args.restore_model and args.load_model can be set
+  assert not (args.restore_model is not None and args.load_model is not None)
 
-  # When in eval mode, model needs to be restored
+  # When in eval mode, model needs to be loaded
   if args.mode == 'eval':
-    assert (args.restore_model is not None or args.reuse_model is not None)
+    assert args.load_model is not None
+    assert args.n_evals > 0
 
   if args.restore_model is not None:
     args.restore_model = os.path.abspath(args.restore_model)
     assert os.path.exists(args.restore_model)
     assert os.path.basename(args.restore_model).startswith(args.env_id)
 
-  elif args.reuse_model is not None:
-    args.reuse_model = os.path.abspath(args.reuse_model)
-    assert os.path.exists(args.reuse_model)
-    assert os.path.exists(os.path.join(args.reuse_model, "tf"))
+  elif args.load_model is not None:
+    args.load_model = os.path.abspath(args.load_model)
+    assert os.path.exists(args.load_model)
+    assert os.path.exists(os.path.join(args.load_model, "tf"))
 
-  if args.reuse_regex is not None:
-    assert args.reuse_model is not None
+  if args.load_regex is not None:
+    assert args.load_model is not None
 
   # # Grad clip and huber loss cannot be simultaneously set
   # try:
