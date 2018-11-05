@@ -7,11 +7,12 @@ import tensorflow as tf
 
 from gym.utils  import atomic_write
 
+from rltf.utils import rltf_conf
 from rltf.utils import rltf_log
-import rltf.conf
+
 
 logger        = logging.getLogger(__name__)
-stats_logger  = logging.getLogger(rltf.conf.STATS_LOGGER_NAME)
+stats_logger  = logging.getLogger(rltf_conf.STATS_LOGGER_NAME)
 
 # Constant for number of most recent episodes over which to report some of the runtime statistitcs
 N_EPS_STATS   = 100
@@ -70,6 +71,7 @@ class StatsRecorder:
     self.stats_steps  = []    # The agent step at each logging event
     self.stats_inds   = []    # The number of env episodes at each logging event
     self.stats        = None  # A dictionary with runtime statistics
+    self.active       = False # Track whether env.step and env.reset() were executed via this monitor
 
     # Episode tracking
     self.ep_reward  = None      # Track the episode reward so far
@@ -91,6 +93,7 @@ class StatsRecorder:
 
 
   def before_agent_step(self, action):
+    self.active = True
     self._agent_steps += 1
     # Keep this here. Sometimes, env.reset() might induce env.step(), but not
     # agent.env.step() due to Wrapper behavior
@@ -99,25 +102,26 @@ class StatsRecorder:
 
   def after_agent_step(self, obs, reward, done, info):
     # Append stats data for the agent
-    if "rltf_mon" in info:
-      data = info["rltf_mon"]
-    else:
-      data = {}
-      info["rltf_mon"] = data
-    data["ep_rew"]   = self.ep_reward
-    data["step_rew"] = self.step_rew
+    info["rltfmon.ep_rew"]   = self.ep_reward
+    info["rltfmon.step_rew"] = self.step_rew
 
     # NOTE:
     # - Logging needs to happen here, NOT in after_env_step. The latter might see the same value of
     #   self._agent_steps in more than one call and output several logging messages with the same data
     # - Logging TensorBoard summary data here does not interfere with any agent training step, even
     #   if it is concurrently executed, as long as summary has been updated sufficiently recently
-    self.log_stats(data)
+    self.log_stats(info)
+    self.active = False
 
 
-  def agent_reset(self):
+  def before_agent_reset(self):
+    self.active = True
     self._agent_eps += 1
     self.step_rew = 0
+
+
+  def after_agent_reset(self):
+    self.active = False
 
 
   def after_env_step(self, obs, reward, done, info):
@@ -417,7 +421,7 @@ class StatsRecorder:
       stats["best_score"]     = max(stats["score_mean"], stats["best_score"])
 
       # Append info with best_agent
-      info["best_agent"] = stats["score_mean"] == stats["best_score"]
+      info["rltfmon.best_agent"] = stats["score_mean"] == stats["best_score"]
 
     # Update the stats logging steps and indices
     self.stats_steps.append(self._agent_steps)

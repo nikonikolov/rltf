@@ -3,9 +3,10 @@ import logging.config
 import os
 import subprocess
 
-import rltf.conf
+from rltf.utils import rltf_conf
 
-param_logger = logging.getLogger(rltf.conf.PARAM_LOGGER_NAME)
+
+param_logger = logging.getLogger(rltf_conf.PARAM_LOGGER_NAME)
 
 COLORS = dict(
   gray=37,
@@ -79,14 +80,14 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
           'propagate': True
         },
       # Parameter file logger
-      rltf.conf.PARAM_LOGGER_NAME:
+      rltf_conf.PARAM_LOGGER_NAME:
         {
           'handlers': ['std_info', 'run_file', 'param_file'],
           'level': 'INFO',
           'propagate': False
         },
       # Trianing stat reports logger
-      rltf.conf.STATS_LOGGER_NAME:
+      rltf_conf.STATS_LOGGER_NAME:
         {
           'handlers': ['std_info', 'run_file'],
           'level': 'INFO',
@@ -100,7 +101,7 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
 
   # Log the git diff
   try:
-    diff = subprocess.check_output(["git", "diff"], cwd=rltf.conf.PROJECT_DIR)
+    diff = subprocess.check_output(["git", "diff"], cwd=rltf_conf.PROJECT_DIR)
     diff = diff.decode("utf-8")
     if diff != "":
       with open(os.path.join(model_dir, "git.diff"), 'w') as f:
@@ -119,9 +120,9 @@ def log_params(params, args):
   """
   params  = pad_log_data(params, sort=True)
   date    = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-  commit  = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
+  commit  = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=rltf_conf.PROJECT_DIR)
   commit  = commit.decode("utf-8").strip("\n")
-  branch  = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
+  branch  = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=rltf_conf.PROJECT_DIR)
   branch  = branch.decode("utf-8").strip("\n")
 
   param_logger.info("")

@@ -45,14 +45,16 @@ class Monitor(Wrapper):
     - The TF graph is available in the thread running `env.step()`
   """
 
-  def __init__(self, env, log_dir, log_period, mode, video_callable=None):
+  def __init__(self, env, log_dir, log_period, mode, video_spec=None):
     """
     Args:
       log_dir: str. The directory where to save the monitor videos and stats
       log_period: int. The period for logging statistic to stdout and to TensorBoard
-      video_callable: function or False. False disables video recording. If function is provided, it
-        has to take the number of the episode and return True/False if a video should be recorded.
-        If `None`, every 1000th episode is recorded
+      video_spec: lambda, int, False or None. Specifies how often to record episodes.
+        - If lambda, it must take the episode number and return True/False if a video should be recorded.
+        - `int` specifies a period in episodes
+        - `False`, disables video recording
+        - If `None`, every 1000th episode is recorded
       mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor
     """
 
@@ -66,7 +68,7 @@ class Monitor(Wrapper):
     # Member data
     self.video_dir    = video_dir
     self.log_dir      = log_dir
-    self.enable_video = self._get_video_callable(video_callable)
+    self.enable_video = self._get_video_callable(video_spec)
 
     # Create the monitor directory
     self._make_log_dir()
@@ -77,9 +79,10 @@ class Monitor(Wrapper):
     self.video_recorder = None
 
     # Attach StatsRecorder agent methods
-    self._before_agent_step = self.stats_recorder.before_agent_step
-    self._after_agent_step  = self.stats_recorder.after_agent_step
-    self._agent_reset       = self.stats_recorder.agent_reset
+    self._before_agent_step   = self.stats_recorder.before_agent_step
+    self._after_agent_step    = self.stats_recorder.after_agent_step
+    self._before_agent_reset  = self.stats_recorder.before_agent_reset
+    self._after_agent_reset   = self.stats_recorder.after_agent_reset
 
     # Find TimeLimit wrapper and attach step(), reset() and render()
     self.base_env         = None
@@ -125,8 +128,10 @@ class Monitor(Wrapper):
 
 
   def reset(self, **kwargs):
-    self._agent_reset()
-    return self.env.reset(**kwargs)
+    self._before_agent_reset()
+    obs = self.env.reset(**kwargs)
+    self._after_agent_reset()
+    return obs
 
 
   def _agent_step(self, action):
@@ -146,6 +151,12 @@ class Monitor(Wrapper):
 
 
   def _before_env_step(self, action):
+    # Do not execute if the environment was not stepped or reset from this monitor
+    if not self._active:
+      # Remember that env was not stepped via the monitor and require reset next time
+      self.stats_recorder.env_done = None
+      return
+
     if self.done is None:
       raise ResetNeeded("Trying to step environment {}, before calling 'env.reset()'.".format(self.env_id))
 
@@ -155,6 +166,10 @@ class Monitor(Wrapper):
 
 
   def _after_env_step(self, obs, reward, done, info):
+    # Do not execute if the environment was not stepped or reset from this monitor
+    if not self._active:
+      return
+
     # Record stats and video
     self.video_recorder.capture_frame()
     self.stats_recorder.after_env_step(obs, reward, done, info)
@@ -162,6 +177,10 @@ class Monitor(Wrapper):
 
   def _env_reset(self, **kwargs):
     obs = self.base_env_reset(**kwargs)
+
+    # Do not execute if the environment was not stepped or reset from this monitor
+    if not self._active:
+      return obs
 
     # First reset stats for correct episode_id
     self.stats_recorder.env_reset()
@@ -175,7 +194,9 @@ class Monitor(Wrapper):
 
   def _env_render(self, mode):
     obs = self.base_env_render(mode)
-    obs = self.video_plotter.render(obs, mode)
+    # Execute only if the environment was stepped or reset from this monitor
+    if self._active:
+      obs = self.video_plotter.render(obs, mode)
     return obs
 
 
@@ -247,6 +268,12 @@ class Monitor(Wrapper):
 
 
   @property
+  def _active(self):
+    """Track whether env.step and env.reset() were executed via this monitor"""
+    return self.stats_recorder.active
+
+
+  @property
   def monitor(self):
     return self
 
@@ -272,13 +299,19 @@ class Monitor(Wrapper):
 
 
   @staticmethod
-  def _get_video_callable(video_callable):
+  def _get_video_callable(video_spec):
     # Set the video recording schedule
-    if video_callable is None:
-      video_callable = lambda e_id: e_id % 1000 == 0
-    elif video_callable is False:
-      video_callable = lambda e_id: False
-    elif not callable(video_callable):
-      raise ValueError("You must provide a function, None, or False for 'video_callable', "
-                       "not {}: {}".format(type(video_callable), video_callable))
-    return video_callable
+    if video_spec is None:
+      video_spec = lambda e_id: e_id % 1000 == 0
+    elif isinstance(video_spec, int):
+      if video_spec > 0:
+        period     = video_spec
+        video_spec = lambda e_id: e_id % period == 0
+      else:
+        video_spec = lambda e_id: False
+    elif video_spec is False:
+      video_spec = lambda e_id: False
+    elif not callable(video_spec):
+      raise ValueError("You must provide a function, int, False, or None for 'video_spec', "
+                       "not {}: {}".format(type(video_spec), video_spec))
+    return video_spec

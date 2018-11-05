@@ -1,3 +1,5 @@
+import tensorflow as tf
+
 
 class OptimizerConf:
   """Config for an optimizer"""

@@ -4,8 +4,8 @@ import os
 import numpy as np
 
 from gym.utils  import atomic_write
+from rltf.utils import rltf_conf
 from rltf.utils import seeding
-import rltf.conf
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ class BaseBuffer():
         # envdir    = split[1]
         # model     = os.path.split(split[0])
         # store_dir = os.path.join(os.environ['RLTFBUF'], os.path.join(model, envdir))
-        mdir      = os.path.relpath(model_dir, rltf.conf.MODELS_DIR)
+        mdir      = os.path.relpath(model_dir, rltf_conf.MODELS_DIR)
         store_dir = os.path.join(os.environ['RLTFBUF'], mdir)
 
         store_dir = os.path.join(store_dir, "buffer")
