@@ -43,8 +43,8 @@ def parse_cmd_args():
   parser.add_argument('--linewidth',  default=2.0,      type=float, help='linewidth for all plots')
   parser.add_argument('--shrink',     default=0.9,      type=float, help='shrink factor to fit legend')
   parser.add_argument('--pad',        default=3,        type=int,   help='pad between subplots and fig margins')
-  parser.add_argument('--hpad',       default=3,        type=int,   help='horizonal pad between subplots')
-  parser.add_argument('--wpad',       default=3,        type=int,   help='vertical pad between subplots')
+  parser.add_argument('--wpad',       default=3.0,      type=float, help='horizonal pad between subplots')
+  parser.add_argument('--hpad',       default=3.0,      type=float, help='vertical pad between subplots')
 
   # Model runtime arguments
   parser.add_argument('--max-step',   default=50*10**6, type=int,   help='max train step for data')
