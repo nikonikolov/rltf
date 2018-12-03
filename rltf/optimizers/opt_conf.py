@@ -1,22 +1,33 @@
 import tensorflow as tf
 
+from rltf.schedules import ConstSchedule
+from rltf.schedules import Schedule
+
 
 class OptimizerConf:
   """Config for an optimizer"""
 
-  def __init__(self, opt_type, lr_schedule, **kwargs):
+  def __init__(self, opt_type, learn_rate, **kwargs):
     """
     Args:
       opt_type: tf.train.Optimizer subclass. Constructor for the optimizer, e,g, tf.train.AdamOptimizer
-      lr_schedule: rltf.schedules.Schedule. Schedule for the learning rate
+      learn_rate: float or rltf.schedules.Schedule. Schedule for the learning rate
       kwargs: dict. All additional keyword arguments will be passed on directly
         to the optimizer constructor
     """
+    if isinstance(learn_rate, float):
+      lr_schedule = ConstSchedule(learn_rate)
+    elif isinstance(learn_rate, Schedule):
+      lr_schedule = learn_rate
+    else:
+      raise TypeError("Incorrect learn_rate type {}".format(type(learn_rate)))
 
     self.opt_type     = opt_type
     self.lr_schedule  = lr_schedule
     self.kwargs       = kwargs
     self.lr_ph        = None
+    self.built        = False
+    self.opt          = None
 
 
   def build(self, lr_tb_name=None, lr_ph_name=None):
@@ -28,12 +39,18 @@ class OptimizerConf:
     Returns:
       The built optimizer. Instance of tf.train.Optimizer
     """
+    if self.built:
+      return self.opt
+    self.built = True
+
     self.lr_ph = tf.placeholder(tf.float32, shape=(), name=lr_ph_name)
 
     if lr_tb_name is not None:
       tf.summary.scalar(lr_tb_name, self.lr_ph)
 
-    return self.opt_type(self.lr_ph, **self.kwargs)
+    self.opt = self.opt_type(self.lr_ph, **self.kwargs)
+
+    return self.opt
 
 
   def lr_value(self, t):

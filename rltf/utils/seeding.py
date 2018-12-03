@@ -36,15 +36,17 @@ SEEDED  = False
 seeder  = np.random.RandomState()
 
 
-def set_random_seed(seed):
-  if seed < 0:
-    return
+def set_random_seeds(seed):
   global SEEDED
+  if seed < 0 or SEEDED:
+    return
   SEEDED = True
+
+  # Set the RLTF seed
   seeder.seed(seed)
 
-
-def set_global_seeds():
+  # Sample separate seeds from seeder to avoid correlation among modules
+  # NOTE: For the same seed, the sampled sequence of module seeds will always be the same
   tf.set_random_seed(hash_seed(create_seed()))
   np.random.seed(hash_seed(create_seed()))
   random.seed(hash_seed(create_seed()))

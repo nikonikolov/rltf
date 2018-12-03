@@ -1,158 +1,41 @@
-import numpy      as np
-import tensorflow as tf
-
-from rltf.agents        import AgentDDPG
+from rltf.cmdutils      import cmdargs
 from rltf.envs          import wrap_deepmind_ddpg
-from rltf.exploration   import DecayedExplorationNoise
-from rltf.exploration   import GaussianNoise
-from rltf.exploration   import OrnsteinUhlenbeckNoise
-from rltf.models        import DDPG
-from rltf.models        import QRDDPG
-from rltf.optimizers    import OptimizerConf
-from rltf.schedules     import PiecewiseSchedule
-from rltf.schedules     import ConstSchedule
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
-from rltf.utils         import cmdargs
 
 
 def parse_args():
-
-  model_types = ["DDPG", "QRDDPG"]
-  noise_types = ["OU", "Gaussian"]
-  s2b         = cmdargs.str2bool
-
-  args = [
-    ('--env-id',       dict(required=True,  type=str,   help='full environment name')),
-    ('--model',        dict(required=True,  type=str,   choices=model_types)),
-
-    ('--N',            dict(default=100,    type=int,   help='number of quantiles for QRDDPG')),
-    ('--actor-lr',     dict(default=1e-4,   type=float, help='actor learn rate')),
-    ('--critic-lr',    dict(default=1e-3,   type=float, help='critic learn rate')),
-    ('--tau',          dict(default=0.001,  type=float, help='weight for soft target update')),
-    ('--critic-reg',   dict(default=0.02,   type=float, help='network weight regularization param')),
-    ('--batch-size',   dict(default=None,   type=int,   help='batch size')),
-    ('--memory-size',  dict(default=10**6,  type=int,   help='size of the replay buffer',)),
-
-    ('--sigma',        dict(default=0.5,    type=float, help='action noise sigma')),
-    ('--theta',        dict(default=0.15,   type=float, help='action noise theta (for OU noise)')),
-    ('--dt',           dict(default=1e-2,   type=float, help='action noise dt (for OU noise)')),
-    ('--noise-type',   dict(default="OU",   type=str,   help='action noise type', choices=noise_types)),
-    ('--noise-decay',  dict(default=500000, type=int,   help='action noise decay; \
-      # steps to decay noise weight from 1 to 0; if <=0, no decay')),
-
-    ('--warm-up',      dict(default=10000,  type=int,   help='# *agent* steps before training starts')),
-    ('--update-period',dict(default=1,      type=int,   help='update target period in # *param updates*')),
-    ('--train-period', dict(default=1,      type=int,   help='train period in # *agent* steps')),
-    ('--stop-step',    dict(default=2500000,type=int,   help='steps to run the *agent* for')),
-    ('--batch-norm',   dict(default=False,  type=s2b,   help='apply batch normalization')),
-    ('--obs-norm',     dict(default=False,  type=s2b,   help='normalize observations')),
-    ('--huber-loss',   dict(default=False,  type=s2b,   help='use huber loss for critic')),
-    ('--reward-scale', dict(default=1.0,    type=float, help='scale env reward')),
-    ('--max-ep-steps', dict(default=None,   type=int,   help='max episode *env* steps in train mode')),
-
-    ('--eval-period',    dict(default=500000,  type=int,   help='period in # *agent* steps to run eval')),
-    ('--eval-len',     dict(default=50000,   type=int,   help='# *agent* steps to run eval each time')),
-  ]
-
-  return cmdargs.parse_args(args)
+  model_choices = ["DDPG"]
+  return cmdargs.parse_args(model_choices)
 
 
 def make_agent():
 
-  args = parse_args()
+  # Parse the command line args
+  agent_kwargs, args = parse_args()
 
   # Construct the model directory and configure loggers
   model_dir = maker.make_model_dir(args)
 
-  # Set the model-specific keyword arguments
-  model_kwargs = dict(
-    critic_reg=args.critic_reg,
-    tau=args.tau,
-    gamma=args.gamma,
-    huber_loss=args.huber_loss,
-    batch_norm=args.batch_norm,
-    obs_norm=args.obs_norm,
-    actor_opt_conf=OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.actor_lr)),
-    critic_opt_conf=OptimizerConf(tf.train.AdamOptimizer, ConstSchedule(args.critic_lr)),
-  )
+  # Log the program parameters
+  rltf_log.log_params(agent_kwargs.items(), args)
 
-  # Get the model-specific settings
-  if    args.model == "DDPG":
-    model = DDPG
-  elif  args.model == "QRDDPG":
-    model = QRDDPG
-    model_kwargs["N"] = args.N
-
-
-  # Create the environments
-  env_kwargs = dict(
+  # Get the environment maker
+  env_kwargs = {**agent_kwargs.pop("env_kwargs"), **dict(
     env_id=args.env_id,
     seed=args.seed,
+    wrap=wrap_deepmind_ddpg,
+  )}
+  env_maker = maker.get_env_maker(**env_kwargs)
+
+  agent_kwargs = {**agent_kwargs, **dict(
+    env_maker=env_maker,
     model_dir=model_dir,
-    video_period=args.video_period,
-    wrap=lambda env, mode: wrap_deepmind_ddpg(env, mode, rew_scale=args.reward_scale),
-    log_period_train=args.log_period,
-    log_period_eval=args.eval_len,
-    max_ep_steps_train=args.max_ep_steps,
-    max_ep_steps_eval=None,
-  )
-  env_train, env_eval = maker.make_envs(**env_kwargs)
-
-
-  # Set additional arguments
-  if args.batch_size is None:
-    args.batch_size = 16 if len(env_train.observation_space.shape) == 3 else 64
-
-  # Create the exploration noise
-  mu    = np.zeros(env_train.action_space.shape, dtype=np.float32)
-  sigma = np.ones(env_train.action_space.shape,  dtype=np.float32) * args.sigma
-  if args.noise_type == "OU":
-    action_noise = OrnsteinUhlenbeckNoise(mu, sigma, theta=args.theta, dt=args.dt)
-  elif args.noise_type == "Gaussian":
-    action_noise = GaussianNoise(mu, sigma)
-
-  if args.noise_decay > 0:
-    noise_decay  = PiecewiseSchedule([(0, 1.0), (args.noise_decay, 0.0)], outside_value=0.0)
-    action_noise = DecayedExplorationNoise(action_noise, noise_decay)
-
-
-  # Set the Agent class keyword arguments
-  agent_kwargs = dict(
-    env_train=env_train,
-    env_eval=env_eval,
-    train_period=args.train_period,
-    warm_up=args.warm_up,
-    stop_step=args.stop_step,
-    eval_period=args.eval_period,
-    eval_len=args.eval_len,
-    batch_size=args.batch_size,
-    model_dir=model_dir,
-    log_period=args.log_period,
-    save_period=args.save_period,
-    save_buf=args.save_buf,
-    n_evals=args.n_evals,
-    confirm_kill=args.confirm_kill,
-    load_model=args.load_model,
-    load_regex=args.load_regex,
-  )
-
-  ddpg_agent_kwargs = dict(
-    model=model,
-    model_kwargs=model_kwargs,
-    action_noise=action_noise,
-    update_target_period=args.update_period,
-    memory_size=args.memory_size,
-    obs_len=1,
-  )
-
-  kwargs = {**ddpg_agent_kwargs, **agent_kwargs}
-
-  # Log the model parameters
-  rltf_log.log_params(kwargs.items(), args)
+  )}
 
   # Create the agent
-  ddpg_agent = AgentDDPG(**kwargs)
+  agent_type  = agent_kwargs.pop("agent")
+  ddpg_agent  = agent_type(**agent_kwargs)
 
   return ddpg_agent, args
 
@@ -168,7 +51,7 @@ def main():
   if args.mode == 'train':
     ddpg_agent.train()
   else:
-    ddpg_agent.eval()
+    ddpg_agent.play()
 
   # Close on exit
   ddpg_agent.close()

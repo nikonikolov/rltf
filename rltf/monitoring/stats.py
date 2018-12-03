@@ -20,20 +20,34 @@ N_EPS_STATS   = 100
 
 class StatsRecorder:
 
-  def __init__(self, log_dir, log_period, mode):
+  def __init__(self, log_dir, mode, log_period=None, epochs=False, eval_period=None):
     """
     Args:
       log_dir: str. The path for the directory where the videos are saved
-      log_period: int. The period for logging statistics. If mode == 'e', then it must equal
-        the evaluation length in order to keep correct evaluation statistics
       mode: str. Either 't' (for train) or `e` (for eval)
+      log_period: int. The period for logging statistics. If provided, statistics are logged automatically.
+        Otherwise, log_stats() has to be called from outside. If mode == 'e', then it must be provided and
+        must equal the evaluation length in order to keep correct evaluation statistics
+      epochs: If True, statistics are logged in terms of epochs, not agent steps
+      eval_period: int. Required only in evaluation mode. Needed to compute the correct logging step.
     """
 
+    if log_period is not None:
+      assert log_period > 0
+      autolog = True
+    else:
+      assert mode != 'e', "'log_period' must be provided in evaluation mode"
+      log_period = 1
+      autolog = False
+
     # Member data
-    self.log_dir    = os.path.join(log_dir, "data")
-    self.tb_dir     = os.path.join(log_dir, "tb/")
-    self.log_period = log_period
-    self._mode      = mode      # Running mode: either 't' (train) or 'e' (eval)
+    self.log_dir      = os.path.join(log_dir, "data")
+    self.tb_dir       = os.path.join(log_dir, "tb/")
+    self.autolog      = autolog
+    self.log_period   = log_period
+    self._mode        = mode      # Running mode: either 't' (train) or 'e' (eval)
+    self._epochs      = 0 if epochs else None # If not None, stats are logged in terms of epochs
+    self.eval_period  = eval_period
 
     # Stdout data
     self.log_spec     = None    # Tuples containing the specification for fetching stdout data
@@ -110,7 +124,8 @@ class StatsRecorder:
     #   self._agent_steps in more than one call and output several logging messages with the same data
     # - Logging TensorBoard summary data here does not interfere with any agent training step, even
     #   if it is concurrently executed, as long as summary has been updated sufficiently recently
-    self.log_stats(info)
+    if self.autolog:
+      self.log_stats(info)
     self.active = False
 
 
@@ -176,13 +191,13 @@ class StatsRecorder:
 
   def _init_stats(self):
     self.stats = {
-      "mean_ep_rew":    np.nan,
-      "std_ep_rew":     np.nan,
-      "ep_len_mean":    np.nan,
-      "ep_len_std":     np.nan,
+      "mean_ep_rew":    -np.inf,
+      "std_ep_rew":     -np.inf,
+      "ep_len_mean":    -np.inf,
+      "ep_len_std":     -np.inf,
       "best_mean_rew":  -np.inf,
       "best_ep_rew":    -np.inf,
-      "last_log_ep":  0,
+      "last_log_ep":    0,
     }
 
     if self.mode == 't':
@@ -191,46 +206,56 @@ class StatsRecorder:
       self.stats["last_log_step"] = 0             # Step at which the last runtime log happened
 
     else:
-      self.stats["best_score"]     = -np.inf
-      self.stats["score_mean"]     = -np.inf
-      self.stats["score_std"]      = -np.nan
       self.stats["score_episodes"] = 0
 
 
   def _init_stdout(self):
 
-    N = N_EPS_STATS
+    n_eps = " (%d eps)"%(N_EPS_STATS) if self._epochs is None else ""
 
     if self.mode == "t":
+      # Function to compute the total time
+      start_time = time.time()
+      def total_time(_):
+        delta = time.time() - start_time
+        return '{0:02.0f}:{1:02.0f}'.format(*divmod(delta//60, 60))
+
       self.log_spec = [
+        ("train/total_time",                      "",     total_time),
         ("train/mean_steps_per_sec",              ".3f",  lambda t: self.stats["steps_per_sec"]),
-        ("train/agent_steps",                     "d",    lambda t: t),
+        ("train/epochs",                          "d",    lambda t: self._log_epoch),
+        ("train/agent_steps",                     "d",    lambda t: self._log_step),
         ("train/env_steps",                       "d",    lambda t: self._env_steps+self.ep_steps),
         ("train/episodes",                        "d",    lambda t: self._env_eps),
         ("train/best_episode_rew",                ".3f",  lambda t: self.stats["best_ep_rew"]),
-        ("train/best_mean_ep_rew (%d eps)"%N,     ".3f",  lambda t: self.stats["best_mean_rew"]),
-        ("train/ep_len_mean (%d eps)"%N,          ".3f",  lambda t: self.stats["ep_len_mean"]),
-        ("train/ep_len_std  (%d eps)"%N,          ".3f",  lambda t: self.stats["ep_len_std"]),
-        ("train/mean_ep_reward (%d eps)"%N,       ".3f",  lambda t: self.stats["mean_ep_rew"]),
-        ("train/std_ep_reward (%d eps)"%N,        ".3f",  lambda t: self.stats["std_ep_rew"]),
+        ("train/best_mean_ep_rew%s"%n_eps,        ".3f",  lambda t: self.stats["best_mean_rew"]),
+        ("train/ep_len_mean%s"%n_eps,             ".3f",  lambda t: self.stats["ep_len_mean"]),
+        ("train/ep_len_std %s"%n_eps,             ".3f",  lambda t: self.stats["ep_len_std"]),
+        ("train/mean_ep_reward%s"%n_eps,          ".3f",  lambda t: self.stats["mean_ep_rew"]),
+        ("train/std_ep_reward%s"%n_eps,           ".3f",  lambda t: self.stats["std_ep_rew"]),
       ]
 
+      # Remove epochs if necessary
+      if self._epochs is None:
+        self.log_spec = self.log_spec[:2] + self.log_spec[3:]
+
     else:
+
       self.log_spec = [
-        ("eval/agent_steps",                      "d",    lambda t: t),
-        ("eval/env_steps",                        "d",    lambda t: self._env_steps+self.ep_steps),
-        ("eval/episodes",                         "d",    lambda t: self._env_eps),
+        ("eval/epochs",                           "d",    lambda t: self._log_epoch),
+        ("eval/agent_steps",                      "d",    lambda t: self._log_step),
         ("eval/best_episode_rew",                 ".3f",  lambda t: self.stats["best_ep_rew"]),
-        ("eval/best_mean_ep_rew (%d eps)"%N,      ".3f",  lambda t: self.stats["best_mean_rew"]),
-        ("eval/ep_len_mean (%d eps)"%N,           ".3f",  lambda t: self.stats["ep_len_mean"]),
-        ("eval/ep_len_std  (%d eps)"%N,           ".3f",  lambda t: self.stats["ep_len_std"]),
-        ("eval/mean_ep_reward (%d eps)"%N,        ".3f",  lambda t: self.stats["mean_ep_rew"]),
-        ("eval/std_ep_reward (%d eps)"%N,         ".3f",  lambda t: self.stats["std_ep_rew"]),
-        ("eval/best_score",                       ".3f",  lambda t: self.stats["best_score"]),
+        ("eval/ep_len_mean",                      ".3f",  lambda t: self.stats["ep_len_mean"]),
+        ("eval/ep_len_std ",                      ".3f",  lambda t: self.stats["ep_len_std"]),
+        ("eval/mean_ep_reward",                   ".3f",  lambda t: self.stats["mean_ep_rew"]),
+        ("eval/std_ep_reward",                    ".3f",  lambda t: self.stats["std_ep_rew"]),
         ("eval/score_episodes",                   "d",    lambda t: self.stats["score_episodes"]),
-        ("eval/score_mean",                       ".3f",  lambda t: self.stats["score_mean"]),
-        ("eval/score_std",                        ".3f",  lambda t: self.stats["score_std"]),
+        ("eval/best_score",                       ".3f",  lambda t: self.stats["best_mean_rew"]),
       ]
+
+      # Remove epochs if necessary
+      if self._epochs is None:
+        self.log_spec = self.log_spec[1:]
 
 
   def set_stdout_logs(self, stdout_spec):
@@ -381,6 +406,10 @@ class StatsRecorder:
   def _update_stats(self, info):
     """Update the values of the runtime statistics variables"""
 
+    # Update epochs if necessary
+    if self._epochs is not None:
+      self._epochs += 1
+
     # Configure the stdout on the first logging event
     if not self.stdout_set:
       self._build_stdout()
@@ -390,41 +419,47 @@ class StatsRecorder:
 
     stats = self.stats
 
-    # Update standard statisticis
-    stats["mean_ep_rew"]    = stats_mean(self.ep_rews)
-    stats["std_ep_rew"]     = stats_std(self.ep_rews)
-    stats["ep_len_mean"]    = stats_mean(self.ep_lens)
-    stats["ep_len_std"]     = stats_std(self.ep_lens)
-    stats["best_mean_rew"]  = max(stats["best_mean_rew"], stats["mean_ep_rew"])
-    stats["best_ep_rew"]    = stats_best(stats["best_ep_rew"], self.ep_rews, stats["last_log_ep"])
-    stats["last_log_ep"]    = len(self.ep_rews)
-
-    # Update statistics specific to train mode
+    # Update train mode statistics
     if self.mode == 't':
       time_now      = time.time()
       steps_per_sec = (self._agent_steps - stats["last_log_step"]) / (time_now - stats["last_log_time"])
+      lo            = stats["last_log_ep"] if self._epochs is not None else -N_EPS_STATS
 
-      stats["steps_per_sec"] = steps_per_sec
-      stats["last_log_time"] = time_now
-      stats["last_log_step"] = self._agent_steps
+      stats["mean_ep_rew"]    = stats_mean(self.ep_rews[lo:])
+      stats["std_ep_rew"]     = stats_std(self.ep_rews[lo:])
+      stats["ep_len_mean"]    = stats_mean(self.ep_lens[lo:])
+      stats["ep_len_std"]     = stats_std(self.ep_lens[lo:])
+      stats["best_mean_rew"]  = max(stats["best_mean_rew"], stats["mean_ep_rew"])
+      stats["best_ep_rew"]    = stats_best(stats["best_ep_rew"], self.ep_rews, stats["last_log_ep"])
 
-    # Update statistics specific to eval mode
+      stats["last_log_ep"]    = len(self.ep_rews)
+      stats["steps_per_sec"]  = steps_per_sec
+      stats["last_log_time"]  = time_now
+      stats["last_log_step"]  = self._agent_steps
+
+    # Update eval mode statistics
     else:
       # Logging means that an evaluation run is finished, so it is time to update the statistics
-      # last_log_ep   = stats["last_log_ep"]
-      last_log_ep   = self.stats_inds[-1] if len(self.stats_inds) > 0 else 0
-      episode_data  = self.ep_rews[last_log_ep:]
+      # In evaluation mode, statistics are always based on the most recent run
 
-      stats["score_mean"]     = stats_mean(episode_data)
-      stats["score_std"]      = stats_std(episode_data)
-      stats["score_episodes"] = len(episode_data)
-      stats["best_score"]     = max(stats["score_mean"], stats["best_score"])
+      last_log_ep   = self.stats_inds[-1] if len(self.stats_inds) > 0 else 0
+      episode_rews  = self.ep_rews[last_log_ep:]
+      episode_lens  = self.ep_lens[last_log_ep:]
+
+      stats["mean_ep_rew"]    = stats_mean(episode_rews)
+      stats["std_ep_rew"]     = stats_std(episode_rews)
+      stats["ep_len_mean"]    = stats_mean(episode_lens)
+      stats["ep_len_std"]     = stats_std(episode_lens)
+      stats["best_mean_rew"]  = max(stats["best_mean_rew"], stats["mean_ep_rew"])
+      stats["best_ep_rew"]    = stats_best(stats["best_ep_rew"], self.ep_rews, stats["last_log_ep"])
+      stats["score_episodes"] = len(episode_rews)
+      stats["last_log_ep"]    = len(self.ep_rews)
 
       # Append info with best_agent
-      info["rltfmon.best_agent"] = stats["score_mean"] == stats["best_score"]
+      info["rltfmon.best_agent"] = stats["mean_ep_rew"] == stats["best_mean_rew"]
 
     # Update the stats logging steps and indices
-    self.stats_steps.append(self._agent_steps)
+    self.stats_steps.append(self._log_step if self.epochs is None else self._log_epoch)
     self.stats_inds.append(len(self.ep_rews))
 
     # Append the TensorBoard summary data
@@ -433,10 +468,9 @@ class StatsRecorder:
         self.summary.value.add(tag="train/mean_ep_rew", simple_value=stats["mean_ep_rew"])
       else:
         self.summary.value.add(tag="eval/mean_ep_rew",  simple_value=stats["mean_ep_rew"])
-        self.summary.value.add(tag="eval/score",        simple_value=stats["score_mean"])
 
 
-  def log_stats(self, info):
+  def log_stats(self, info=None):
     """Log the training progress if the **agent** step is appropriate
     Args:
       info: The info dict returned after env.step(). Can be optionally appended with some data
@@ -460,7 +494,8 @@ class StatsRecorder:
 
     # Log the summary to TensorBoard
     if self.summary is not None:
-      self.tb_writer.add_summary(self.summary, global_step=self._agent_steps)
+      global_step = self._log_step if self._epochs is None else self._log_epoch
+      self.tb_writer.add_summary(self.summary, global_step=global_step)
 
 
   def save(self):
@@ -472,10 +507,14 @@ class StatsRecorder:
     data = {
       "env_steps":      self._env_steps,
       "agent_steps":    self._agent_steps,
+      "epochs":         self._epochs,
       "env_episodes":   self._env_eps,
       "agent_episodes": self._agent_eps,
       "best_mean_rew":  self.stats["best_mean_rew"],
     }
+
+    if self.autolog:
+      data["log_period"] = self.log_period
 
     # Get the filenames
     if self.mode == 't':
@@ -491,8 +530,6 @@ class StatsRecorder:
       ep_lens_file      = "eval_ep_lens.npy"
       stats_inds_file   = "eval_scores_inds.npy"
       stats_steps_file  = "eval_scores_steps.npy"
-
-      data["best_score"] = self.stats["best_score"],
 
     # Write the data
     self._write_json(json_file, data)
@@ -529,12 +566,10 @@ class StatsRecorder:
     if data:
       self._env_steps   = data["env_steps"]
       self._agent_steps = data["agent_steps"]
+      self._epochs      = data["epochs"] if self._epochs is not None else None
       self._env_eps     = data["env_episodes"]
       self._agent_eps   = data["agent_episodes"]
       self.stats["best_mean_rew"] = data["best_mean_rew"]
-
-      if self.mode == 'e':
-        self.stats["best_score"] = data["best_score"]
 
     # Read the numpy data
     self.ep_rews      = self._read_npy(ep_rews_file)
@@ -576,6 +611,24 @@ class StatsRecorder:
 
 
   @property
+  def _log_step(self):
+    if self._mode == 't':
+      return self._agent_steps
+    else:
+      # Scale evaluation mode steps to agent training steps
+      return int(self._agent_steps // self.log_period * self.eval_period)
+
+
+  @property
+  def _log_epoch(self):
+    if self._mode == 't':
+      return self._epochs
+    else:
+      # Scale evaluation mode ecochs to agent training epochs
+      return int(self._epochs // self.log_period * self.eval_period)
+
+
+  @property
   def mode(self):
     return self._mode
 
@@ -586,6 +639,10 @@ class StatsRecorder:
   @property
   def env_steps(self):
     return self._env_steps
+
+  @property
+  def epochs(self):
+    return self._epochs
 
   @property
   def agent_eps(self):
@@ -606,13 +663,13 @@ class StatsRecorder:
 
 def stats_mean(data):
   if len(data) > 0:
-    return np.mean(data[-N_EPS_STATS:])
+    return np.mean(data)
   return -np.inf
 
 
 def stats_std(data):
   if len(data) > 0:
-    return np.std(data[-N_EPS_STATS:])
+    return np.std(data)
   return np.nan
 
 

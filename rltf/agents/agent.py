@@ -2,6 +2,8 @@ import json
 import logging
 import os
 import re
+import signal
+import numpy as np
 import tensorflow as tf
 
 from rltf.utils import seeding
@@ -14,62 +16,53 @@ class Agent:
   """Base class for a Reinforcement Learning agent"""
 
   def __init__(self,
-               env_train,
-               env_eval,
-               train_period,
-               warm_up,
-               stop_step,
                eval_period,
                eval_len,
                batch_size,
                model_dir,
                save_period=1000000,
-               n_evals=0,
+               n_plays=0,
                load_model=None,
                load_regex=None,
+               **model_kwargs
               ):
     """
     Args:
-      env: gym.Env. Environment in which the model will be trained.
-      train_period: int. How many environment actions to take between every 2 learning steps
-      warm_up: int. Number of random steps before training starts
-      stop_step: int. Training step at which learning stops
       eval_period: int. How many agent steps to take between every 2 evaluation runs
       eval_len: int. How many agent steps an evaluation run lasts. `<=0` means no evaluation
       batch_size: int. Batch size for training the model
       model_dir: str. Directory path for the model, where logs and checkpoints will be saved. If the
         directory is not empty, the agent will restore the model continue training it
-      n_evals: int. Number of separate evaluation runs to execute when `Agent.eval()` is called. If `<=0`,
-        `Agent.eval()` will raise exception. If `>0`, `Agent.train()` will raise exception
+      n_plays: int. Number of separate play (or evaluation) runs to execute when `Agent.play()` is called.
+        If `<=0`, `Agent.play()` will raise exception. If `>0`, `Agent.train()` will raise exception
       save_period: int. Save the model every `save_period` training steps. `<=0` means no saving
       load_model: str. Path to a directory which contains an existing model. The best_agent weights in
         this model will be loaded (no data in `load_model` will be overwritten)
       load_regex: str. Regular expression for matching variables whose values should be reused.
         If empty, all model variables are reused
+      model_kwargs: dict. All uncaught arguments are automatically considered as arguments to be
+        passed to the model
     """
 
     # Environment data
-    self.env_train      = env_train
-    self.env_eval       = env_eval
+    self.env_train      = None
+    self.env_eval       = None
 
     # Model data
     self.model          = None
+    self.model_kwargs   = model_kwargs
     self.built          = False
 
     # Save and restore specs data
     self.model_dir      = model_dir
     self.reuse_model    = load_model
     self.reuse_regex    = None if load_regex is None else re.compile(load_regex)
-    self.save_period    = save_period
+    self.save_period    = save_period if save_period > 0 else np.inf
     self.train_saver    = None
     self.eval_saver     = None
 
     # Training data
-    self.warm_up        = warm_up       # Step from which training starts
-    self.stop_step      = stop_step     # Step at which training stops
-    self.learn_started  = False         # Bool: Indicates if learning has started or not
-    self.train_period   = train_period  # How often to run a training step
-    self.train_step     = 0             # Current agent train step
+    self.agent_step     = 0             # Current agent step
     self.batch_size     = batch_size
     self.prng           = seeding.get_prng()
 
@@ -77,7 +70,11 @@ class Agent:
     self.eval_period    = eval_period   # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
     self.eval_step      = 0             # Current agent eval step
-    self.n_evals        = n_evals       # Number of evaluation runs in Agent.eval()
+
+    # Run data
+    self.n_plays        = n_plays       # Number of evaluation runs in Agent.play()
+    self.play_mode      = n_plays > 0   # True if Agent allowed to be run only in play mode
+    self._terminate     = False         # Used to signal terminate. Must be monitored by the main loop
 
     # TensorFlow attributes
     self.sess           = None
@@ -99,7 +96,7 @@ class Agent:
 
     if os.path.exists(self.state_file):
       restore = True
-      assert self.n_evals <= 0
+      assert not self.play_mode
       assert self.reuse_model is None
       assert self.reuse_regex is None
     else:
@@ -133,13 +130,16 @@ class Agent:
   def train(self):
     """Train the agent"""
     assert self.built, "You need to execute Agent.build() before calling Agent.train()"
-    assert self.n_evals <= 0      # Make sure in correct mode
+    assert not self.play_mode      # Make sure in correct mode
+
+    # Configure a safe exit
+    self._configure_safe_exit()
 
     # If the agent was restored and it was previously terminated during an evaluation run,
     # complete this unfinished evaluation run before training starts
-    if self.eval_period > 0 and self.train_step % self.eval_period == 0:
+    if self.eval_period > 0 and self.agent_step % self.eval_period == 0:
       # Compute what eval step would be if eval run was able to complete
-      eval_step = self.train_step / self.eval_period * self.eval_len
+      eval_step = self.agent_step / self.eval_period * self.eval_len
       # Run evaluation if necessary
       if self.eval_step != eval_step:
         self._eval_agent()
@@ -148,15 +148,18 @@ class Agent:
     self._train()
 
 
-  def eval(self):
+  def play(self):
     """Evaluate the agent"""
-    assert self.built, "You need to execute Agent.build() before calling Agent.eval()"
-    assert self.n_evals > 0                     # Make sure in the correct mode and best agent restored
+    assert self.built, "You need to execute Agent.build() before calling Agent.play()"
+    assert self.play_mode                       # Make sure in the correct mode and best agent restored
     assert self.eval_step == 0                  # Ensure a single call to eval
     assert self.reuse_regex is None             # Make sure all variables were restored
 
+    # Configure a safe exit
+    self._configure_safe_exit()
+
     # Run the actual evaluation process
-    self._eval()
+    self._run_play()
 
     # Execute only agent-specific save, e.g. save statistics
     self._save()
@@ -212,13 +215,8 @@ class Agent:
     with open(self.state_file, 'r') as f:
       data = json.load(f)
 
-    self.train_step = data["train_step"]
+    self.agent_step = data["train_step"]
     self.eval_step  = data["eval_step"]
-    self.learn_started = self.train_step >= self.warm_up
-
-    if not self.learn_started:
-      logger.warning("Training the restored model will not start immediately")
-      logger.warning("Random policy will be run for %d steps", self.warm_up-self.train_step)
 
 
   def _restore(self):
@@ -249,16 +247,9 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _eval(self):
-    """Evaluate the agent. To be implemented by the inheriting class. Can call Agent._run_eval()"""
-    raise NotImplementedError()
-
-
   def _build(self):
-    """Used by the subclass to build class specific TF objects. Must not call
-    `self.model.build()`
-    """
-    raise NotImplementedError()
+    """Overload in subclasses to build additional TF objects. Do NOT call `self.model.build()`"""
+    pass
 
 
   def _reset(self):
@@ -283,17 +274,11 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _action_eval(self, state, t):
+  def _action_eval(self, state):
     """Return action selected by the agent for an evaluation step
     Args:
       state: np.array. Current state
-      t: int. Current timestep
     """
-    raise NotImplementedError()
-
-
-  def _check_terminate(self):
-    """Check if train or eval loop must terminate because of Ctrl+C"""
     raise NotImplementedError()
 
 
@@ -314,10 +299,10 @@ class Agent:
     obs = self.env_eval.reset()
 
     for t in range(start_step, stop_step):
-      if self._check_terminate():
+      if self._terminate:
         break
 
-      action = self._action_eval(obs, t)
+      action = self._action_eval(obs)
       next_obs, rew, done, info = self.env_eval.step(action)
 
       # Reset the environment if end of episode
@@ -334,11 +319,11 @@ class Agent:
       logger.info("Evaluation run finished")
 
 
-  def _run_eval(self):
+  def _run_play(self):
     """Subclass helper function.
-    Run the agent in evaluation mode. Should be called from `Agent._eval()`
+    Run the agent in evaluation mode. Should be called from `Agent._play()`
     """
-    for _ in range(self.n_evals):
+    for _ in range(self.n_plays):
       self._eval_agent()
 
 
@@ -350,20 +335,20 @@ class Agent:
 
     Calls `self._save()` for any subclass specific save procedures.
     """
-    if not self.learn_started or self.n_evals > 0:
+    if self.play_mode or not self._save_allowed():
       return
 
     logger.info("Saving the TF model and stats to %s", self.model_dir)
 
     # Save the model
-    self.train_saver.save(self.sess, self.tf_dir, global_step=self.train_step)
+    self.train_saver.save(self.sess, self.tf_dir, global_step=self.agent_step)
 
     # Execute additional agent-specific save proceudres
     self._save()
 
     # Save the agent state
     data = {
-      "train_step": self.train_step,
+      "train_step": self.agent_step,
       "eval_step":  self.eval_step,
     }
     with open(self.state_file, 'w') as f:
@@ -373,21 +358,27 @@ class Agent:
 
 
   def _save(self):
-    """Overload in subclasses in order to implement custom save procedures"""
+    """Override in subclasses in order to implement custom save procedures"""
     return
+
+
+  def _save_allowed(self):
+    """Return False if saving is not allowed at this point due to inconsistent state.
+    To be overriden in subclasses."""
+    return True
 
 
   def _save_best_agent(self, best_agent):
     """Save the best-performing agent.
     best_agent: bool. If True, the agent is the best so far. If False, do not save.
     """
-    if not best_agent or self.n_evals > 0:
+    if not best_agent or self.play_mode:
       return
 
     save_dir = self.best_agent_dir
     logger.info("Saving best agent so far to %s", save_dir)
     # Save the model
-    self.eval_saver.save(self.sess, save_dir, global_step=self.train_step+1)
+    self.eval_saver.save(self.sess, save_dir, global_step=self.agent_step+1)
     logger.info("Save finished successfully")
 
 
@@ -429,3 +420,37 @@ class Agent:
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     return tf.Session(config=config)
+
+
+  def _configure_safe_exit(self):
+    """Catch Ctrl+C in order to exit safely without interrupting the agent"""
+
+    in_exit_call = False
+
+    def safe_exit(*args, **kwargs):
+      nonlocal in_exit_call
+
+      # If Ctrl+C pressed twice consecutively, then exit
+      if in_exit_call or not self.built:
+        import sys
+        sys.exit(0)
+
+      in_exit_call = True
+
+      # Confirm that killing was intended
+      y = ''
+      while True:
+        y = input("Do you really want to exit? [y/n]")
+        if y not in ['y', 'n']:
+          print("Response not recognized. Expected 'y' or 'n'.")
+        else:
+          break
+      if y == 'n':
+        logger.info("CONTINUING EXECUTION")
+      else:
+        logger.info("EXITING")
+        self._terminate = True
+
+      in_exit_call = False
+
+    signal.signal(signal.SIGINT, safe_exit)

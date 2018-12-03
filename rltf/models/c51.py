@@ -234,11 +234,11 @@ class C51(BaseDQN):
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return tf.identity(self.a_train, name=name)
+    return dict(action=tf.identity(self.train_dict["action"], name=name))
 
 
   def _compute_z_variance(self, z=None, logits=None, q=None, normalize=True):

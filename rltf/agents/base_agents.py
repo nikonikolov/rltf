@@ -11,64 +11,17 @@ class ThreadedAgent(Agent):
   """Abstract agent which can run the main process in several python threads.
   Allows for a standardized way of exiting cleanly, without losing any data at Ctrl+C"""
 
-  def __init__(self, *args, confirm_kill=False, **kwargs):
-    """
-    Args:
-      confirm_kill: bool. If True, you will be asked to confirm Ctrl+C
-    """
-    super().__init__(*args, **kwargs)
-
-    self._terminate   = False         # Internal termination signal for the agent
-    self.confirm_kill = confirm_kill
-
-
   def _run_threads(self, threads):
-    """Safely run `threads` by sending an internal termination signal and joinining all threads
-    before exiting. At Ctrl+C signal, optinally confirm that program must exit if confirm_kill is set.
+    """Run `threads`
     Args:
       threads: list of threads to start and join
     """
-
     # Start threads
     for t in threads:
       t.start()
-
     # Wait for threads
-    stop = False
-    while not stop:
-      try:
-        for t in threads:
-          t.join()
-        stop = True
-      except KeyboardInterrupt:
-        # Confirm the kill
-        if not self._kill_confirmed():
-          logger.info("CONTINUING EXECUTION")
-          continue
-        logger.info("EXITING")
-        # Raise the internal termination signal
-        self._terminate = True
-        for t in threads:
-          t.join()
-        stop = True
-
-
-  def _kill_confirmed(self):
-    """Ask for confirmation for Ctrl+C or any additional termination signal
-    Returns:
-      `bool`. If True, kill. If False, continue
-    """
-    if self.confirm_kill:
-      y = ''
-      while True:
-        y = input("Do you really want to exit? [y/n]. If you want to exit and save buffer, type 's'")
-        if y not in ['y', 'n']:
-          print("Response not recognized. Expected 'y' or 'n'.")
-        else:
-          break
-      if y == 'n':
-        return False
-    return True
+    for t in threads:
+      t.join()
 
 
   def _thread(self, f):
@@ -78,25 +31,25 @@ class ThreadedAgent(Agent):
       f()
 
 
-  def _check_terminate(self):
-    return self._terminate
-
-
 
 class LoggingAgent(Agent):
   """Abstract Agent which takes care of logging training and evaluation progress to stdout
   and TensorBoard. Also takes care of saving data to disk and restoring it"""
 
-  def __init__(self, *args, log_period=10000, plots_layout=None, **kwargs):
+  def __init__(self, *args, log_period=50000, video_period=1000, plot_video=False, **kwargs):
     """
     Args:
       log_period: int. Add TensorBoard summary and print progress every log_period agent steps
-      plots_layout: dict or None. Used to configure the layout for video plots
+      video_period: int. Period for recording episode videos (in number of episodes). If <=0,
+        no recordings will be made
+      plot_video: bool. If True, plots of some of the model tensor values will be included in video
+        recordings by the monitor. Values appear together with the corresponding state
     """
     super().__init__(*args, **kwargs)
 
     self.log_period   = log_period
-    self.plots_layout = plots_layout
+    self.video_period = video_period
+    self.plot_video   = plot_video
     self.summary      = None    # The most recent summary
     self.summary_op   = None    # TF op that contains all summaries
 
@@ -119,18 +72,16 @@ class LoggingAgent(Agent):
     # Set the function to fetch TensorBoard summaries during training
     self.env_train.monitor.set_summary_getter(self._fetch_summary)
 
-    # Configure the plot layout for recorded videos
-    if self.plots_layout is not None:
-      self._plots_layout()
-    else:
-      self.model.clear_plot_tensors()
+    if self.plot_video:
+      # Enable plotting tensors in the recorded videos
+      self.env_train.monitor.enable_video_plots(self.model.name)
+      self.env_eval.monitor.enable_video_plots(self.model.name)
 
-
-  def _plots_layout(self):
-    self.env_train.monitor.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
-      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
-    self.env_eval.monitor.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
-      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
+    # No need for deactivating. It is deactivated by default
+    # else:
+    #   # If plots not enabled, make sure no tensors are run needlessly
+    #   self.model.plot_conf.deactivate_train_plots()
+    #   self.model.plot_conf.deactivate_eval_plots()
 
 
   def _fetch_summary(self):
@@ -139,7 +90,7 @@ class LoggingAgent(Agent):
     if byte_summary is not None:
       summary.ParseFromString(byte_summary)
     # Pass the real current training step
-    self._append_summary(summary, self.train_step+1)
+    self._append_summary(summary, self.agent_step+1)
 
     return summary
 
@@ -150,8 +101,8 @@ class LoggingAgent(Agent):
     self.env_eval.monitor.save()
 
 
-  def _run_summary_op(self, t):
-    """Return True if summary has to be run at this step, False otherwise.
+  def _run_summary_op(self, t, feed_dict):
+    """Run the summary op and save the result in self.summary
     NOTE:
       - For significant computation efficiency, summaries should be run only each log_period,
         otherwise the data is thrown away and causes unnecessary computations
@@ -160,12 +111,13 @@ class LoggingAgent(Agent):
         this means that the summary has to be run **before** the corresponding call to env.step()
     Args:
       t: int. Current time step
+      feed_dict: dict. feed_dict to feed to sess.run
     """
     raise NotImplementedError()
 
 
   def _append_log_spec(self):
-    """
+    """To be overriden by the subclass
     Returns:
       List of tuples `(name, format, lambda)` with information of custom subclass
       parameters to log during training. `name`: `str`, the name of the reported
@@ -173,14 +125,15 @@ class LoggingAgent(Agent):
       `lambda`: A function that takes the current timestep as argument and
       returns the value to be printed.
     """
-    raise NotImplementedError()
+    return []
 
 
   def _append_summary(self, summary, t):
-    """Append the tf.Summary that will be written to disk at timestep t with custom data.
+    """To be overriden by the subclass.
+    Append the tf.Summary that will be written to disk at timestep t with custom data.
     Used only in train mode. The resulting summary is passed to rltf.Monitor for saving.
     Args:
       summary: tf.Summary. The summary to append
       t: int. Current time step
     """
-    raise NotImplementedError()
+    return

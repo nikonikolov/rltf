@@ -16,6 +16,7 @@ class NoNoise(ExplorationNoise):
     return 'NoNoise()'
 
 
+
 class DecayedExplorationNoise(ExplorationNoise):
   """Use any `ExplorationNoise` type but decay the amount of noise over time"""
 
@@ -40,10 +41,11 @@ class DecayedExplorationNoise(ExplorationNoise):
     return 'DecayedExplorationNoise(type={}, decay={})'.format(self.noise, self.decay)
 
 
+
 class GaussianNoise(ExplorationNoise):
   """Produces Gaussian Noise"""
 
-  def __init__(self, mu, sigma):
+  def __init__(self, shape, mu, sigma):
     """
     Args:
       mu: float or np.array. Mean of the Gaussian
@@ -51,8 +53,8 @@ class GaussianNoise(ExplorationNoise):
     """
     super().__init__()
 
-    self.mu     = mu
-    self.sigma  = sigma
+    self.mu     = np.ones(shape, dtype=np.float32) * mu
+    self.sigma  = np.ones(shape, dtype=np.float32) * sigma
 
   def sample(self, t):
     return self.prng.normal(self.mu, self.sigma)
@@ -62,6 +64,7 @@ class GaussianNoise(ExplorationNoise):
 
   def __repr__(self):
     return 'GaussianNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
+
 
 
 class OrnsteinUhlenbeckNoise(ExplorationNoise):
@@ -74,9 +77,10 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     - https://github.com/rll/rllab/blob/master/rllab/exploration_strategies/ou_strategy.py
   """
 
-  def __init__(self, mu, sigma, theta=0.15, dt=1e-2):
+  def __init__(self, shape, mu, sigma, theta=0.15, dt=1e-2):
     """
     Args:
+      shape: tuple or list. Shape of the nd.array for the noise
       mu: np.array or scalar. Noise mean
       sigma: np.array or scalar. Wiener noise scale constant. Should have the same shape as mu
       theta: float. Mean attraction constant
@@ -85,12 +89,8 @@ class OrnsteinUhlenbeckNoise(ExplorationNoise):
     """
     super().__init__()
 
-    assert isinstance(sigma, np.ndarray)
-    assert isinstance(mu,    np.ndarray)
-    assert mu.shape == sigma.shape
-
-    self.mu     = mu
-    self.sigma  = sigma
+    self.mu     = np.ones(shape, dtype=np.float32) * mu
+    self.sigma  = np.ones(shape, dtype=np.float32) * sigma
     self.theta  = theta
     self.dt     = dt
     self.x      = None

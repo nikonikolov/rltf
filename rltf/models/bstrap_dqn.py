@@ -179,9 +179,7 @@ class BaseBstrapDQN(BaseDQN):
     p_a     = tf.identity(action[0],  name="plot/eval/a")
     p_vote  = tf.identity(votes[0],   name="plot/eval/vote")
 
-    self.plot_eval["eval_actions"] = {
-      "a_vote": dict(height=p_vote, a=p_a),
-    }
+    self.plot_conf.set_eval_spec(dict(eval_actions=dict(a_vote=dict(height=p_vote, a=p_a))))
 
     return action
 
@@ -196,9 +194,7 @@ class BaseBstrapDQN(BaseDQN):
     p_a     = tf.identity(action[0],  name="plot/eval/a")
     p_mean  = tf.identity(mean[0],    name="plot/eval/mean")
 
-    self.plot_eval["eval_actions"] = {
-      "a_mean": dict(height=p_mean, a=p_a),
-    }
+    self.plot_conf.set_eval_spec(dict(eval_actions=dict(a_mean=dict(height=p_mean, a=p_a))))
 
     return action
 
@@ -238,11 +234,12 @@ class BstrapDQN(BaseBstrapDQN):
 
     # Compute the greedy action
     action    = tf.argmax(q_head, axis=-1, output_type=tf.int32, name=name)
-    return action
+
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return self._act_eval_vote(agent_net, name)
+    return dict(action=self._act_eval_vote(agent_net, name))
 
 
   def reset(self, sess):
@@ -268,11 +265,11 @@ class BstrapDQN_UCB(BaseBstrapDQN):
     tf.summary.histogram("debug/a_std",   std)
     tf.summary.histogram("debug/a_mean",  mean)
 
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return self._act_eval_vote(agent_net, name)
+    return dict(action=self._act_eval_vote(agent_net, name))
 
 
 
@@ -280,9 +277,11 @@ class BstrapDQN_Ensemble(BaseBstrapDQN):
   """Ensemble policy from Boostrapped DQN"""
 
   def _act_train(self, agent_net, name):
-    # TODO: If plotting, self.plot_train will be empty
-    return self._act_eval_vote(agent_net, name)
+    action = self._act_eval_vote(agent_net, name)
+    # Set the plottable tensors for train
+    self.plot_conf.set_train_spec(dict(eval_actions=self.plot_conf.true_eval_spec["eval_actions"]))
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return tf.identity(self.a_train, name=name)
+    return dict(action=tf.identity(self.train_dict["action"], name=name))

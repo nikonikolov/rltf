@@ -9,15 +9,33 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
   Runs training and evaluation in python Threads for safe exit when Ctrl+C is pressed
   """
 
-  def __init__(self, *args, save_buf=True, **kwargs):
+  def __init__(self,
+               warm_up,
+               train_period,
+               target_update_period,
+               stop_step,
+               *args,
+               save_buf=True,
+               **kwargs):
+
     """
     Args:
+      warm_up: int. Number of random steps before training starts
+      train_period: int. How many environment actions to take between every 2 learning steps
+      target_update_period: Period in number of agent steps at which to update the target net
+      stop_step: int. Training step at which learning stops
       save_buf: bool. If True, save the buffer during calls to `self.save()`. Can also be disabled
         by setting the 'RLTFBUF' environment variable to `/dev/null`.
     """
     super().__init__(*args, **kwargs)
 
-    self.update_target_period = None
+    # Training data
+    self.warm_up        = warm_up       # Step from which training starts
+    self.learn_started  = False         # Bool: Indicates if learning has started or not
+    self.train_period   = train_period  # How often to run a training step
+    self.stop_step      = stop_step     # Step at which training stops
+
+    self.target_update_period = target_update_period  # Period at which target network is updated
     self.replay_buf = None
 
     self.threads    = []
@@ -26,13 +44,6 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
 
   def _train(self):
     self._run_threads(self.threads)
-
-
-  def _eval(self):
-    # Use a thread for clean exit on KeyboardInterrupt
-    eval_thread = threading.Thread(name='eval_thread', target=self._thread, args=[self._run_eval])
-
-    self._run_threads([eval_thread])
 
 
   def _restore(self):
@@ -45,31 +56,37 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
       self.replay_buf.save(self.model_dir)
 
 
+  def _save_allowed(self):
+    return self.learn_started
+
+
   def _run_train_step(self, t):
     # Compose feed_dict
     batch       = self.replay_buf.sample(self.batch_size)
     feed_dict   = self._get_feed_dict(batch, t)
-    run_summary = self._run_summary_op(t)
 
     # Wait for synchronization if necessary
     self._wait_act_chosen()
 
     # Run a training step
-    if run_summary:
-      self.summary, _ = self.sess.run([self.summary_op, self.model.train_op], feed_dict=feed_dict)
-    else:
-      self.sess.run(self.model.train_op, feed_dict=feed_dict)
+    self.sess.run(self.model.train_op, feed_dict=feed_dict)
 
     # Update target network
-    if t % self.update_target_period == 0:
+    if t % self.target_update_period == 0:
       self.sess.run(self.model.update_target)
 
+    # Run the summary op to log the changes from the update if necessary
+    self._run_summary_op(t, feed_dict)
 
-  def _run_summary_op(self, t):
+
+  def _run_summary_op(self, t, feed_dict):
     # Remember this is called only each training period
     # Make sure to run the summary right before t gets to a log_period so as to make sure
     # that the summary will be updated on time
-    return t % self.log_period + self.train_period >= self.log_period
+    run_summary = t % self.log_period + self.train_period >= self.log_period
+
+    if run_summary:
+      self.summary = self.sess.run(self.summary_op, feed_dict=feed_dict)
 
 
   def _wait_act_chosen(self):
@@ -118,7 +135,7 @@ class QlearnAgent(BaseQlearnAgent):
 
     obs = self.reset()
 
-    for t in range(self.train_step+1, self.stop_step+1):
+    for t in range(self.agent_step+1, self.stop_step+1):
       if self._terminate:
         self._signal_act_chosen()
         break
@@ -152,11 +169,11 @@ class QlearnAgent(BaseQlearnAgent):
       if self.eval_len > 0 and t % self.eval_period == 0:
         self._eval_agent()
 
-      # Update the train step
-      self.train_step = t
+      # Update the agent step
+      self.agent_step = t
 
-      # Save **after** train step is correct and completed
-      if self.save_period > 0 and t % self.save_period == 0:
+      # Save **after** agent step is correct and completed
+      if t % self.save_period == 0:
         self.save()
 
 
@@ -168,7 +185,7 @@ class QlearnAgent(BaseQlearnAgent):
     `self._run_env()` thread to select a new action
     """
 
-    for t in range(self.train_step+1, self.stop_step+1):
+    for t in range(self.agent_step+1, self.stop_step+1):
       if self._terminate:
         self._signal_train_done()
         break
@@ -227,7 +244,7 @@ class SequentialQlearnAgent(BaseQlearnAgent):
 
     obs = self.reset()
 
-    for t in range(self.train_step+1, self.stop_step+1):
+    for t in range(self.agent_step+1, self.stop_step+1):
       if self._terminate:
         break
 
@@ -262,11 +279,11 @@ class SequentialQlearnAgent(BaseQlearnAgent):
       if self.eval_len > 0 and t % self.eval_period == 0:
         self._eval_agent()
 
-      # Update the train step
-      self.train_step = t
+      # Update the agent step
+      self.agent_step = t
 
-      # Save **after** train step is correct and completed
-      if self.save_period > 0 and t % self.save_period == 0:
+      # Save **after** agent step is correct and completed
+      if t % self.save_period == 0:
         self.save()
 
 

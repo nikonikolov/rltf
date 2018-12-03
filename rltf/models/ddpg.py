@@ -20,11 +20,12 @@ def init_output_uniform_conv():
 
 class DDPG(BaseQlearn):
 
-  def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
-               tau, gamma, batch_norm, obs_norm, huber_loss=False):
+  def __init__(self, obs_shape, act_shape, actor_opt_conf, critic_opt_conf, critic_reg,
+               tau, gamma, batch_norm, obs_norm, critic_huber_loss=False):
     """
     Args:
       obs_shape: list. Shape of a single state input
+      act_shape: list of 1 element. Shape of a single action
       actor_opt_conf: rltf.optimizers.OptimizerConf. Configuration for the actor optimizer
       critic_opt_conf: rltf.optimizers.OptimizerConf. Configuration for the critic optimizer
       critic_reg: float. Regularization parameter for the weights of the critic
@@ -32,13 +33,13 @@ class DDPG(BaseQlearn):
       gamma: float. Discount factor
       batch_norm: bool. Whether to add batch normalization layers
       obs_norm: bool. Whether to normalize input observations
-      huber_loss: bool. Whether to use Huber loss or not
+      critic_huber_loss: bool. Whether to use Huber loss or not
     """
 
     super().__init__()
 
     self.tau          = tau
-    self.huber_loss   = huber_loss
+    self.huber_loss   = critic_huber_loss
     self.gamma        = gamma
     self.critic_reg   = critic_reg
     self.batch_norm   = batch_norm
@@ -51,8 +52,8 @@ class DDPG(BaseQlearn):
 
     self.obs_shape = obs_shape
     self.obs_dtype = tf.uint8 if len(obs_shape) == 3 else tf.float32
-    self.n_actions = n_actions
-    self.act_shape = [self.n_actions]
+    self.n_actions = act_shape[0]
+    self.act_shape = act_shape
     self.act_dtype = tf.float32
 
     # Initializers
@@ -64,6 +65,16 @@ class DDPG(BaseQlearn):
     self._training  = None
     self._action    = None
 
+    # Set the correct actor and critic networks
+    if len(self.obs_shape) == 3 and self.obs_dtype == tf.uint8:
+      self._actor   = self._actor_conv_net
+      self._critic  = self._critic_conv_net
+    elif len(self.obs_shape) == 1 and self.obs_dtype == tf.float32 or self.obs_dtype == tf.float64:
+      self._actor   = self._actor_net
+      self._critic  = self._critic_net
+    else:
+      raise ValueError("Invalid observation shape and type")
+
 
   def build(self):
 
@@ -71,7 +82,8 @@ class DDPG(BaseQlearn):
     self._build_ph()
 
     # Preprocess the observations
-    obs_t, obs_tp1  = self._preprocess_obs()
+    obs_t   = tf_utils.preprocess_input(self.obs_t_ph,   norm=self.obs_norm, training=self._training)
+    obs_tp1 = tf_utils.preprocess_input(self.obs_tp1_ph, norm=self.obs_norm, training=self._training)
 
     actor           = self._actor(obs_t,                  scope="agent_net/actor")
     actor_critic_q  = self._critic(obs_t, actor,          scope="agent_net/critic")
@@ -102,14 +114,15 @@ class DDPG(BaseQlearn):
     self._update_target = tf_utils.assign_vars(target_vars, agent_vars, self.tau, "update_target")
 
     # Remember the action tensor. name is needed when restoring the graph
-    self._action    = tf.identity(actor, name="action")
+    self.train_dict = dict(action=tf.identity(actor, name="action"))
+    self.eval_dict  = self.train_dict
 
     # Initialization Op
     logger.debug("Creating initialization Op")
     self._init_op   = tf_utils.assign_vars(target_vars, agent_vars, name="init_op")
 
     # Rememeber the model variables
-    self._variables = agent_vars + target_vars
+    self._vars      = agent_vars + target_vars
 
     self._add_summaries(actor_loss, critic_loss, act_t_q, target_q)
 
@@ -129,36 +142,6 @@ class DDPG(BaseQlearn):
     tf.summary.scalar("train/actor_critic_q", -actor_loss)
     tf.summary.scalar("train/act_t_q",        tf.reduce_mean(act_t_q))
     tf.summary.scalar("train/target_q",       tf.reduce_mean(target_q))
-
-
-  def _preprocess_obs(self):
-    # Image observations
-    if len(self.obs_shape) == 3 and self.obs_dtype == tf.uint8:
-      # Normalize observations
-      obs_t   = tf.cast(self.obs_t_ph,   tf.float32) / 255.0
-      obs_tp1 = tf.cast(self.obs_tp1_ph, tf.float32) / 255.0
-
-      self._actor   = self._actor_conv_net
-      self._critic  = self._critic_conv_net
-
-    # Low-dimensional observations
-    elif len(self.obs_shape) == 1 and self.obs_dtype == tf.float32 or self.obs_dtype == tf.float64:
-      if self.obs_norm:
-        # Normalize observations
-        bnorm_args = dict(axis=-1, center=False, scale=False, trainable=False, training=self._training)
-        obs_t   = tf.layers.batch_normalization(self.obs_t_ph,   **bnorm_args)
-        obs_tp1 = tf.layers.batch_normalization(self.obs_tp1_ph, **bnorm_args)
-      else:
-        obs_t   = self.obs_t_ph
-        obs_tp1 = self.obs_tp1_ph
-
-      self._actor   = self._actor_net
-      self._critic  = self._critic_net
-
-    else:
-      raise ValueError("Invalid observation shape and type")
-
-    return obs_t, obs_tp1
 
 
   def _compute_target(self, target_q):
@@ -225,15 +208,14 @@ class DDPG(BaseQlearn):
     pass
 
 
-  def action_train(self, sess, state):
+  def action_train_ops(self, sess, state, run_dict=None):
     feed_dict = {self.obs_t_ph: state[None,:], self._training: False}
-    action    = sess.run(self._action, feed_dict=feed_dict)
-    action    = action[0]
-    return action
+    return super()._action_train_ops(sess, run_dict, feed_dict=feed_dict)
 
 
-  def action_eval(self, sess, state):
-    return self.action_train(sess, state)
+  def action_eval_ops(self, sess, state, run_dict=None):
+    feed_dict = {self.obs_t_ph: state[None,:], self._training: False}
+    return super()._action_eval_ops(sess, run_dict, feed_dict=feed_dict)
 
 
   def _actor_net(self, state, scope):

@@ -74,14 +74,67 @@ def huber_loss(x, delta=1.0):
 def softmax(logits, axis=None, name=None):
   """Perform stable softmax"""
   C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
-  x = tf.nn.softmax(logits-C, axis=axis)
+  x = tf.nn.softmax(logits-C, axis=axis, name=name)
   return x
 
 
 def log_softmax(logits, axis=None, name=None):
   """Perform stable log_softmax"""
   C = tf.stop_gradient(tf.reduce_max(logits, axis=axis, keepdims=True))
-  x = tf.nn.log_softmax(logits-C, axis=axis)
+  x = tf.nn.log_softmax(logits-C, axis=axis, name=name)
+  return x
+
+
+def normalize(x, training, momentum=0.0):
+  """Normalize a tensor along the batch dimension. Normalization is done using the statistics of the
+  current batch (in training mode) or based on running mean and variance (in inference mode).
+  Args:
+    x: tf.Tensor, shape.ndims == 2. Input tensor
+    training: tf.Tensor or bool. Whether to return the output in training mode (normalized with
+      statistics of the current batch) or in inference mode (normalized with moving statistics)
+    momentum: float. Momentum for the moving average.
+  """
+  assert x.shape.ndims == 2
+
+  kwargs = dict(axis=-1, center=False, scale=False, trainable=True, training=training, momentum=momentum)
+
+  ops = tf.get_collection_ref(tf.GraphKeys.UPDATE_OPS)
+  i   = len(ops)
+
+  x = tf.layers.batch_normalization(x, **kwargs)
+
+  # Get the batch norm update ops and remove them from the global list
+  update_ops = ops[i:]
+  del ops[i:]
+
+  # Update the moving mean and variance before returning the output
+  with tf.control_dependencies(update_ops):
+    x = tf.identity(x)
+  return x
+
+
+def preprocess_input(x, norm=True, training=None, momentum=0.0):
+  """Preprocess input observations by optionally normalizing them.
+  Args:
+    x: tf.Tensor. Input tensor. When image observations, `shape.ndims` must be `4` and dtype must be
+      `uint8`. When low-dimensional observations, `shape.ndims` must be `2` and dtype must be float
+    norm: bool. If True, normalize the tensor
+    training: tf.Tensor or bool. Required only for low-dimensional tensors. See normalize()
+    momentum: float. See normalize()
+  """
+  # Image input
+  if x.shape.ndims == 4 and x.dtype.base_dtype == tf.uint8:
+    x = tf.cast(x, tf.float32)
+    if norm:
+      x = x / 255.0
+  # Low-dimensional 2D input
+  elif x.shape.ndims == 2 and x.dtype.base_dtype == tf.float32 or x.dtype.base_dtype == tf.float64:
+    if norm:
+      assert training is not None
+      # Normalize observations
+      x = normalize(x, training, momentum)
+  else:
+    raise ValueError("Invalid observation shape and type")
   return x
 
 

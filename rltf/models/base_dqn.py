@@ -122,8 +122,6 @@ class BaseDQN(BaseQlearn):
     # Custom TF Tensors and Ops
     self.obs_t      = None
     self.obs_tp1    = None
-    self.a_train    = None
-    self.a_eval     = None
 
 
   def build(self):
@@ -132,8 +130,8 @@ class BaseDQN(BaseQlearn):
     self._build_ph()
 
     # Preprocess the observation
-    self.obs_t   = self._preprocess_obs(self.obs_t_ph)
-    self.obs_tp1 = self._preprocess_obs(self.obs_tp1_ph)
+    self.obs_t    = tf_utils.preprocess_input(self.obs_t_ph)
+    self.obs_tp1  = tf_utils.preprocess_input(self.obs_tp1_ph)
 
     # Construct the Q-network and the target network
     agent_net     = self._nn_model(self.obs_t,   scope="agent_net")
@@ -158,20 +156,12 @@ class BaseDQN(BaseQlearn):
     update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
     # Compute the train and eval actions
-    self.a_train  = self._act_train(agent_net, name="a_train")
-    self.a_eval   = self._act_eval(agent_net,  name="a_eval")
+    self.train_dict = self._act_train(agent_net, name="a_train")
+    self.eval_dict  = self._act_eval(agent_net,  name="a_eval")
 
     self._train_op      = train_op
     self._update_target = update_target
-    self._variables     = agent_vars + target_vars
-
-
-  def _preprocess_obs(self, obs):
-    if self.obs_dtype == tf.uint8:
-      # In this case, casting on GPU ensures lower data transfer times
-      return tf.cast(obs, tf.float32) / 255.0
-    else:
-      return obs
+    self._vars          = agent_vars + target_vars
 
 
   def _nn_model(self, x, scope):
@@ -237,21 +227,9 @@ class BaseDQN(BaseQlearn):
     pass
 
 
-  def action_train(self, sess, state):
-    assert list(state.shape) == self.obs_shape
-    # action = sess.run(self.a_train, feed_dict={self.obs_t_ph: state[None,:]})
-    # action = action[0]
-    a, data = sess.run([self.a_train, self.plot_train.data], feed_dict={self.obs_t_ph: state[None,:]})
-    action  = a[0]
-    self._update_plot_data(data)
-    return action
+  def action_train_ops(self, sess, state, run_dict=None):
+    return super()._action_train_ops(sess, run_dict, feed_dict={self.obs_t_ph: state[None,:]})
 
 
-  def action_eval(self, sess, state):
-    assert list(state.shape) == self.obs_shape
-    # action = sess.run(self.a_eval, feed_dict={self.obs_t_ph: state[None,:]})
-    # action = action[0]
-    a, data = sess.run([self.a_eval, self.plot_eval.data], feed_dict={self.obs_t_ph: state[None,:]})
-    action  = a[0]
-    self._update_plot_data(data)
-    return action
+  def action_eval_ops(self, sess, state, run_dict=None):
+    return super()._action_eval_ops(sess, run_dict, feed_dict={self.obs_t_ph: state[None,:]})

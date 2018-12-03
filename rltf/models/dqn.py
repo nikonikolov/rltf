@@ -61,11 +61,11 @@ class DQN(BaseDQN):
 
   def _act_train(self, agent_net, name):
     action = tf.argmax(agent_net, axis=-1, output_type=tf.int32, name=name)
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return tf.identity(self.a_train, name=name)
+    return dict(action=tf.identity(self.train_dict["action"], name=name))
 
 
   def _compute_estimate(self, agent_net):

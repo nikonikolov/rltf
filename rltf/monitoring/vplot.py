@@ -6,70 +6,83 @@ import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasAgg as FigureCanvas
 
+from rltf.monitoring  import vplot_manager
+from rltf.utils       import layouts
 
 logger = logging.getLogger(__name__)
 
 
 class VideoPlotter:
 
-  def __init__(self, env):
+  def __init__(self, env, mode):
+    """
+    Args:
+      env: gym.Env. The environment
+      mode: 't' or 'e'. Operating mode of the monitor
+    """
 
     self.env      = env         # Save a reference to the environment
     self.enabled  = False       # True if enabled for the episode
     self.allowed  = False       # True if layout is configured. If False, no rendering
     self.changed  = True
-    # self.mode     = None        # Track the mode of the last episode
-    self.first_t  = True        # Track if the first train episode
-    self.first_e  = True        # Track if the first eval episode
+    self.mode     = mode
 
+    # Video frame arrangement details
     self.width    = None
     self.height   = None
     self.obs_top  = None
     self.obs_left = None
-    self.obs_align = False      # True if obs_top and obs_left have proper values
+    self.obs_align= False      # True if obs_top and obs_left have proper values
 
     self.conf     = None
     self.figs     = None
 
-    self.run_t_tensors  = None
-    self.train_tensors  = None
-    self.run_e_tensors  = None
-    self.eval_tensors   = None
-    self.plot_data      = None
     self.plot_data_id   = None
     self.image          = None
 
+    self.plot_conf        = None
+    self.get_plot_data    = None
+    self.activate_plots   = None  # Function pointer
+    self.deactivate_plots = None  # Function pointer
 
-  def conf_plots(self, layout, train_tensors, eval_tensors, plot_data):
-    """Configure the layout and the plots for the rendering:
-    NOTE: `plot_data.data` must be entirely updated, NOT mutated. If not empty, every key must be a key
-    in `layout["figures"]`. The values must be `dict`s with the same keys as the `"subplots_conf"` of
-    the figure. Each subplot must point to a dict of kwargs for the plot functon call.
 
+  def activate(self, model_class):
+    """Activate the class and allow it to include plots in the videos
     Args:
-      layout: dict. The configuraton dictionary
-      train_tensors: UserDict with values `tf.Tensor` (or `np.array`). Contains the tensors that should be
-        run in a tf.Session() to fetch the data in train mode
-      train_tensors: UserDict with values `tf.Tensor` (or `np.array`). Contains the tensors that should be
-        run in a tf.Session() to fetch the data in eval_mode
-      plot_data: UserDict. `plot_data.data` must be automatically updated with the result of the latest
-        call to `sess.run(train_tensors.data)` or `sess.run(eval_tensors.data)`.
+      model_class: str. Name of the TensorFlow model class for fetching the manager
     """
 
-    assert isinstance(train_tensors,  collections.UserDict)
-    assert isinstance(eval_tensors,   collections.UserDict)
-    assert isinstance(plot_data,      collections.UserDict)
-
-    if not (train_tensors.data or eval_tensors.data):
-      logger.warning("Provided dictionaries with tensors to plot are empty")
+    # Fetch the layout
+    layout = layouts.layouts.get(model_class, None)
+    if layouts is None:
+      logger.warning("No layout for class %s. Plots will not be included in the video", model_class)
       return
 
-    self.run_t_tensors  = train_tensors       # Save a reference to the UserDict
-    self.train_tensors  = train_tensors.data  # Save the actual dict of tensors
-    self.run_e_tensors  = eval_tensors        # Save a reference to the UserDict
-    self.eval_tensors   = eval_tensors.data   # Save the actual dict of tensors
-    self.plot_data      = plot_data           # Save a reference to the UserDict
+    # Fetch the TensorPlotConf object for the class
+    self.plot_conf = vplot_manager.get_plot_conf(model_class)
 
+    if len(self.plot_conf.true_train_spec) == 0 and len(self.plot_conf.true_eval_spec) == 0:
+      logger.warning("The TensorFlow model has not set the tensors to be plotted. "
+                     "Plots will not be included in the video")
+      return
+
+    # Set the correct functions depending on the mode
+    if self.mode == 't':
+      # If no tensors to plot for this mode, do NOT activate
+      if len(self.plot_conf.true_train_spec) == 0:
+        return
+      self.get_plot_data    = lambda: self.plot_conf.train_data
+      self.activate_plots   = self.plot_conf.activate_train_plots
+      self.deactivate_plots = self.plot_conf.deactivate_train_plots
+    else:
+      # If no tensors to plot for this mode, do NOT activate
+      if len(self.plot_conf.true_eval_spec) == 0:
+        return
+      self.get_plot_data    = lambda: self.plot_conf.eval_data
+      self.activate_plots   = self.plot_conf.activate_eval_plots
+      self.deactivate_plots = self.plot_conf.deactivate_eval_plots
+
+    # Parse the layout
     self.width    = layout["width"]
     self.height   = layout["height"]
     self._configure_obs_align(layout["obs_align"])
@@ -80,44 +93,25 @@ class VideoPlotter:
     self.allowed  = True
 
 
-  def reset(self, enabled, mode):
+  def reset(self, enabled):
     if not self.allowed:
       return
-
-    # If this is the first episode, clear the plottable tensors for the current mode
-    if self.first_t and mode == 't':
-      self.first_t = False
-      self.run_t_tensors.data = {}
-    elif self.first_e and mode == 'e':
-      self.first_e = False
-      self.run_e_tensors.data = {}
 
     # If the last episode was enabled, clear the old data
     if self.enabled:
       for name in self.figs:
         self.figs[name]["image"] = None
 
-      # # NOTE: Clear the runnable tensors only for the mode that was run last time. This allows
-      # # for one agent to interact simulatenously with 2 environments - eval and train
-      # if self.mode == 't':
-      #   self.run_t_tensors.data = {}
-      # else:
-      #   self.run_e_tensors.data = {}
-
       self.image = None
 
-    # If enabled for this episode, set the plottable tensors to run for the specific mode
+    # If enabled for this episode, set the plottable tensors to run
     if enabled:
-      if mode == 't':
-        self.run_t_tensors.data = self.train_tensors
-      else:
-        self.run_e_tensors.data = self.eval_tensors
+      self.activate_plots()
 
       # Create a new image and set the current data id
       self.image = np.ones(shape=[self.height, self.width, 3], dtype=np.uint8) * 255
-      self.plot_data_id = id(self.plot_data.data)
+      self.plot_data_id = id(self.get_plot_data())
 
-    # self.mode = mode
     self.enabled = enabled
 
 
@@ -167,7 +161,7 @@ class VideoPlotter:
     run, nothing is redrawn"""
 
     # Check if plot_data has been modified
-    plot_data_id = id(self.plot_data.data)
+    plot_data_id = id(self.get_plot_data())
     self.changed = plot_data_id != self.plot_data_id
 
     # Use old plots if no new data
@@ -176,7 +170,7 @@ class VideoPlotter:
     else:
       # Remember the dictionary id and draw the figures
       self.plot_data_id = plot_data_id
-      self._draw_data(self.plot_data.data)
+      self._draw_data(self.get_plot_data())
 
 
   def _draw_data(self, plot_data):
@@ -393,7 +387,7 @@ class VideoPlotter:
 
     for name, fconf in conf.items():
       # Make sure the tensor key matches
-      assert name in self.train_tensors or name in self.eval_tensors
+      assert name in self.plot_conf.true_train_spec or name in self.plot_conf.true_eval_spec
 
       # Check figure layout
       assert "fig" in fconf

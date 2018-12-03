@@ -12,34 +12,130 @@ logger = logging.getLogger(__name__)
 
 
 class BaseBuffer():
+  """Abstract buffer that saves agent experience. Supports both image and low-dimensional observations.
+  Very memory efficient implementation in the case of images."""
 
-  def __init__(self, size, obs_shape, obs_dtype, act_shape, act_dtype):
+  def __init__(self, size, state_shape, obs_dtype, act_shape, act_dtype, obs_len):
     """
     Args:
-      obs_shape: tuple or list. Shape of a single observation
+      state_shape: tuple or list. Shape of what is consedered to be a single state (not observation).
+        For example, for DQN this should be `[84, 84, 4]` because a state is comprised of the last 4
+        frames (observations).
       obs_dtype: np.dtype. Type of the observation data
       act_shape: tuple or list. Shape of the action space
       act_dtype: np.dtype. Type of the action data
+      obs_len: int, `>= 1`. The number of observations that comprise a state. If `obs_len=1`,
+        then `obs_shape == state_shape`. Must equal 1 for low-dimensional observations.
+        If `obs_len>=1`, then observations must be images. In this case, states are comprised of
+        stacked consecutive observations (images) and `obs_shape[-1] == state_shape[-1] / obs_len`.
+        In this case the buffer stores observations separately and automatically reconstructs the
+        full states when queried. Corresponds to the order of the MDP.
     """
 
-    obs_shape   = list(obs_shape)
-    act_shape   = list(act_shape)
+    # Compute the observation shape
+    obs_shape       = self._get_obs_shape(state_shape, obs_len, obs_dtype)
 
-    self.max_size  = int(size)
-    self.size_now  = 0
-    self.next_idx  = 0
-    self.new_idx   = 0
+    self.obs_shape  = list(obs_shape)   # observation shape (NOT state shape!)
+    self.act_shape  = list(act_shape)
+    self.obs_len    = obs_len
 
-    self.obs    = np.empty([self.max_size] + obs_shape, dtype=obs_dtype)
-    self.action = np.empty([self.max_size] + act_shape, dtype=act_dtype)
-    self.reward = np.empty([self.max_size],             dtype=np.float32)
-    self.done   = np.empty([self.max_size],             dtype=np.bool)
+    self.max_size   = int(size)
+    self.size_now   = 0
+    self.next_idx   = 0
+    # self.new_idx    = 0
+
+    # Create the buffers
+    self.obs    = np.empty([self.max_size] + self.obs_shape,  dtype=obs_dtype)
+    self.action = np.empty([self.max_size] + self.act_shape,  dtype=act_dtype)
+    self.reward = np.empty([self.max_size],                   dtype=np.float32)
+    self.done   = np.empty([self.max_size],                   dtype=np.bool)
 
     self.prng   = seeding.get_prng()
 
 
-  def store(self, obs_t, act_t, reward_tp1, done_tp1):
-    raise NotImplementedError()
+  @staticmethod
+  def _get_obs_shape(state_shape, obs_len, obs_dtype):
+    """Compute the shape of a single observation (not state)"""
+
+    assert isinstance(obs_len, int) and obs_len >= 1
+
+    # Only image observations support stacking observations
+    if obs_len > 1:
+      assert len(state_shape) == 3
+    # Make sure that the type of the observation is np.uint8 for images
+    if len(state_shape) == 3:
+      assert obs_dtype == np.uint8
+
+    # Images assume that the last dimension of the shape is the channel dimension
+    if obs_len > 1 and len(state_shape) == 3:
+      assert state_shape[-1] % obs_len == 0
+      obs_shape = list(state_shape)
+      obs_shape[-1] = int(obs_shape[-1]/obs_len)
+    else:
+      obs_shape = state_shape
+
+    return obs_shape
+
+
+  def store(self, obs_t, act_t, rew_tp1, done_tp1):
+    """Store an observed transition. If `obs_len>1`, the next call to this function must be with
+    the observation after taking `act_t`, otherwise, reconstructed state will be incorrect.
+    If `done_tp1 == True`, then `store()` should not be called with `obs_tp1`, since the agent
+    does not need it for computing the return
+    Args:
+      obs_t: `np.array`, of shape `state_shape`. If `obs_len>1`, the observation is automatically
+        extracted and stored instead of storing duplicate data.
+      act_t: `np.array`, of shape `act_shape` or `float`. Action taken when `obs_t` was observed
+      reward_tp1: `float`. Reward obtained on executing `act_t` in state `obs_t`
+      done_tp1: `bool`. True if episode terminated on executing `act_t` in state `obs_t`.
+    """
+
+    # To avoid storing the same data several times, if obs_len > 1, then store only the last
+    # observation from the stack of observations that comprise a state
+    if self.obs_len > 1:
+      self.obs[self.next_idx]   = obs_t[:, :, -self.obs_shape[-1]:]
+    else:
+      self.obs[self.next_idx]   = obs_t
+
+    self.action[self.next_idx]  = act_t
+    self.reward[self.next_idx]  = rew_tp1
+    self.done[self.next_idx]    = done_tp1
+
+    # idx = self.next_idx
+    self.next_idx = (self.next_idx + 1) % self.max_size
+    self.size_now = min(self.max_size, self.size_now + 1)
+
+
+  def _encode_img_observation(self, idx):
+    """Encode the observation for idx by stacking the `obs_len` preceding frames together.
+    Assume there are more than `obs_len` frames in the buffer.
+    NOTE: Used only for image observations
+    """
+    hi = idx + 1 # make noninclusive
+    lo = hi - self.obs_len
+
+    for i in range(lo, hi - 1):
+      if self.done[i % self.max_size]:
+        lo = i + 1
+    missing = self.obs_len - (hi - lo)
+
+    # We need to duplicate the lo observation
+    if missing > 0:
+      frames = [self.obs[lo % self.max_size] for _ in range(missing)]
+      for i in range(lo, hi):
+        frames.append(self.obs[i % self.max_size])
+      return np.concatenate(frames, 2)
+    # We are on the boundary of the buffer
+    elif lo < 0:
+      img_h, img_w = self.obs.shape[1], self.obs.shape[2]
+      frames = [self.obs[lo:], self.obs[:hi]]
+      frames = np.concatenate(frames, 0)
+      return frames.transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
+    # The standard case
+    else:
+      # This optimization can save about 30% compute time
+      img_h, img_w = self.obs.shape[1], self.obs.shape[2]
+      return self.obs[lo:hi].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
 
 
   def sample(self, batch_size):
@@ -77,15 +173,6 @@ class BaseBuffer():
     raise NotImplementedError()
 
 
-  @property
-  def size(self):
-    return self.max_size
-
-
-  def __len__(self):
-    return self.size_now
-
-
   def save(self, model_dir):
     """Store the data to disk
     Args:
@@ -120,7 +207,7 @@ class BaseBuffer():
     data = {
       "size_now": self.size_now,
       "next_idx": self.next_idx,
-      "new_idx":  self.new_idx,
+      # "new_idx":  self.new_idx,
     }
 
     with atomic_write.atomic_write(state_file) as f:
@@ -143,7 +230,7 @@ class BaseBuffer():
 
     self.size_now = data["size_now"]
     self.next_idx = data["next_idx"]
-    self.new_idx  = data["new_idx"]
+    # self.new_idx  = data["new_idx"]
 
     obs    = np.load(os.path.join(save_dir, "obs.npy"))
     action = np.load(os.path.join(save_dir, "act.npy"))
@@ -190,3 +277,18 @@ class BaseBuffer():
       k = end
 
     return batch
+
+
+  def reset(self):
+    self.size_now   = 0
+    self.next_idx   = 0
+    # self.new_idx    = 0
+
+
+  @property
+  def size(self):
+    return self.max_size
+
+
+  def __len__(self):
+    return self.size_now

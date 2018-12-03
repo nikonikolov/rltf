@@ -45,17 +45,19 @@ class Monitor(Wrapper):
     - The TF graph is available in the thread running `env.step()`
   """
 
-  def __init__(self, env, log_dir, log_period, mode, video_spec=None):
+  def __init__(self, env, log_dir, mode, log_period=None, video_spec=None, epochs=False, eval_period=None):
     """
     Args:
       log_dir: str. The directory where to save the monitor videos and stats
       log_period: int. The period for logging statistic to stdout and to TensorBoard
+      mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor
       video_spec: lambda, int, False or None. Specifies how often to record episodes.
         - If lambda, it must take the episode number and return True/False if a video should be recorded.
         - `int` specifies a period in episodes
         - `False`, disables video recording
         - If `None`, every 1000th episode is recorded
-      mode: str. Either 't' (train) or 'e' (eval) for the mode in which to start the monitor
+      epochs: If True, statistics are logged in terms of epochs, not agent steps
+      eval_period: int. Required only in evaluation mode. Needed to compute the correct logging step.
     """
 
     assert mode in ['t', 'e']
@@ -74,8 +76,8 @@ class Monitor(Wrapper):
     self._make_log_dir()
 
     # Composition objects
-    self.stats_recorder = StatsRecorder(log_dir, log_period, mode)
-    self.video_plotter  = VideoPlotter(self.env)
+    self.stats_recorder = StatsRecorder(log_dir, mode, log_period, epochs, eval_period)
+    self.video_plotter  = VideoPlotter(self.env, mode=mode)
     self.video_recorder = None
 
     # Attach StatsRecorder agent methods
@@ -92,10 +94,11 @@ class Monitor(Wrapper):
     self._attach_env_methods()
 
     # Attach member methods
-    self.conf_video_plots   = self.video_plotter.conf_plots
+    self.enable_video_plots = self.video_plotter.activate
     self.set_stdout_logs    = self.stats_recorder.set_stdout_logs
     self.set_summary_getter = self.stats_recorder.set_summary_getter
     self.save               = self.stats_recorder.save
+    self.log_stats          = self.stats_recorder.log_stats
 
 
   def _attach_env_methods(self):
@@ -185,7 +188,7 @@ class Monitor(Wrapper):
     # First reset stats for correct episode_id
     self.stats_recorder.env_reset()
     # Reset the video plotter next so it can prepare
-    self.video_plotter.reset(enabled=self.enable_video(self.episode_id), mode=self.mode)
+    self.video_plotter.reset(enabled=self.enable_video(self.episode_id))
     # Start new video recording
     self._reset_video_recorder()
 

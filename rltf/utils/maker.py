@@ -1,75 +1,75 @@
 import datetime
-import logging
 import os
 
 import gym
 
 from rltf.envs        import MaxEpisodeLen
-from rltf.monitoring  import Monitor
 from rltf.utils       import rltf_conf
 from rltf.utils       import rltf_log
 from rltf.utils       import seeding
 
 
-logger = logging.getLogger(__name__)
-
-
-def _make_env(env_id, seed, model_dir, wrap, mode, log_period, video_period, max_ep_steps):
-  if "Roboschool" in env_id:
-    import roboschool
-
-  if "Bullet" in env_id:
-    import pybullet_envs
-
-  env = gym.make(env_id)
-  if seed >= 0:
-    env.seed(seed)
-
-  # NOTE: Episode steps limit wrapper must be set before any other wrapper, including the Monitor.
-  # Otherwise, statistics of reported reward will be wrong
-  if max_ep_steps is not None:
-  # if max_ep_steps is not None and max_ep_steps > 0:
-    # env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
-    env = MaxEpisodeLen(env, max_episode_steps=max_ep_steps)
-
-  if wrap is not None:
-    env = wrap(env, mode=mode)
-
-  # Apply monitor at the very top
-  env = Monitor(env, model_dir, log_period, mode, video_period)
-
-  return env
-
-
-def _set_seeds(seed):
-  seeding.set_random_seed(seed)  # Set RLTF seed
-  seeding.set_global_seeds()     # Set other module's seeds
-
-
-def make_envs(env_id, seed, model_dir, log_period_train, log_period_eval,
-              video_period=None, wrap=None, max_ep_steps_train=None, max_ep_steps_eval=None):
-  """Create two instances of a gym environment, wrap them in a Monitor class and
-  set seeds for the environments and for other modules (tf, np, random). Both
-  environments are not allowed to be in dual mode. One env is for train, one for eval
+def get_env_maker(env_id, seed, wrap=None, max_ep_steps_train=None, max_ep_steps_eval=None, **wrap_kwargs):
+  """Create an environment maker function
   Args:
-    env_id: str. Full name of the gym environment
+    env_id: str or callable. If str, full name of a registered gym, roboschool or pybullet
+      env. If callable, must return a new env instance.
     seed: int. Seed for the environment and the modules
-    model_dir: std. Path where videos from the Monitor class will be saved
-    video_period: int. Every `video_period` episode will be recorded. If `None`,
-      then the monitor default is used. If `<=0`, then no videos are recorded
     wrap: function. Must take as arguments the environment and its mode and wrap it.
-    max_ep_steps_train: int. Set a bound on the max steps in a training episode. If None, no limit
-    max_ep_steps_eval: int. Set a bound on the max steps in an evaluation episode. If None, no limit
+    max_ep_steps_train: int. A limit on the max steps in a training episode.
+    max_ep_steps_eval: int. A limit on the max steps in an evaluation episode.
+    wrap_kwargs: dict. Keyword arguments that will be passed to the wrapper
   Returns:
-    Tuple of the environments, each wrapped inside a Monitor class
+    callable which takes the mode of an env and builds a new enviornment instance
   """
 
-  _set_seeds(seed)
+  # Set the global seed. Note that once the seed it set, multiple calls to this do not afect randomness
+  seeding.set_random_seeds(seed)
 
-  env_train = _make_env(env_id, seed,   model_dir, wrap, 't', log_period_train, video_period, max_ep_steps_train)
-  env_eval  = _make_env(env_id, seed+1, model_dir, wrap, 'e', log_period_eval,  video_period, max_ep_steps_eval)
+  # Create a variable which tracks the seeds passed to environments.
+  # This is to prevent environments from having the same seed, which will cause unwanted correlation.
+  env_seed = int(seed)
 
-  return env_train, env_eval
+  if isinstance(env_id, str):
+    if "Roboschool" in env_id:
+      import roboschool
+
+    if "Bullet" in env_id:
+      import pybullet_envs
+
+    make = lambda: gym.make(env_id)
+
+  elif callable(env_id):
+    make = env_id
+
+  else:
+    raise ValueError("You must provide a str or a function for 'env_id', "
+                     "not {}: {}".format(type(env_id), env_id))
+
+
+  def make_env(mode):
+    nonlocal env_seed
+
+    # Make the environment
+    env = make()
+
+    if env_seed >= 0:
+      # Increment seed to avoid producing identical environments
+      env_seed += 1
+      env.seed(env_seed)
+
+    # NOTE: Wrapper for episode steps limit must be set before any other wrapper
+    if mode == 't' and max_ep_steps_train is not None:
+      env = MaxEpisodeLen(env, max_episode_steps=max_ep_steps_train)
+    elif mode == 'e' and max_ep_steps_eval is not None:
+      env = MaxEpisodeLen(env, max_episode_steps=max_ep_steps_eval)
+
+    if wrap is not None:
+      env = wrap(env, mode, **wrap_kwargs)
+
+    return env
+
+  return make_env
 
 
 def make_model_dir(args, base=rltf_conf.MODELS_DIR):
