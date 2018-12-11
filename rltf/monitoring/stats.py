@@ -143,7 +143,8 @@ class StatsRecorder:
     self.ep_steps   += 1
     self.ep_reward  += reward
     self.step_rew   += reward
-    self.env_done   = done
+    # Prevent corrupting data if env.step() is incorrectly called when done=True
+    self.env_done   = done if self.env_done is not None else None
 
     self._finish_episode()
 
@@ -170,16 +171,16 @@ class StatsRecorder:
     environment is truly done.
     """
 
-    # Ignore at initial reset
+    # Ignore at initial reset and when env.step() is incorrectly called after done=True
     if self.env_done is None:
       return
-
-    self._env_steps += self.ep_steps
 
     # Append episode data only if the env has advertised done
     if self.env_done:
       self.ep_lens.append(self.ep_steps)
       self.ep_rews.append(self.ep_reward)
+      self._env_steps += self.ep_steps
+      self.env_done = None
 
 
   def env_reset(self):
