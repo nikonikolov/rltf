@@ -1,12 +1,12 @@
 import tensorflow as tf
 
-from rltf.models.dqn  import BaseDQN
-from rltf.models      import tf_utils
+from rltf.models import BaseDQN
+from rltf.models import tf_utils
 
 
 class BaseBstrapDQN(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+  def __init__(self, huber_loss, n_heads, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -17,7 +17,7 @@ class BaseBstrapDQN(BaseDQN):
       n_heads: Number of bootstrap heads
     """
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma)
+    super().__init__(**kwargs)
 
     self.huber_loss = huber_loss
     self.n_heads    = n_heads
@@ -65,7 +65,7 @@ class BaseBstrapDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
-    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)
+    a_mask  = tf.one_hot(self.act_t_ph, self.n_actions, dtype=tf.float32)
     a_mask  = tf.tile(tf.expand_dims(a_mask, axis=-2), [1, self.n_heads, 1])
     q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
     return q
@@ -82,7 +82,7 @@ class BaseBstrapDQN(BaseDQN):
     n_actions   = self.n_actions
 
     # Compute the Q-estimate with the agent network variables and select the maximizing action
-    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")      # out: [None, n_heads, n_actions]
+    agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")       # out: [None, n_heads, n_actions]
     target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)   # out: [None, n_heads]
 
     # Select the target Q-function
@@ -99,7 +99,7 @@ class BaseBstrapDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, n_heads]`
     """
-    done_mask   = tf.cast(tf.logical_not(self._done_ph), tf.float32)  # out: [None]
+    done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)   # out: [None]
     done_mask   = tf.expand_dims(done_mask, axis=-1)                  # out: [None, 1]
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)              # out: [None, 1]
     target_q    = rew_t + self.gamma * done_mask * target             # out: [None, n_heads]
@@ -175,13 +175,11 @@ class BaseBstrapDQN(BaseDQN):
     # Get the max vote action; output shape `[batch_size]`
     action  = tf.argmax(votes, axis=-1, output_type=tf.int32, name=name)
 
-    # Set the plottable tensors for video. Use only the first action in the batch
+    # Set the plottable tensors for episode recordings
     p_a     = tf.identity(action[0],  name="plot/eval/a")
     p_vote  = tf.identity(votes[0],   name="plot/eval/vote")
 
-    self.plot_eval["eval_actions"] = {
-      "a_vote": dict(height=p_vote, a=p_a),
-    }
+    self.plot_conf.set_eval_spec(dict(eval_actions=dict(a_vote=dict(height=p_vote, a=p_a))))
 
     return action
 
@@ -192,13 +190,11 @@ class BaseBstrapDQN(BaseDQN):
     mean    = tf.reduce_mean(agent_net, axis=1)
     action  = tf.argmax(mean, axis=-1, output_type=tf.int32, name=name)
 
-    # Set the plottable tensors for video. Use only the first action in the batch
+    # Set the plottable tensors for episode recordings
     p_a     = tf.identity(action[0],  name="plot/eval/a")
     p_mean  = tf.identity(mean[0],    name="plot/eval/mean")
 
-    self.plot_eval["eval_actions"] = {
-      "a_mean": dict(height=p_mean, a=p_a),
-    }
+    self.plot_conf.set_eval_spec(dict(eval_actions=dict(a_mean=dict(height=p_mean, a=p_a))))
 
     return action
 
@@ -206,9 +202,9 @@ class BaseBstrapDQN(BaseDQN):
 
 class BstrapDQN(BaseBstrapDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+  def __init__(self, **kwargs):
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+    super().__init__(**kwargs)
 
     # Custom TF Tensors and Ops
     self._active_head   = None
@@ -238,11 +234,12 @@ class BstrapDQN(BaseBstrapDQN):
 
     # Compute the greedy action
     action    = tf.argmax(q_head, axis=-1, output_type=tf.int32, name=name)
-    return action
+
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return self._act_eval_vote(agent_net, name)
+    return dict(action=self._act_eval_vote(agent_net, name))
 
 
   def reset(self, sess):
@@ -253,8 +250,8 @@ class BstrapDQN(BaseBstrapDQN):
 class BstrapDQN_UCB(BaseBstrapDQN):
   """UCB policy from Boostrapped DQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, n_stds=0.1):
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+  def __init__(self, n_stds=0.1, **kwargs):
+    super().__init__(**kwargs)
     self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
 
 
@@ -268,11 +265,11 @@ class BstrapDQN_UCB(BaseBstrapDQN):
     tf.summary.histogram("debug/a_std",   std)
     tf.summary.histogram("debug/a_mean",  mean)
 
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return self._act_eval_vote(agent_net, name)
+    return dict(action=self._act_eval_vote(agent_net, name))
 
 
 
@@ -280,36 +277,37 @@ class BstrapDQN_Ensemble(BaseBstrapDQN):
   """Ensemble policy from Boostrapped DQN"""
 
   def _act_train(self, agent_net, name):
-    # TODO: If plotting, self.plot_train will be empty
-    return self._act_eval_vote(agent_net, name)
+    action = self._act_eval_vote(agent_net, name)
+    # Set the plottable tensors for episode recordings
+    self.plot_conf.set_train_spec(dict(eval_actions=self.plot_conf.true_eval_spec["eval_actions"]))
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return tf.identity(self.a_train, name=name)
+    return dict(action=tf.identity(self.train_dict["action"], name=name))
 
 
 
 class BstrapDQN_IDS(BaseBstrapDQN):
   """IDS policy from Boostrapped DQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, n_stds=0.1):
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+  def __init__(self, n_stds, **kwargs):
+    super().__init__(**kwargs)
 
     self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
-    self.rho2   = 1.0**2    # Const for IDS Info Gain
+    self.rho2   = 1.0**2    # Return distribution variance
 
 
   def _act_train(self, agent_net, name):
     mean      = tf.reduce_mean(agent_net, axis=1)
     zero_mean = agent_net - tf.expand_dims(mean, axis=-2)
     var       = tf.reduce_mean(tf.square(zero_mean), axis=1)
-    # var       = tf.reduce_sum(tf.square(zero_mean), axis=1) / float(self.n_heads-1)
     std       = tf.sqrt(var)
     regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keepdims=True)
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
     info_gain = tf.log(1 + var / self.rho2) + 1e-6
-    ids_score = tf.div(regret_sq, info_gain)
+    ids_score = regret_sq / info_gain
     action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
 
     # Add debug histograms
@@ -319,20 +317,21 @@ class BstrapDQN_IDS(BaseBstrapDQN):
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
 
-    # Set the plottable tensors for video. Use only the first action in the batch
+    # Set the plottable tensors for episode recordings
     p_a     = tf.identity(action[0],    name="plot/train/a")
     p_mean  = tf.identity(mean[0],      name="plot/train/mean")
     p_std   = tf.identity(std[0],       name="plot/train/std")
     p_ids   = tf.identity(ids_score[0], name="plot/train/ids")
 
-    self.plot_train["train_actions"] = {
+    train_actions = {
       "a_mean": dict(height=p_mean, a=p_a),
       "a_std":  dict(height=p_std,  a=p_a),
       "a_ids":  dict(height=p_ids,  a=p_a),
     }
+    self.plot_conf.set_train_spec(dict(train_actions=train_actions))
 
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return self._act_eval_greedy(agent_net, name)
+    return dict(action=self._act_eval_greedy(agent_net, name))

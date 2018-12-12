@@ -2,105 +2,71 @@ import collections
 
 import gym
 import numpy as np
-import tensorflow as tf
 
-from rltf.agents.off_pi import ParallelOffPolicyAgent
-from rltf.agents.off_pi import SequentialOffPolicyAgent
-from rltf.memory        import ReplayBuffer
+from rltf.agents      import QlearnAgent
+from rltf.memory      import ReplayBuffer
+from rltf.monitoring  import Monitor
 
 
-class AgentDDPG(ParallelOffPolicyAgent):
+class AgentDDPG(QlearnAgent):
 
   def __init__(self,
+               env_maker,
                model,
-               model_kwargs,
-               actor_opt_conf,
-               critic_opt_conf,
                action_noise,
-               update_target_freq=1,
                memory_size=int(1e6),
-               obs_len=1,
+               stack_frames=3,
                **agent_kwargs
               ):
     """
     Args:
-      agent_config: dict. Dictionary with parameters for the Agent class. Must
-        contain all parameters that do not have default values
+      env_maker: callable. Function that takes the mode of an env and retruns a new environment instance
       model: rltf.models.Model. TF implementation of a model network
-      model_kwargs: dict. Model-specific keyword arguments to pass to the model
-      actor_opt_conf: rltf.optimizers.OptimizerConf. Config for the actor network optimizer
-      critic_opt_conf: rltf.optimizers.OptimizerConf. Config for the critic network optimizer
-      action_noise: rltf.exploration.ExplorationNoise. Action exploration noise
-        to add to the selected action
-      update_target_freq: Period in number of agent steps at which to update the target net
+      action_noise: rltf.exploration.ExplorationNoise. Additive action space exploration noise
       memory_size: int. Size of the replay buffer
-      obs_len: int. How many environment observations comprise a single state.
+      stack_frames: int. How many frames comprise a single state.
+      agent_kwargs: Keyword arguments that will be passed to the Agent base class
     """
 
     super().__init__(**agent_kwargs)
 
-    assert isinstance(self.env_train.observation_space, gym.spaces.Box)
-    assert isinstance(self.env_train.action_space,      gym.spaces.Box)
+    self.env_train = Monitor(
+                      env=env_maker('t'),
+                      log_dir=self.model_dir,
+                      mode='t',
+                      log_period=self.log_period,
+                      video_spec=self.video_period,
+                    )
 
-    self.action_noise = action_noise
+    self.env_eval  = Monitor(
+                      env=env_maker('e'),
+                      log_dir=self.model_dir,
+                      mode='e',
+                      log_period=self.eval_len,
+                      video_spec=self.video_period,
+                      eval_period=self.eval_period,
+                    )
 
-    self.actor_opt_conf   = actor_opt_conf
-    self.critic_opt_conf  = critic_opt_conf
-    self.update_target_freq = update_target_freq
+    self.action_noise = action_noise(self.env_train.action_space.shape)
 
     # Get environment specs
-    act_shape = list(self.env_train.action_space.shape)
-    obs_shape = list(self.env_train.observation_space.shape)
+    obs_shape, obs_dtype, obs_len, act_shape = self._state_action_spec(stack_frames)
 
-    # Image observation
-    if len(obs_shape) == 3:
-      assert obs_len > 1
-      obs_dtype = np.uint8
-    else:
-      obs_dtype = np.float32
-
-    model_kwargs["obs_shape"]       = obs_shape
-    model_kwargs["n_actions"]       = act_shape[0]
-    model_kwargs["actor_opt_conf"]  = actor_opt_conf
-    model_kwargs["critic_opt_conf"] = critic_opt_conf
-
-    self.model      = model(**model_kwargs)
+    # Initialize the model and the experience buffer
+    self.model      = model(obs_shape=obs_shape, act_shape=act_shape, **self.model_kwargs)
     self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, act_shape, np.float32, obs_len)
 
-    # Configure what information to log
-    self._define_log_info()
-
-    # Custom TF Tensors and Ops
-    self.actor_learn_rate_ph  = None
-    self.critic_learn_rate_ph = None
-
     # Custom stats
-    self.act_noise_stats = collections.deque([], maxlen=self.log_freq)
+    self.act_noise_stats = collections.deque([], maxlen=self.log_period)
 
 
-  def _build(self):
-    # Create Learning rate placeholders
-    self.actor_learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="actor_learn_rate_ph")
-    self.critic_learn_rate_ph = tf.placeholder(tf.float32, shape=(), name="critic_learn_rate_ph")
-
-    # Set the learn rate placeholders for the model
-    self.actor_opt_conf.lr_ph  = self.actor_learn_rate_ph
-    self.critic_opt_conf.lr_ph = self.critic_learn_rate_ph
-
-    # Create learn rate summaries
-    tf.summary.scalar("train/actor_learn_rate",  self.actor_learn_rate_ph)
-    tf.summary.scalar("train/critic_learn_rate", self.critic_learn_rate_ph)
-
-
-  def _append_log_info(self):
-    t = self.log_freq
-    log_info = [
-      ( "train/actor_learn_rate",           "f", self.actor_opt_conf.lr_value   ),
-      ( "train/critic_learn_rate",          "f", self.critic_opt_conf.lr_value  ),
-      ( "mean/act_noise_mean (%d steps)"%t, "f", self._stats_act_noise_mean     ),
-      ( "mean/act_noise_std  (%d steps)"%t, "f", self._stats_act_noise_std      ),
+  def _append_log_spec(self):
+    t = self.log_period
+    log_spec = [
+      ( "mean_act_noise_mean (%d steps)"%t, "f", self._stats_act_noise_mean     ),
+      ( "mean_act_noise_std  (%d steps)"%t, "f", self._stats_act_noise_std      ),
     ]
-    return log_info
+    return log_spec
 
 
   def _append_summary(self, summary, t):
@@ -125,20 +91,21 @@ class AgentDDPG(ParallelOffPolicyAgent):
 
   def _get_feed_dict(self, batch, t):
     feed_dict = {
-      self.model.obs_t_ph:       batch["obs"],
-      self.model.act_t_ph:       batch["act"],
-      self.model.rew_t_ph:       batch["rew"],
-      self.model.obs_tp1_ph:     batch["obs_tp1"],
-      self.model.done_ph:        batch["done"],
-      self.actor_learn_rate_ph:  self.actor_opt_conf.lr_value(t),
-      self.critic_learn_rate_ph: self.critic_opt_conf.lr_value(t),
+      self.model.obs_t_ph:              batch["obs"],
+      self.model.act_t_ph:              batch["act"],
+      self.model.rew_t_ph:              batch["rew"],
+      self.model.obs_tp1_ph:            batch["obs_tp1"],
+      self.model.done_ph:               batch["done"],
+      self.model.actor_opt_conf.lr_ph:  self.model.actor_opt_conf.lr_value(t),
+      self.model.critic_opt_conf.lr_ph: self.model.critic_opt_conf.lr_value(t),
     }
     return feed_dict
 
 
   def _action_train(self, state, t):
     noise   = self.action_noise.sample(t)
-    action  = self.model.action_train(self.sess, state)
+    data    = self.model.action_train_ops(self.sess, state)
+    action  = data["action"][0]
     action  = action + noise
 
     # Add action noise to stats
@@ -147,6 +114,26 @@ class AgentDDPG(ParallelOffPolicyAgent):
     return action
 
 
-  def _action_eval(self, state, t):
-    action  = self.model.action_eval(self.sess, state)
+  def _action_eval(self, state):
+    data    = self.model.action_eval_ops(self.sess, state)
+    action  = data["action"][0]
     return action
+
+
+  def _state_action_spec(self, stack_frames):
+    assert isinstance(self.env_train.observation_space, gym.spaces.Box)
+    assert isinstance(self.env_train.action_space,      gym.spaces.Box)
+
+    # Get environment specs
+    act_shape = list(self.env_train.action_space.shape)
+    obs_shape = list(self.env_train.observation_space.shape)
+
+    if len(obs_shape) == 3:
+      assert stack_frames > 1
+      obs_dtype = np.uint8
+      obs_len   = stack_frames
+    else:
+      obs_dtype = np.float32
+      obs_len   = 1
+
+    return obs_shape, obs_dtype, obs_len, act_shape

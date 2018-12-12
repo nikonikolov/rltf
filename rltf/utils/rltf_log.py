@@ -3,9 +3,22 @@ import logging.config
 import os
 import subprocess
 
-import rltf.conf
+from rltf.utils import rltf_conf
 
-param_logger = logging.getLogger(rltf.conf.PARAM_LOGGER_NAME)
+
+param_logger = logging.getLogger(rltf_conf.PARAM_LOGGER_NAME)
+stats_logger = logging.getLogger(rltf_conf.STATS_LOGGER_NAME)
+
+COLORS = dict(
+  gray=37,
+  red=31,
+  green=32,
+  yellow=93,
+  blue=94,
+  magenta=35,
+  cyan=36,
+  white=97,
+)
 
 
 def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
@@ -43,12 +56,12 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
           'formatter': 'default',
           'filename': run_file,
         },
-        # Parameter file handler
-        'param_file': {
-          'level': 'INFO',
+        # Runtime file handler
+        'info_run_file': {
+          'level': file_lvl,
           'class': 'logging.FileHandler',
           'formatter': 'info_formatter',
-          'filename': param_file,
+          'filename': run_file,
         },
         # Normal stdout info and stats
         'std_info': {
@@ -68,16 +81,16 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
           'propagate': True
         },
       # Parameter file logger
-      rltf.conf.PARAM_LOGGER_NAME:
+      rltf_conf.PARAM_LOGGER_NAME:
         {
-          'handlers': ['std_info', 'run_file', 'param_file'],
+          'handlers': ['std_info', 'info_run_file'],
           'level': 'INFO',
           'propagate': False
         },
       # Trianing stat reports logger
-      rltf.conf.STATS_LOGGER_NAME:
+      rltf_conf.STATS_LOGGER_NAME:
         {
-          'handlers': ['std_info', 'run_file'],
+          'handlers': ['std_info', 'info_run_file'],
           'level': 'INFO',
           'propagate': False
         },
@@ -89,7 +102,7 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
 
   # Log the git diff
   try:
-    diff = subprocess.check_output(["git", "diff"], cwd=rltf.conf.PROJECT_DIR)
+    diff = subprocess.check_output(["git", "diff"], cwd=rltf_conf.PROJECT_DIR)
     diff = diff.decode("utf-8")
     if diff != "":
       with open(os.path.join(model_dir, "git.diff"), 'w') as f:
@@ -99,6 +112,15 @@ def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
     pass
 
 
+def colorize(string, color, bold=False, highlight=False):
+  attr = []
+  code = COLORS[color]
+  if highlight: code += 10
+  attr.append(str(code))
+  if bold: attr.append('1')
+  return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
+
+
 def log_params(params, args):
   """Log the runtime parameters for the model to a file on disk
   Args:
@@ -106,11 +128,12 @@ def log_params(params, args):
       be any time of object, but it should have an implementation of __str__
     args: ArgumentParser. The command line arguments
   """
-  params  = pad_log_data(params, sort=True)
+
+  # Log date and time and git commit and branch
   date    = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-  commit  = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
+  commit  = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=rltf_conf.PROJECT_DIR)
   commit  = commit.decode("utf-8").strip("\n")
-  branch  = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=rltf.conf.PROJECT_DIR)
+  branch  = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=rltf_conf.PROJECT_DIR)
   branch  = branch.decode("utf-8").strip("\n")
 
   param_logger.info("")
@@ -118,18 +141,20 @@ def log_params(params, args):
   param_logger.info("GIT COMMIT: %s", commit)
   param_logger.info("GIT BRANCH: %s", branch)
   param_logger.info("")
-  param_logger.info("AGENT CONFIG:")
-  for k, v in params:
-    param_logger.info(k + ": " + str(v))
-  param_logger.info("")
 
-  if args is not None:
-    param_logger.info("COMMAND LINE ARGS:")
-    args = args.__dict__.items()
-    args = format_tabular(args, 30)
-    for s, v in args:
+  # Build the list of data that will be logged
+  data = {**vars(args), **dict(params)}
+  data = data.items()
+
+  # Log the parameters
+  param_logger.info("PARAMETERS:")
+  data = format_tabular(data, 80)
+  for s, v in data:
+    try:
       param_logger.info(s.format(v))
-    param_logger.info("")
+    except TypeError:
+      param_logger.info(s.format(str(v)))
+  param_logger.info("")
 
 
 def format_tabular(data, value_width=15, sort=True):
@@ -143,35 +168,54 @@ def format_tabular(data, value_width=15, sort=True):
     list of tuples. Calling `print(s.format(v)) for s,v in data`, will result in
       tabular print. If `v` is lambda, it must be evaluated before printing
   """
-  data = pad_log_data(data, sort)
+  data = _pad_keys_tabular(data, sort)
   width = len(data[0][0]) + 6 + value_width
 
-  # Check if the values are computed with a lambda or variable evaluation
-  if callable(data[0][-1]):
-    border = ("-" * width + "{}", lambda *args, **kwargs: "")
-  else:
-    border = ("-" * width + "{}", "")
-
-  if    len(data[0]) == 2:
-    data = [("| " + s + "| {:<" + str(value_width) + "} |", v) for s, v in data]
-  elif  len(data[0]) == 3:
-    data = [("| " + s + "| {:<" + str(value_width) + f + "} |", v) for s, f, v in data]
+  # Values available directly
+  if len(data[0]) == 2:
+    hborder = ("-" * width + "{}", "")
+    data    = [("| " + s + "| {:<" + str(value_width) + "} |", v) for s, v in data]
+  # Values available from calling a lambda
+  elif len(data[0]) == 3:
+    hborder = ("-" * width + "{}", lambda *args, **kwargs: "")
+    data    = [("| " + s + "| {:<" + str(value_width) + f + "} |", v) for s, f, v in data]
   else:
     raise ValueError("Tuple must have len 2 or 3")
 
+
   data = [(s, str(v)) if v is None else (s, v) for s, v in data]
-  data = [border] + data + [border]
+  data = [hborder] + data + [hborder]
 
   return data
 
 
-def pad_log_data(data, sort):
-  """
+_DUMP_TABULAR = []
+
+
+def log_tabular(name, value):
+  _DUMP_TABULAR.append((name, value))
+
+
+def dump_tabular(logger=stats_logger):
+  global _DUMP_TABULAR
+  data = _DUMP_TABULAR
+  # Format in tabular way
+  data = format_tabular(data, sort=False)
+  # Dump the data
+  logger.info("")
+  for s, v in data:
+    logger.info(s.format(v))
+  logger.info("")
+  _DUMP_TABULAR = []
+
+
+def _pad_keys_tabular(data, sort):
+  """Pad only the key fields in data (i.e. the strs) in a tabular way, such that they
+  all take the same amount of characters
   Args:
-    data: list of tuples. The first member of the tuple must be str, the
-      rest can be anything.
+    data: list of tuples. The first member of the tuple must be str, the rest can be anything.
   Returns:
-    The list, with the strs padded with space chars in order to align in tabular way
+    list with the strs padded with space chars in order to align in tabular way
   """
   if sort:
     data  = sorted(data, key=lambda tup: tup[0])

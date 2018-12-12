@@ -1,112 +1,116 @@
 import datetime
-import logging
 import os
 
 import gym
 
-import rltf.conf
-import rltf.utils.seeding
-import rltf.monitoring
-import rltf.envs
+from rltf.envs        import MaxEpisodeLen
+from rltf.utils       import rltf_conf
+from rltf.utils       import rltf_log
+from rltf.utils       import seeding
 
 
-logger = logging.getLogger(__name__)
-
-
-def _make_env(env_id, seed, model_dir, video_callable, mode, max_ep_steps):
-  if "Roboschool" in env_id:
-    import roboschool
-
-  if "Bullet" in env_id:
-    import pybullet_envs
-
-  monitor_dir = os.path.join(model_dir, "env_monitor")
-
-  env = gym.make(env_id)
-  if seed >= 0:
-    env.seed(seed)
-
-  # NOTE: Episode steps limit wrapper must be set before the Monitor. Otherwise, statistics of
-  # reported reward will be wrong
-  if max_ep_steps is not None:
-  # if max_ep_steps is not None and max_ep_steps > 0:
-    # env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
-    env = rltf.envs.MaxEpisodeLen(env, max_episode_steps=max_ep_steps)
-  env = rltf.monitoring.Monitor(env, monitor_dir, video_callable, mode)
-
-  return env
-
-
-def _get_video_callable(video_freq):
-  if video_freq is None:
-    video_callable = None
-  elif video_freq > 0:
-    video_callable = lambda e_id: e_id % video_freq == 0
-  else:
-    video_callable = False
-  return video_callable
-
-
-def _set_seeds(seed):
-  rltf.utils.seeding.set_random_seed(seed)  # Set RLTF seed
-  rltf.utils.seeding.set_global_seeds()     # Set other module's seeds
-
-
-def make_envs(env_id, seed, model_dir, video_freq=None, wrap=None,
-              max_ep_steps_train=None, max_ep_steps_eval=None):
-  """Create two instances of a gym environment, wrap them in a Monitor class and
-  set seeds for the environments and for other modules (tf, np, random). Both
-  environments are not allowed to be in dual mode. One env is for train, one for eval
+def get_env_maker(env_id, seed, wrap=None, max_ep_steps_train=None, max_ep_steps_eval=None, **wrap_kwargs):
+  """Create an environment maker function
   Args:
-    env_id: str. Full name of the gym environment
+    env_id: str or callable. If str, full name of a registered gym, roboschool or pybullet
+      env. If callable, must return a new env instance.
     seed: int. Seed for the environment and the modules
-    model_dir: std. Path where videos from the Monitor class will be saved
-    video_freq: int. Every `video_freq` episode will be recorded. If `None`,
-      then the monitor default is used. If `<=0`, then no videos are recorded
     wrap: function. Must take as arguments the environment and its mode and wrap it.
-    max_ep_steps_train: int. Set a bound on the max steps in a training episode. If None, no limit
-    max_ep_steps_eval: int. Set a bound on the max steps in an evaluation episode. If None, no limit
+    max_ep_steps_train: int. A limit on the max steps in a training episode.
+    max_ep_steps_eval: int. A limit on the max steps in an evaluation episode.
+    wrap_kwargs: dict. Keyword arguments that will be passed to the wrapper
   Returns:
-    Tuple of the environments, each wrapped inside a Monitor class
+    callable which takes the mode of an env and builds a new enviornment instance
   """
 
-  _set_seeds(seed)
-  video_callable = _get_video_callable(video_freq)
+  # Set the global seed. Note that once the seed it set, multiple calls to this do not afect randomness
+  seeding.set_random_seeds(seed)
 
-  env_train = _make_env(env_id, seed,   model_dir, video_callable, 't', max_ep_steps_train)
-  env_eval  = _make_env(env_id, seed+1, model_dir, video_callable, 'e', max_ep_steps_eval)
+  # Create a variable which tracks the seeds passed to environments.
+  # This is to prevent environments from having the same seed, which will cause unwanted correlation.
+  env_seed = int(seed)
 
-  if wrap is not None:
-    env_train = wrap(env_train, mode='t')
-    env_eval  = wrap(env_eval,  mode='e')
+  if isinstance(env_id, str):
+    if "Roboschool" in env_id:
+      import roboschool
 
-  return env_train, env_eval
+    if "Bullet" in env_id:
+      import pybullet_envs
+
+    make = lambda: gym.make(env_id)
+
+  elif callable(env_id):
+    make = env_id
+
+  else:
+    raise ValueError("You must provide a str or a function for 'env_id', "
+                     "not {}: {}".format(type(env_id), env_id))
 
 
-def make_model_dir(model_type, env_id, dest=rltf.conf.MODELS_DIR):
-  """
+  def make_env(mode):
+    nonlocal env_seed
+
+    # Make the environment
+    env = make()
+
+    if env_seed >= 0:
+      # Increment seed to avoid producing identical environments
+      env_seed += 1
+      env.seed(env_seed)
+
+    # NOTE: Wrapper for episode steps limit must be set before any other wrapper
+    if mode == 't' and max_ep_steps_train is not None:
+      env = MaxEpisodeLen(env, max_episode_steps=max_ep_steps_train)
+    elif mode == 'e' and max_ep_steps_eval is not None:
+      env = MaxEpisodeLen(env, max_episode_steps=max_ep_steps_eval)
+
+    if wrap is not None:
+      env = wrap(env, mode, **wrap_kwargs)
+
+    return env
+
+  return make_env
+
+
+def make_model_dir(args, base=rltf_conf.MODELS_DIR):
+  """Construct the correct absolute path of the model and create the directory.
   Args:
-    model_type: python class or str. The class of the model
-    env_id: str. The environment name
-    dest: str. The absolute path of the directory where all models are saved
+    args: argparse.ArgumentParser. The command-line arguments
+    base: str. The absolute path of the directory where all models are saved
   Returns:
     The absolute path for the model directory
   """
 
-  if isinstance(model_type, str):
-    model_name  = model_type.lower()
+  # Get the model, the env, values of restore and reuse
+  model_type  = args.model
+  env_id      = args.env_id
+  restore_dir = args.restore_model
+  reuse_dir   = args.load_model
+
+  # If restoring, do not create a new directory
+  if restore_dir is not None:
+    model_dir = restore_dir
+
+  # If evaluating, create a subdirectory
+  elif args.mode == 'eval':
+    assert reuse_dir is not None
+    model_dir = os.path.join(reuse_dir, "eval/")
+    os.makedirs(model_dir)
+
+  # Create a new model directory
   else:
-    model_name  = model_type.__name__.lower()
+    model_id    = datetime.datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
+    model_id    = env_id + "_" + model_id
+    model_name  = model_type.lower()
 
-  model_dir   = os.path.join(dest,      model_name)
-  model_dir   = os.path.join(model_dir, env_id)
+    model_dir   = os.path.join(base,      model_name)
+    model_dir   = os.path.join(model_dir, model_id)
+    model_dir   = os.path.join(model_dir, "")
 
-  model_id    = datetime.datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
-  model_dir   = model_dir + "_" + model_id
-  model_dir   = os.path.join(model_dir, "")
+    # Create the directory for the model
+    os.makedirs(model_dir)
 
-  # Create the directory for the model
-  logger.info('Creating model directory %s', model_dir)
-  os.makedirs(model_dir)
+  # Configure the logger
+  rltf_log.conf_logs(model_dir, args.log_lvl, args.log_lvl)
 
   return model_dir

@@ -1,14 +1,13 @@
 import tensorflow as tf
 
-from rltf.models.bstrap_dqn import BaseBstrapDQN
-from rltf.models.bstrap_dqn import BstrapDQN_IDS
-from rltf.models.qr_dqn     import QRDQN
-from rltf.models            import tf_utils
+from rltf.models  import BstrapDQN_IDS
+from rltf.models  import QRDQN
+from rltf.models  import tf_utils
 
 
-class BaseBstrapQRDQN(BaseBstrapDQN):
+class BstrapQRDQN_IDS(BstrapDQN_IDS, QRDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k):
+  def __init__(self, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -19,10 +18,10 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
       N: int. number of quantiles
       k: int. Huber loss order
     """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, True, n_heads)
+    super().__init__(**kwargs)
 
-    self.N = N
-    self.k = k
+    # Custom TF Tensors and Ops
+    self.rho2   = None
 
 
   def _conv_nn(self, x):
@@ -32,7 +31,7 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     Returns:
       Tuple of `tf.Tensor`s. First tensor is of shape `[batch_size, n_heads, n_actions]` and contains the
       Q-function bootstrapped estimates. Second tensor is of shape `[batch_size, n_actions, N]` and
-      contains the C51 return distribution for each head
+      contains the QRDQN return distribution for each action
     """
     n_actions = self.n_actions
     N         = self.N
@@ -94,8 +93,8 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
     q, z = agent_net
-    q = super()._compute_estimate(q)
-    z = QRDQN._compute_estimate(self, z)
+    q = BstrapDQN_IDS._compute_estimate(self, q)  # out: [None, n_heads]
+    z = QRDQN._compute_estimate(self, z)          # out: [None, N]
     return q, z
 
 
@@ -110,7 +109,7 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     n_actions   = self.n_actions
 
     # Compute the Q-estimate with the agent network variables and select the maximizing action
-    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")      # out: [None, n_heads, n_actions]
+    agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")      # out: [None, n_heads, n_actions]
     agent_net   = agent_net[0]  # Select only the Q-tensor
     target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)   # out: [None, n_heads]
 
@@ -130,8 +129,10 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
     target_q, target_z = target_net
-    backup_q = super()._compute_target(target_q)
-    # backup_z = QRDQN._compute_target(self, target_z)  # NOT correct
+    # BstrapDQN_IDS call to self._select_target resolves to the BstrapQRDQN_IDS._select_target()
+    backup_q = BstrapDQN_IDS._compute_target(self, target_q)
+    # NOTE: Do NOT call QRDQN._compute_target(self, target_z) - call to self._select_target()
+    # will resolve to BstrapQRDQN_IDS._select_target() - incorrect
     target_z = QRDQN._select_target(self, target_z)
     backup_z = QRDQN._compute_backup(self, target_z)
     backup_z = tf.stop_gradient(backup_z)
@@ -139,10 +140,10 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
 
 
   def _compute_loss(self, estimate, target, name):
-    estimate_q, z       = estimate
+    q, z                = estimate
     target_q, target_z  = target
 
-    head_loss = super()._compute_loss(estimate_q, target_q, name)
+    head_loss = BstrapDQN_IDS._compute_loss(self, q, target_q, name)
     z_loss    = QRDQN._compute_loss(self, z, target_z, "train/z_loss")
 
     return head_loss, z_loss
@@ -152,13 +153,15 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
     head_loss = loss[0]
     z_loss    = loss[1]
 
-    # Get the Bootsrapped heads and conv net train op
-    train_net = super()._build_train_op(optimizer, head_loss, agent_vars, name=None)
+    # Get the bootsrapped heads and conv net train op
+    train_net = BstrapDQN_IDS._build_train_op(self, optimizer, head_loss, agent_vars, name=None)
 
-    # Build the train op for C51 - apply gradients only to fully connected layers
+    # Get the train op for the distributional FC layers
     z_vars    = tf_utils.scope_vars(agent_vars, scope='agent_net/distribution_value')
-    train_z   = optimizer.minimize(z_loss, var_list=z_vars)
+    train_z   = QRDQN._build_train_op(self, optimizer, z_loss, z_vars, name=None)
+
     train_op  = tf.group(train_net, train_z, name=name)
+
     return train_op
 
 
@@ -184,52 +187,25 @@ class BaseBstrapQRDQN(BaseBstrapDQN):
   #   return train_op
 
 
-  def _compute_z_variance(self, agent_net):
-    z       = agent_net[1]                                    # out: [None, n_actions, N]
-
-    # Var(X) = sum_x p(X)*[X - E[X]]^2
-    z_mean  = tf.reduce_mean(z, axis=-1)                      # out: [None, n_actions]
-    center  = z - tf.expand_dims(z_mean, axis=-1)             # out: [None, n_actions, N]
-    z_var   = tf.reduce_mean(tf.square(center), axis=-1)      # out: [None, n_actions]
-
-    # Normalize the variance
-    mean    = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-    z_var   = z_var / mean                                    # out: [None, n_actions]
-    return z_var
-
-
-
-class BstrapQRDQN_IDS(BaseBstrapQRDQN):
-  """IDS policy from Boostrapped DQN-QRDQN"""
-
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, N, k, n_stds=0.1):
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, n_heads, N, k)
-
-    self.n_stds = n_stds    # Number of standard deviations for computing uncertainty
-    self.rho2   = None
-
-
   def _act_train(self, agent_net, name):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
-    z_var     = self._compute_z_variance(agent_net)           # out: [None, n_actions]
+    z_var     = self._compute_z_variance(agent_net[1], normalize=True)  # [None, n_actions]
     self.rho2 = tf.maximum(z_var, 0.25)
 
-    # Compute the IDS action - ugly way
     action    = BstrapDQN_IDS._act_train(self, agent_net[0], name)
 
     # Add debugging data for TB
     tf.summary.histogram("debug/a_rho2", self.rho2)
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
 
+    # Append the plottable tensors for episode recordings
     p_rho2  = tf.identity(self.rho2[0], name="plot/train/rho2")
-    p_a     = self.plot_train["train_actions"]["a_mean"]["a"]
-
-    self.plot_train["train_actions"]["a_rho2"] = dict(height=p_rho2,  a=p_a)
+    p_a     = self.plot_conf.true_train_spec["train_actions"]["a_mean"]["a"]
+    self.plot_conf.true_train_spec["train_actions"]["a_rho2"] = dict(height=p_rho2, a=p_a)
 
     return action
 
 
   def _act_eval(self, agent_net, name):
-    q = agent_net[0]
-    return self._act_eval_greedy(q, name)
+    return BstrapDQN_IDS._act_eval(self, agent_net[0], name)

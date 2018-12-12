@@ -1,60 +1,41 @@
-import collections
 import logging
 import tensorflow as tf
 
+from rltf.monitoring import vplot_manager
 
 logger = logging.getLogger(__name__)
 
 
 class Model:
-  """The base class for operating a Reinforcement Learning deep net in
-  TensorFlow. All networks descend from this class
+  """The base class for operating a Reinforcement Learning deep net in TensorFlow.
+  All network estimators descend from this class
   """
 
   def __init__(self):
-    # Input TF placeholders that must be set
-    self._obs_t_ph      = None
-    self._act_t_ph      = None
-    self._rew_t_ph      = None
-    self._obs_tp1_ph    = None
-    self._done_ph       = None
 
     # Properties that should be set by the subclass
-    self.obs_dtype      = None
-    self.obs_shape      = None
-    self.act_dtype      = None
-    self.act_shape      = None
+    self.obs_dtype  = None
+    self.obs_shape  = None
+    self.act_dtype  = None
+    self.act_shape  = None
 
-    # plot_train: UserDict of `tf.Tensor`(or `np.array`) objects that have to be run in the session
-    # plot_data: UserDict of `np.array`s that contain the actual data to be plotted
-    # For performance `plot_train.data` should be modified from the outside to determine when to run
-    # the tensors and transfer data between CPU and GPU. `plot_data.data` should be set to the result
-    # of `sess.run(plot_train)` after every step, no matter the value of `plot_train.data`.
-    # `plot_data` will be accessed from the outside to fetch the data when needed
-    self.plot_train = collections.UserDict()
-    self.plot_eval  = collections.UserDict()
-    self.plot_data  = collections.UserDict()
+    # Get a TensorPlotConf object that manages plotting tenors in episode video recordings
+    self.plot_conf  = vplot_manager.get_plot_conf(self.name)
+
+    self.train_dict = None  # Dict of all tensors to run when fetching a train action
+    self.eval_dict  = None  # Dict of all tensors to run when fetching an eval action
+    self.ops_dict   = {}    # Dict of all important model tensors. Used for general access (by agent)
 
     # Regex that matches variables that should not be trained. Used when variable values are
     # restored and reused from an already trained model
     self.notrain_re = None
 
-    # TF Ops that should be set
-    self._train_op      = None
-    self._update_target = None  # Optional
-    self._variables     = None
+    # List of all model variables
+    self._vars      = None
 
 
   def build(self):
     raise NotImplementedError()
-
-
-  def _build(self):
-    self._obs_t_ph    = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_t_ph")
-    self._act_t_ph    = tf.placeholder(self.act_dtype,  [None] + self.act_shape, name="act_t_ph")
-    self._rew_t_ph    = tf.placeholder(tf.float32,      [None],                  name="rew_t_ph")
-    self._obs_tp1_ph  = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_tp1_ph")
-    self._done_ph     = tf.placeholder(tf.bool,         [None],                  name="done_ph")
 
 
   def initialize(self, sess):
@@ -72,28 +53,50 @@ class Model:
     raise NotImplementedError()
 
 
-  def action_train(self, sess, state):
-    """Compute the training action from the model. NOTE that this should NOT include
-    any exploration policy, but should only return the action that would be
-    performed if the model was being evaluated
+  def action_train_ops(self, sess, state, run_dict=None):
+    """Compute the training action from the model and any additional tensors.
     Args:
       sess: tf.Session(). Currently open session
       state: np.array. Observation for the current state
+      run_dict: dict of str-tf.Tensor pairs. Contains any additional tensors to run
     Returns:
-      The calculated action. Type and shape varies based on the specific model
+      dict of str-np.array pairs. Contains the action, additional model tensors and run_dict
     """
     raise NotImplementedError()
 
 
-  def action_eval(self, sess, state):
-    """Compute the action that should be taken in evaluation mode
+  def action_eval_ops(self, sess, state, run_dict=None):
+    """Compute the action that should be taken in evaluation mode and any additional tensors.
     Args:
       sess: tf.Session(). Currently open session
       state: np.array. Observation for the current state
+      run_dict: dict of str-tf.Tensor pairs. Contains any additional tensors to run
     Returns:
-      The calculated action. Type and shape varies based on the specific model
+      dict of str-np.array pairs. Contains the action, additional model tensors and run_dict
     """
     raise NotImplementedError()
+
+
+  def _action_train_ops(self, sess, run_dict, feed_dict):
+    if run_dict is None:
+      run_dict = self.train_dict
+    else:
+      run_dict = {**run_dict, **self.train_dict}
+
+    # Run the results and update any data that needs to be plotted
+    data, self.plot_conf.train_data = sess.run([run_dict, self.plot_conf.train_spec], feed_dict=feed_dict)
+    return data
+
+
+  def _action_eval_ops(self, sess, run_dict, feed_dict):
+    if run_dict is None:
+      run_dict = self.eval_dict
+    else:
+      run_dict = {**run_dict, **self.eval_dict}
+
+    # Run the results and update any data that needs to be plotted
+    data, self.plot_conf.eval_data = sess.run([run_dict, self.plot_conf.eval_spec], feed_dict=feed_dict)
+    return data
 
 
   def exclude_train_vars(self, regex):
@@ -112,6 +115,7 @@ class Model:
       list of `tf.Variable`s that should be trained
     """
     train_vars = tf.trainable_variables(scope=scope)
+    # Exlude variables that are explicitly exluded from training
     if self.notrain_re is not None:
       exlcude = [v for v in train_vars if self.notrain_re.search(v.name)]
       if len(exlcude) > 0:
@@ -124,17 +128,6 @@ class Model:
     return train_vars
 
 
-  def clear_plot_tensors(self):
-    """Clear dicts with plot tensors in order to avoid running them every time"""
-    self.plot_train.data = dict()
-    self.plot_eval.data  = dict()
-    self.plot_data.data  = dict()
-
-
-  def _update_plot_data(self, data):
-    self.plot_data.data = data
-
-
   @property
   def name(self):
     """
@@ -143,88 +136,6 @@ class Model:
     """
     return self.__class__.__name__
 
-  @property
-  def train_op(self):
-    """
-    Returns:
-      `tf.Op` that trains the network. Requires that `self.obs_t_ph`,
-      `self.act_t_ph`, `self.obs_tp1_ph`, `self.done_ph` placeholders
-      are set via feed_dict. Might require other placeholders as well.
-    """
-    if self._train_op is not None:
-      return self._train_op
-    else:
-      raise NotImplementedError()
-
-  @property
-  def update_target(self):
-    """
-    Returns:
-      `tf.Op` that updates the target network (if one is used).
-    """
-    if self._update_target is not None:
-      return self._update_target
-    else:
-      raise NotImplementedError()
-
-  @property
-  def obs_t_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for observations at time t from the training batch
-    """
-    if self._obs_t_ph is not None:
-      return self._obs_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def act_t_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for actions at time t from the training batch
-    """
-    if self._act_t_ph is not None:
-      return self._act_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def rew_t_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for actions at time t from the training batch
-    """
-    if self._rew_t_ph is not None:
-      return self._rew_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def obs_tp1_ph(self):
-    """
-    Returns:
-      `tf.placeholder` for observations at time t+1 from the training batch
-    """
-    if self._obs_tp1_ph is not None:
-      return self._obs_tp1_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def done_ph(self):
-    """
-    Returns:
-      `tf.placeholder` to indicate end of episode for examples in the training batch
-    """
-    if self._done_ph is not None:
-      return self._done_ph
-    else:
-      raise NotImplementedError()
-
-  # @property
-  # def training_ph(self):
-  #   return self._training_ph
 
   @property
   def variables(self):
@@ -233,7 +144,7 @@ class Model:
       `list` of `tf.Variable`s which contains all variables used by the model. If there is a target
       network, its variables must be included. Optimizer related variables must be excluded
     """
-    if self._variables is not None:
-      return self._variables
+    if self._vars is not None:
+      return self._vars
     else:
       raise NotImplementedError()

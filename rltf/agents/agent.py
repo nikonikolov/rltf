@@ -2,10 +2,11 @@ import json
 import logging
 import os
 import re
+import signal
+import numpy as np
 import tensorflow as tf
 
-from rltf.envs.utils  import get_env_monitor
-from rltf.utils       import seeding
+from rltf.utils import seeding
 
 
 logger = logging.getLogger(__name__)
@@ -15,101 +16,94 @@ class Agent:
   """Base class for a Reinforcement Learning agent"""
 
   def __init__(self,
-               env_train,
-               env_eval,
-               train_freq,
-               warm_up,
-               stop_step,
-               eval_freq,
+               eval_period,
                eval_len,
                batch_size,
                model_dir,
-               log_freq=10000,
-               save_freq=100000,
-               save_buf=False,
-               restore_dir=None,
-               plots_layout=None,
-               confirm_kill=False,
-               reuse_regex=None,
+               save_period=1000000,
+               n_plays=0,
+               load_model=None,
+               load_regex=None,
+               **model_kwargs
               ):
     """
     Args:
-      env: gym.Env. Environment in which the model will be trained.
-      train_freq: int. How many environment actions to take between every 2 learning steps
-      warm_up: int. Number of random steps before training starts
-      stop_step: int. Training step at which learning stops
-      eval_freq: int. How many agent steps to take between every 2 evaluation runs
+      eval_period: int. How many agent steps to take between every 2 evaluation runs
       eval_len: int. How many agent steps an evaluation run lasts. `<=0` means no evaluation
       batch_size: int. Batch size for training the model
-      model_dir: string. Directory path for the model logs and checkpoints
-      log_freq: int. Add TensorBoard summary and print progress every log_freq agent steps
-      save_freq: int. Save the model every `save_freq` training steps. `<=0` means no saving
-      save_buf: bool. If True, save buffer (if any) in calls to `self.save()`
-      restore_dir: str. Path to a directory which contains an existing model to restore. If
-        `restore_dir==model_dir`, then training is continued from the saved model time step and
-        the existing model is overwritten. Otherwise, the saved weights are used but training
-        starts from step 0 and the model is saved in `model_dir`. If `None`, no restoring
-      plots_layout: dict or None. Used to configure the layout for video plots
-      confirm_kill: bool. If True, you will be asked to confirm Ctrl+C
-      reuse_regex: str or None. Regular expression for matching variables whose values should be reused.
-        If None, all model variables are reused
+      model_dir: str. Directory path for the model, where logs and checkpoints will be saved. If the
+        directory is not empty, the agent will restore the model continue training it
+      n_plays: int. Number of separate play (or evaluation) runs to execute when `Agent.play()` is called.
+        If `<=0`, `Agent.play()` will raise exception. If `>0`, `Agent.train()` will raise exception
+      save_period: int. Save the model every `save_period` training steps. `<=0` means no saving
+      load_model: str. Path to a directory which contains an existing model. The best_agent weights in
+        this model will be loaded (no data in `load_model` will be overwritten)
+      load_regex: str. Regular expression for matching variables whose values should be reused.
+        If empty, all model variables are reused
+      model_kwargs: dict. All uncaught arguments are automatically considered as arguments to be
+        passed to the model
     """
 
-    self.env_train      = env_train
-    self.env_train_mon  = get_env_monitor(env_train)
-    self.env_eval       = env_eval
-    self.env_eval_mon   = get_env_monitor(env_eval)
+    # Environment data
+    self.env_train      = None
+    self.env_eval       = None
 
-    self.batch_size     = batch_size
+    # Model data
+    self.model          = None
+    self.model_kwargs   = model_kwargs
+    self.built          = False
+
+    # Save and restore specs data
     self.model_dir      = model_dir
-    self.save_freq      = save_freq
-    self.save_buf       = save_buf
-    self.log_freq       = log_freq
-    self.restore_dir    = restore_dir
+    self.reuse_model    = load_model
+    self.reuse_regex    = None if load_regex is None else re.compile(load_regex)
+    self.save_period    = save_period if save_period > 0 else np.inf
+    self.train_saver    = None
+    self.eval_saver     = None
+
+    # Training data
+    self.agent_step     = 0             # Current agent step
+    self.batch_size     = batch_size
     self.prng           = seeding.get_prng()
-    self.confirm_kill   = confirm_kill
-    self.reuse_regex    = None if reuse_regex is None else re.compile(reuse_regex)
 
-    self.warm_up        = warm_up       # Step from which training starts
-    self.stop_step      = stop_step     # Step at which training stops
-    self.learn_started  = False         # Bool: Indicates if learning has started or not
-    self.train_freq     = train_freq    # How often to run a training step
-    self.train_step     = 0             # Current agent train step
-
-    self.eval_freq      = eval_freq     # How often to take an evaluation run
+    # Evaluation data
+    self.eval_period    = eval_period   # How often to take an evaluation run
     self.eval_len       = eval_len      # How many steps to an evaluation run lasts
     self.eval_step      = 0             # Current agent eval step
 
-    self.plots_layout   = plots_layout
-    self.built          = False
+    # Run data
+    self.n_plays        = n_plays       # Number of evaluation runs in Agent.play()
+    self.play_mode      = n_plays > 0   # True if Agent allowed to be run only in play mode
+    self._terminate     = False         # Used to signal terminate. Must be monitored by the main loop
 
     # TensorFlow attributes
-    self.model            = None
-    self.summary          = None
+    self.sess           = None
 
-    self.summary_op       = None
-
-    self.sess             = None
-    self.train_saver      = None
-    self.eval_saver       = None
-    self.tb_train_writer  = None
-    self.tb_eval_writer   = None
+    if not os.path.exists(self.tf_dir):
+      os.makedirs(self.tf_dir)
 
 
   def build(self):
     """Build the graph. The graph is always built and initialized from scratch. After that, tf.Variables
      are restored (if needed). Meta graphs are not used. Calls `self._build()` and `self.model.build()`.
-    If `restore_dir is None`, the graph will be initialized from scratch.
-    If `restore_dir == model_dir`, all graph variable values will be restored from checkpoint
-    If `restore_dir != model_dir`, variables which match the provided pattern will be restored from
-    checkpoint. The rest of the variables will reatin their original random values
+    - If `model_dir` is not empty, all TF variable values will be restored from the latest checkpoint
+    - If `reuse_model is not None`, variables which match `reuse_regex` will be restored from the
+      best agent checkpoint. The rest of the variables will retain their initialized random values
     """
+    if self.built:
+      return
+    self.built = True
 
-    restore = self.restore_dir is not None and self.restore_dir == self.model_dir
-    reuse   = self.restore_dir is not None and self.restore_dir != self.model_dir
+    if os.path.exists(self.state_file):
+      restore = True
+      assert not self.play_mode
+      assert self.reuse_model is None
+      assert self.reuse_regex is None
+    else:
+      restore = False
 
     # Set regex to match variables which should not be trained. Must be done before building the graph
-    if reuse and self.reuse_regex is not None:
+    if self.reuse_model is not None and self.reuse_regex is not None:
       self.model.exclude_train_vars(self.reuse_regex)
 
     # Build the graph from scratch
@@ -121,43 +115,54 @@ class Agent:
       self._restore()       # Execute agent-specific restore, e.g. restore buffer
 
     # Reuse some variables if model is being reused
-    elif reuse:
+    elif self.reuse_model is not None:
       self._reuse_vars()
 
-    # NOTE: Create tf.train.Saver **after** building the whole graph
+    # NOTE: Create tf.train.Savers **after** building the whole graph
+    # Create a saver for the training model
     self.train_saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
 
     # Create a separate saver for the best agent
     var_list = [v for v in self.model.variables if "agent_net" in v.name]
     self.eval_saver = tf.train.Saver(var_list, max_to_keep=1, save_relative_paths=True)
 
-    # Create TensorBoard summary writers
-    tb_dir = os.path.join(self.model_dir, "tf/tb/")
-    self.tb_train_writer  = tf.summary.FileWriter(tb_dir, self.sess.graph, filename_suffix=".train")
-    self.tb_eval_writer   = tf.summary.FileWriter(tb_dir, filename_suffix=".eval")
-
-    # Configure the plot layout for recorded videos
-    if self.plots_layout is not None:
-      self._plots_layout()
-    else:
-      self.model.clear_plot_tensors()
-
-    self.built = True
-
-
-  def _plots_layout(self):
-    self.env_train_mon.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
-      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
-    self.env_eval_mon.conf_video_plots(layout=self.plots_layout, train_tensors=self.model.plot_train,
-      eval_tensors=self.model.plot_eval, plot_data=self.model.plot_data)
-
 
   def train(self):
-    raise NotImplementedError()
+    """Train the agent"""
+    assert self.built, "You need to execute Agent.build() before calling Agent.train()"
+    assert not self.play_mode      # Make sure in correct mode
+
+    # Configure a safe exit
+    self._configure_safe_exit()
+
+    # If the agent was restored and it was previously terminated during an evaluation run,
+    # complete this unfinished evaluation run before training starts
+    if self.eval_period > 0 and self.agent_step % self.eval_period == 0:
+      # Compute what eval step would be if eval run was able to complete
+      eval_step = self.agent_step / self.eval_period * self.eval_len
+      # Run evaluation if necessary
+      if self.eval_step != eval_step:
+        self._eval_agent()
+
+    # Run the actual training process
+    self._train()
 
 
-  def eval(self):
-    raise NotImplementedError()
+  def play(self):
+    """Evaluate the agent"""
+    assert self.built, "You need to execute Agent.build() before calling Agent.play()"
+    assert self.play_mode                       # Make sure in the correct mode and best agent restored
+    assert self.eval_step == 0                  # Ensure a single call to eval
+    assert self.reuse_regex is None             # Make sure all variables were restored
+
+    # Configure a safe exit
+    self._configure_safe_exit()
+
+    # Run the actual evaluation process
+    self._run_play()
+
+    # Execute only agent-specific save, e.g. save statistics
+    self._save()
 
 
   def reset(self):
@@ -176,8 +181,6 @@ class Agent:
     self.save()
 
     # Close the writers, the env and the session on exit
-    self.tb_train_writer.close()
-    self.tb_eval_writer.close()
     self.sess.close()
     self.env_train.close()
     self.env_eval.close()
@@ -191,9 +194,6 @@ class Agent:
 
     # Build the model
     self.model.build()
-
-    # Create an Op for all summaries
-    self.summary_op = tf.summary.merge_all()
 
     # Create a session and initialize the model
     self.sess = self._get_sess()
@@ -209,20 +209,14 @@ class Agent:
 
     # Restore all variables
     saver = tf.train.Saver()
-    saver.restore(self.sess, self._ckpt_path())
+    saver.restore(self.sess, self.restore_ckpt)
 
     # Recover the agent state
-    state_file = os.path.join(self.model_dir, "agent_state.json")
-    with open(state_file, 'r') as f:
+    with open(self.state_file, 'r') as f:
       data = json.load(f)
 
-    self.train_step = data["train_step"]
+    self.agent_step = data["train_step"]
     self.eval_step  = data["eval_step"]
-    self.learn_started = self.train_step >= self.warm_up
-
-    if not self.learn_started:
-      logger.warning("Training the restored model will not start immediately")
-      logger.warning("Random policy will be run for %d steps", self.warm_up-self.train_step)
 
 
   def _restore(self):
@@ -231,7 +225,7 @@ class Agent:
 
 
   def _reuse_vars(self):
-    logger.info("Reusing model variables:")
+    logger.info("Loading model '%s' and reusing variables", self.reuse_model)
 
     # Get the list of variables to restore
     if self.reuse_regex is not None:
@@ -243,25 +237,19 @@ class Agent:
     for v in var_list:
       logger.info(v.name)
 
-    # Restore the variables
+    # Restore the best agent variables
     saver = tf.train.Saver(var_list)
-    saver.restore(self.sess, self._ckpt_path())
+    saver.restore(self.sess, self.reuse_ckpt)
 
 
-  def _ckpt_path(self):
-    restore_dir = os.path.join(self.restore_dir, "tf/")
-    ckpt = tf.train.get_checkpoint_state(restore_dir)
-    if ckpt is None:
-      raise ValueError("No checkpoint found in {}".format(restore_dir))
-    ckpt_path = ckpt.model_checkpoint_path
-    return ckpt_path
+  def _train(self):
+    """Evaluate the agent. To be implemented by the inheriting class"""
+    raise NotImplementedError()
 
 
   def _build(self):
-    """Used by the subclass to build class specific TF objects. Must not call
-    `self.model.build()`
-    """
-    raise NotImplementedError()
+    """Overload in subclasses to build additional TF objects. Do NOT call `self.model.build()`"""
+    pass
 
 
   def _reset(self):
@@ -278,130 +266,191 @@ class Agent:
     raise NotImplementedError()
 
 
-  def _run_train_step(self, t, run_summary):
+  def _run_train_step(self, t):
     """Get the placeholder parameters to feed to the model while training
     Args:
       t: int. Current timestep
-      run_summary: bool. Whether summary should be run and set during the train step
     """
     raise NotImplementedError()
 
 
-  def _define_log_info(self):
-    custom_log_info = self._append_log_info()
-    self.env_train_mon.define_log_info(custom_log_info)
-    self.env_eval_mon.define_log_info(custom_log_info)
-
-
-  def _append_log_info(self):
-    """
-    Returns:
-      List of tuples `(name, format, lambda)` with information of custom subclass
-      parameters to log during training. `name`: `str`, the name of the reported
-      value. `modifier`: `str`, the type modifier for printing the value.
-      `lambda`: A function that takes the current timestep as argument and
-      returns the value to be printed.
-    """
-    raise NotImplementedError()
-
-
-  def _append_summary(self, summary, t):
-    """Append the tf.Summary that will be written to disk at timestep t with custom data.
-    Used only in train mode
+  def _action_eval(self, state):
+    """Return action selected by the agent for an evaluation step
     Args:
-      summary: tf.Summary. The summary to append
-      t: int. Current time step
+      state: np.array. Current state
     """
     raise NotImplementedError()
 
 
-  def _log_stats(self, t, mode):
-    """Log the training progress and append the TensorBoard summary.
-    Note that the TensorBoard summary might be 1 step old.
-    Args:
-      t: int. Current timestep
-      mode: str, either 't' (train) or 'e' (eval). The mode for which to log the statistics
+  def _eval_agent(self):
+    """Subclass helper function.
+    Execute a single evaluation run for the lenght of self.eval_len steps.
     """
-    if t % self.log_freq != 0 and mode == 't':
+    if self.eval_len <= 0 or self.eval_period <= 0:
       return
-    assert mode in ['t', 'e']
 
-    if mode == 't' and self.learn_started:
-      # Log the statistics from the environment Monitor
-      self.env_train_mon.log_stats(t)
+    logger.info("Starting evaluation run")
 
-      if self.summary:
-        # Append the summary with custom data
-        byte_summary = self.summary
-        summary = tf.Summary()
-        summary.ParseFromString(byte_summary)
-        summary.value.add(tag="train/mean_ep_rew", simple_value=self.env_train_mon.mean_ep_rew)
-        self._append_summary(summary, t)
+    # Compute the start and the end step
+    start_step  = self.eval_step + 1
+    stop_step   = start_step + self.eval_len
 
-        # Log with TensorBoard
-        self.tb_train_writer.add_summary(summary, global_step=t)
+    # Reset the environment at the beginning
+    obs = self.env_eval.reset()
 
-    elif mode == 'e':
-      # Log the statistics from the environment Monitor
-      self.env_eval_mon.log_stats(t)
+    for t in range(start_step, stop_step):
+      if self._terminate:
+        break
 
-      # Add a TB summary
-      summary = tf.Summary()
-      summary.value.add(tag="eval/mean_ep_rew", simple_value=self.env_eval_mon.mean_ep_rew)
-      summary.value.add(tag="eval/score",       simple_value=self.env_eval_mon.eval_score)
-      self.tb_eval_writer.add_summary(summary, t)
+      action = self._action_eval(obs)
+      next_obs, rew, done, info = self.env_eval.step(action)
+
+      # Reset the environment if end of episode
+      if done:
+        next_obs = self.env_eval.reset()
+      obs = next_obs
+
+    # Execute on successful loop completion
+    else:
+      best_agent = info["rltfmon.best_agent"]
+      self._save_best_agent(best_agent)     # Save agent if the best so far
+      self.eval_step = t                    # Update the eval step
+
+      logger.info("Evaluation run finished")
+
+
+  def _run_play(self):
+    """Subclass helper function.
+    Run the agent in evaluation mode. Should be called from `Agent._play()`
+    """
+    for _ in range(self.n_plays):
+      self._eval_agent()
 
 
   def save(self):
-    if self.learn_started:
-      logger.info("Saving the TF model and stats to %s", self.model_dir)
+    """Save the current agent status to disk. This function needs to be explicitly called.
+    It is possible to implement automatic savers which save the data to disk at some period, but
+    the agent state needs to be consistent, including train and eval steps, all model variables,
+    possible monitors. Thus explicitly calling save is easier and more clear.
 
-      # Save the monitor statistics
-      self.env_train_mon.save()
-      self.env_eval_mon.save()
-
-      # Save the model
-      model_dir = os.path.join(self.model_dir, "tf/")
-      self.train_saver.save(self.sess, model_dir, global_step=self.train_step)
-
-      self._save()
-
-      # Save the agent state
-      state_file = os.path.join(self.model_dir, "agent_state.json")
-      data = {
-        "train_step": self.train_step,
-        "eval_step":  self.eval_step,
-      }
-      with open(state_file, 'w') as f:
-        json.dump(data, f, indent=4, sort_keys=True)
-
-      # Flush the TB writers
-      self.tb_train_writer.flush()
-      self.tb_eval_writer.flush()
-
-      logger.info("Save finished successfully")
-
-
-  def _save(self):
-    """Use by implementing class for custom save procedures"""
-    return
-
-
-  def _save_best(self, best_agent):
-    """Save the best-performing agent.
-    best_agent: bool. If True, the agent is the best so far. If False, do not save.
+    Calls `self._save()` for any subclass specific save procedures.
     """
-    if not best_agent:
+    if self.play_mode or not self._save_allowed():
       return
-    model_dir = os.path.join(self.model_dir, "tf/best_agent/")
 
-    logger.info("Saving best agent so far to %s", model_dir)
+    logger.info("Saving the TF model and stats to %s", self.model_dir)
+
     # Save the model
-    self.eval_saver.save(self.sess, model_dir, global_step=self.train_step+1)
+    self.train_saver.save(self.sess, self.tf_dir, global_step=self.agent_step)
+
+    # Execute additional agent-specific save proceudres
+    self._save()
+
+    # Save the agent state
+    data = {
+      "train_step": self.agent_step,
+      "eval_step":  self.eval_step,
+    }
+    with open(self.state_file, 'w') as f:
+      json.dump(data, f, indent=4, sort_keys=True)
+
     logger.info("Save finished successfully")
 
 
-  def _get_sess(self):
+  def _save(self):
+    """Override in subclasses in order to implement custom save procedures"""
+    return
+
+
+  def _save_allowed(self):
+    """Return False if saving is not allowed at this point due to inconsistent state.
+    To be overriden in subclasses."""
+    return True
+
+
+  def _save_best_agent(self, best_agent):
+    """Save the best-performing agent.
+    best_agent: bool. If True, the agent is the best so far. If False, do not save.
+    """
+    if not best_agent or self.play_mode:
+      return
+
+    save_dir = self.best_agent_dir
+    logger.info("Saving best agent so far to %s", save_dir)
+    # Save the model
+    self.eval_saver.save(self.sess, save_dir, global_step=self.agent_step+1)
+    logger.info("Save finished successfully")
+
+
+  @property
+  def state_file(self):
+    return os.path.join(self.model_dir, "agent_state.json")
+
+
+  @property
+  def tf_dir(self):
+    return os.path.join(self.model_dir, "tf/")
+
+
+  @property
+  def best_agent_dir(self):
+    return os.path.join(self.model_dir, "tf/best_agent/")
+
+
+  @property
+  def reuse_ckpt(self):
+    return self._ckpt_path(os.path.join(self.reuse_model, "tf/best_agent/"))
+
+
+  @property
+  def restore_ckpt(self):
+    return self._ckpt_path(self.tf_dir)
+
+
+  def _ckpt_path(self, ckpt_dir):
+    ckpt = tf.train.get_checkpoint_state(ckpt_dir)
+    if ckpt is None:
+      raise ValueError("No checkpoint found in {}".format(ckpt_dir))
+    ckpt_path = ckpt.model_checkpoint_path
+    return ckpt_path
+
+
+  @staticmethod
+  def _get_sess():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     return tf.Session(config=config)
+
+
+  def _configure_safe_exit(self):
+    """Catch Ctrl+C in order to exit safely without interrupting the agent"""
+
+    in_exit_call = False
+
+    def safe_exit(*args, **kwargs):
+      nonlocal in_exit_call
+
+      # If Ctrl+C pressed twice consecutively, then exit
+      if in_exit_call or not self.built:
+        import sys
+        sys.exit(0)
+
+      in_exit_call = True
+
+      # Confirm that killing was intended
+      y = ''
+      while True:
+        y = input("Do you really want to exit? [y/n]")
+        if y not in ['y', 'n']:
+          print("Response not recognized. Expected 'y' or 'n'.")
+        else:
+          break
+      if y == 'n':
+        logger.info("CONTINUING EXECUTION")
+      else:
+        logger.info("EXITING")
+        self._terminate = True
+
+      in_exit_call = False
+
+    signal.signal(signal.SIGINT, safe_exit)

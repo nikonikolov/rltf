@@ -48,13 +48,10 @@ def parse_cmd_args():
 
   # Model runtime arguments
   parser.add_argument('--max-step',   default=50*10**6, type=int,   help='max train step for data')
-  # parser.add_argument('--eval-freq',  default=250000,   type=int,   help='freq of eval in # *agent* steps')
-  # parser.add_argument('--eval-len',   default=125000,   type=int,   help='len of eval in # *agent* steps')
-  # parser.add_argument('--n-eps',      default=100,      type=int,   help='number of eps to average')
   parser.add_argument('--tb-tag',     default=None,     type=str,   help='TensorBoard tag to read')
   parser.add_argument('--np-data',    default=None,     type=str,   help='Read train or eval npy data', choices=["t", "e"])
 
-  parser.add_argument('--tb-filter',  default=True,     type=bool,  help='filter TB data based on eval-freq')
+  parser.add_argument('--period',     default=None,     type=int,   help='filter data with this period')
   parser.add_argument('--boldmax',    default=True,     type=bool,  help='bold max scores in table output')
   parser.add_argument('--tablestd',   default=False,    type=bool,  help='Add std of max scores in table output')
 
@@ -180,7 +177,7 @@ def process_run(model_dir, args):
   print("Processing '%s'" % model_dir)
 
   path = dataio.get_model_dir(model_dir, args)
-  datawrap = dataproc.DataWrapper(path, args.max_step, tb_tag=args.tb_tag, data_type=args.np_data)
+  datawrap = dataproc.DataWrapper(path, args.max_step, tb_tag=args.tb_tag, data_type=args.np_data, log_period=args.period)
   datawrap.read_data()
   datawrap.data.compute_y(mode=args.score_mode)
   data = datawrap.get_data()

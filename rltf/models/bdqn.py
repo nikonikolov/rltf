@@ -1,14 +1,14 @@
 import tensorflow as tf
 
-from rltf.models.ddqn import DDQN
-from rltf.models.blr  import BLR
+from rltf.models      import DDQN
 from rltf.models      import tf_utils
+from rltf.models.blr  import BLR
 
 
 class BDQN(DDQN):
   """Bayesian Double DQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean"):
+  def __init__(self, sigma_e, tau, mode="mean", **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -20,7 +20,7 @@ class BDQN(DDQN):
       huber_loss: bool. Whether to use huber loss or not
     """
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss)
+    super().__init__(**kwargs)
 
     self.agent_blr  = [BLR(tau=tau, sigma_e=sigma_e, mode=mode)   for _ in range(self.n_actions)]
     self.target_blr = [BLR(tau=tau, sigma_e=sigma_e, mode="mean") for _ in range(self.n_actions)]
@@ -33,9 +33,9 @@ class BDQN(DDQN):
     self.a_var      = None    # Tensor with BLR var
 
 
-  # def build(self):
-  #   super().build()
-  #   self.reset_blr = tf.group(*[blr.reset_op for blr in self.agent_blr], name="reset_blr")
+  def build(self):
+    super().build()
+    self.reset_blr = tf.group(*[blr.reset_op for blr in self.agent_blr], name="reset_blr")
 
 
   def _conv_nn(self, x):
@@ -109,9 +109,9 @@ class BDQN(DDQN):
 
 class BDQN_TS(BDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau):
+  def __init__(self, **kwargs):
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="ts")
+    super().__init__(mode="ts", **kwargs)
 
     # Custom TF Tensors and Ops
     self.reset_ts   = None    # Op that resamples the parameters for TS
@@ -133,13 +133,11 @@ class BDQN_TS(BDQN):
 
 class BDQN_UCB(BDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, n_stds=0.1):
-    """
-    Args:
-      n_stds: float. Scale constant for the uncertainty
-    """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean")
-    self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
+  def __init__(self, n_stds, **kwargs):
+
+    super().__init__(mode="mean", **kwargs)
+
+    self.n_stds = n_stds       # Scale constant for computing uncertainty
 
 
   def _act_train(self, agent_net, name):
@@ -151,20 +149,16 @@ class BDQN_UCB(BDQN):
     tf.summary.histogram("debug/a_std",   std)
     tf.summary.histogram("debug/a_mean",  mean)
 
-    return action
+    return dict(action=action)
 
 
 
 class BDQN_IDS(BDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, n_stds=0.1):
-    """
-    Args:
-      n_stds: float. Scale constant for the uncertainty
-    """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, sigma_e, tau, mode="mean")
+  def __init__(self, n_stds, **kwargs):
+    super().__init__(mode="mean", **kwargs)
 
-    self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
+    self.n_stds = n_stds       # Scale constant for computing uncertainty
     self.rho    = 1.0
 
 
@@ -189,32 +183,32 @@ class BDQN_IDS(BDQN):
     tf.summary.histogram("debug/a_info",    info_gain)
     tf.summary.histogram("debug/a_ids",     ids_score)
 
-    a_diff_ucb = tf.reduce_mean(tf.cast(tf.equal(a_ucb, action), tf.float32))
-    tf.summary.scalar("debug/a_ucb_vs_ids", a_diff_ucb)
-
     # Set the plottable tensors for video. Use only the first action in the batch
     p_a     = tf.identity(action[0],    name="plot/train/a")
     p_mean  = tf.identity(mean[0],      name="plot/train/mean")
     p_std   = tf.identity(std[0],       name="plot/train/std")
     p_ids   = tf.identity(ids_score[0], name="plot/train/ids")
 
-    self.plot_train["train_actions"] = {
+    train_actions = {
       "a_mean": dict(height=p_mean, a=p_a),
       "a_std":  dict(height=p_std,  a=p_a),
       "a_ids":  dict(height=p_ids,  a=p_a),
     }
+    self.plot_conf.set_train_spec(dict(train_actions=train_actions))
 
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
     action = super()._act_eval(agent_net, name)
-    # Set the plottable tensors for video. Use only the first action in the batch
-    p_a     = tf.identity(action[0],    name="plot/eval/a")
-    p_mean  = tf.identity(agent_net[0], name="plot/eval/mean")
 
-    self.plot_eval["eval_actions"] = {
+    # Set the plottable tensors for train
+    p_a     = tf.identity(action["action"][0],  name="plot/eval/a")
+    p_mean  = tf.identity(agent_net[0],         name="plot/eval/mean")
+    # Set the plottable tensors for episode recordings
+    eval_actions = {
       "a_mean": dict(height=p_mean, a=p_a),
     }
+    self.plot_conf.set_eval_spec(dict(eval_actions=eval_actions))
 
     return action

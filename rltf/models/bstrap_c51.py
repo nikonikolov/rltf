@@ -1,14 +1,13 @@
-import numpy as np
 import tensorflow as tf
 
-from rltf.models.bstrap_dqn import BstrapDQN_IDS
-from rltf.models.c51        import C51
-from rltf.models            import tf_utils
+from rltf.models  import BstrapDQN_IDS
+from rltf.models  import C51
+from rltf.models  import tf_utils
 
 
-class BstrapC51_IDS(BstrapDQN_IDS):
+class BstrapC51_IDS(BstrapDQN_IDS, C51):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, n_heads, V_min, V_max, N, n_stds):
+  def __init__(self, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -16,34 +15,20 @@ class BstrapC51_IDS(BstrapDQN_IDS):
       opt_conf: rltf.optimizers.OptimizerConf. Configuration for the optimizer
       gamma: float. Discount factor
       n_heads: Number of bootstrap heads
+      huber_loss: bool. Use huber loss for the bootstrap heads
       V_min: float. lower bound for histrogram range
       V_max: float. upper bound for histrogram range
       N: int. number of histogram bins
       n_stds: float. Standard deviation scale for computing regret
     """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, False, n_heads, n_stds)
-    # BstrapDQN_IDS.__init__(self, obs_shape, n_actions, opt_conf, gamma, False, n_heads, n_stds)
-
-    self.N      = N
-    self.V_min  = V_min
-    self.V_max  = V_max
-    self.dz     = (self.V_max - self.V_min) / float(self.N - 1)
+    super().__init__(**kwargs)
 
     # Custom TF Tensors and Ops
-    self.bins   = None
     self.rho2   = None
 
-    # Ugly temporary fix for project_distribution
-    self._project_distribution = lambda *args, **kwargs: C51._project_distribution(self, *args, **kwargs)
-
-
-  def build(self):
-    # Costruct the tensor of the bins for the probability distribution
-    bins      = np.arange(0, self.N, 1, dtype=np.float32)
-    bins      = bins * self.dz + self.V_min
-    self.bins = tf.constant(bins[None, None, :], dtype=tf.float32)  # out shape: [1, 1, N]
-
-    super().build()
+    # Use C51 algo projection and log loss
+    C51._project_distribution = C51._project_distribution_algo
+    C51._compute_loss = C51._compute_loss_algo
 
 
   def _conv_nn(self, x):
@@ -53,7 +38,7 @@ class BstrapC51_IDS(BstrapDQN_IDS):
     Returns:
       Tuple of `tf.Tensor`s. First tensor is of shape `[batch_size, n_heads, n_actions]` and contains the
       Q-function bootstrapped estimates. Second tensor is of shape `[batch_size, n_actions, N]` and
-      contains the C51 return distribution for each head
+      contains the C51 return distribution for each action
     """
     n_actions = self.n_actions
     N         = self.N
@@ -115,8 +100,8 @@ class BstrapC51_IDS(BstrapDQN_IDS):
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
     q, z = agent_net
-    q = super()._compute_estimate(q)
-    z = C51._compute_estimate(self, z)    # logits; out: [None, N]
+    q = BstrapDQN_IDS._compute_estimate(self, q)  # out: [None, n_heads]
+    z = C51._compute_estimate(self, z)            # logits; out: [None, N]
     return q, z
 
 
@@ -131,7 +116,7 @@ class BstrapC51_IDS(BstrapDQN_IDS):
     n_actions   = self.n_actions
 
     # Compute the Q-estimate with the agent network variables and select the maximizing action
-    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")      # out: [None, n_heads, n_actions]
+    agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")       # out: [None, n_heads, n_actions]
     agent_net   = agent_net[0]  # Select only the Q-tensor
     target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)   # out: [None, n_heads]
 
@@ -151,8 +136,10 @@ class BstrapC51_IDS(BstrapDQN_IDS):
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
     target_q, target_z = target_net
-    backup_q = super()._compute_target(target_q)
-    # backup_z = C51._compute_target(self, target_z)  # NOT correct
+    # BstrapDQN_IDS call to self._select_target resolves to the BstrapC51_IDS._select_target()
+    backup_q = BstrapDQN_IDS._compute_target(self, target_q)
+    # NOTE: Do NOT call C51._compute_target(self, target_z) - call to self._select_target()
+    # will resolve to BstrapC51_IDS._select_target() - incorrect
     target_z = C51._select_target(self, target_z)
     backup_z = C51._compute_backup(self, target_z)
     backup_z = tf.stop_gradient(backup_z)
@@ -163,8 +150,7 @@ class BstrapC51_IDS(BstrapDQN_IDS):
     q, logits_z         = estimate
     target_q, target_z  = target
 
-    head_loss = super()._compute_loss(q, target_q, name)
-
+    head_loss = BstrapDQN_IDS._compute_loss(self, q, target_q, name)
     z_loss    = C51._compute_loss(self, logits_z, target_z, "train/z_loss")
 
     return head_loss, z_loss
@@ -175,72 +161,36 @@ class BstrapC51_IDS(BstrapDQN_IDS):
     z_loss    = loss[1]
 
     # Get the Bootsrapped heads and conv net train op
-    train_net = super()._build_train_op(optimizer, head_loss, agent_vars, name=None)
+    train_net = BstrapDQN_IDS._build_train_op(self, optimizer, head_loss, agent_vars, name=None)
 
-    # Build the train op for C51 - apply gradients only to fully connected layers
+    # Get the train op for the distributional FC layers
     z_vars    = tf_utils.scope_vars(agent_vars, scope='agent_net/distribution_value')
-    train_z   = optimizer.minimize(z_loss, var_list=z_vars)
+    train_z   = C51._build_train_op(self, optimizer, z_loss, z_vars, name=None)
+
     train_op  = tf.group(train_net, train_z, name=name)
+
     return train_op
 
 
   def _act_train(self, agent_net, name):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
-    z_var     = C51._compute_z_variance(self, logits=agent_net[1], normalize=True)  # [None, n_actions]
+    z_var     = self._compute_z_variance(logits=agent_net[1], normalize=True)  # [None, n_actions]
     self.rho2 = tf.maximum(z_var, 0.25)
 
-    # Compute the IDS action - ugly way
-    # action    = BstrapDQN_IDS._act_train(self, agent_net[0], name)
-    action    = super()._act_train(agent_net[0], name)
+    action    = BstrapDQN_IDS._act_train(self, agent_net[0], name)
 
     # Add debugging data for TB
     tf.summary.histogram("debug/a_rho2", self.rho2)
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
 
-    # p_rho2  = tf.identity(self.z_var[0], name="plot/train/rho2")
+    # Append the plottable tensors for episode recordings
     p_rho2  = tf.identity(self.rho2[0], name="plot/train/rho2")
-    p_a     = self.plot_train["train_actions"]["a_mean"]["a"]
-
-    self.plot_train["train_actions"]["a_rho2"] = dict(height=p_rho2,  a=p_a)
+    p_a     = self.plot_conf.true_train_spec["train_actions"]["a_mean"]["a"]
+    self.plot_conf.true_train_spec["train_actions"]["a_rho2"] = dict(height=p_rho2, a=p_a)
 
     return action
 
 
   def _act_eval(self, agent_net, name):
-    q = agent_net[0]
-    return self._act_eval_greedy(q, name)
-
-
-  # def _project_distribution(self, atoms, p):
-  #   """Project the distribution given by (atoms, p) onto the support of self.bins
-  #     using Eq. (7) from the Categorical DQN paper (Bellemare et. al. 2017)
-  #   Args:
-  #     atoms: tf.Tensor, shape `[None, N]`. Atoms for the support of the distribution
-  #     p: tf.Tensor, shape `[None, N]`. Probability of each atom of the distribution
-  #   Returns:
-  #     tf.Tensor of shape `[None, N]`, which contains the projected distribution
-  #   """
-
-  #   # Clip the atom supports in [V_min, V_max]
-  #   atoms = tf.clip_by_value(atoms, self.V_min, self.V_max)   # [None, N]
-  #   atoms = tf.expand_dims(atoms, axis=-2)                    # [None, 1, N]
-  #   atoms = tf.tile(atoms, [1, self.N, 1])                    # [None, N, N]
-
-  #   # Compute the temporal difference between atoms and bins
-  #   td_z  = atoms - tf.reshape(self.bins, [1, self.N, 1])     # [None, N, N]
-  #   # td_z[0] =
-  #   # [ [tz1-z1, tz2-z1, ..., tzN-z1],
-  #   #   [tz1-z2, tz2-z2, ..., tzN-z2],
-  #   #   ...
-  #   #   [tz1-zN, tzN-zN, ..., tzN-zN]  ]
-
-  #   # Compute the projection weights and clip them between 0 and 1
-  #   # Corresponds to `[1 - |[\hat{T}z_j]_{V_min}^{V_max} - z_i| / (\Delta z) ]_0^1` in Eq. (7)
-  #   weights = tf.clip_by_value(1 - tf.abs(td_z) / self.dz, 0, 1)
-
-  #   # Compute the projected probabilities
-  #   p       = tf.expand_dims(p, axis=1)                     # [None, 1, N]
-  #   proj_p  = tf.reduce_sum(weights * p, axis=-1)           # [None, N]
-
-  #   return proj_p
+    return BstrapDQN_IDS._act_eval(self, agent_net[0], name)

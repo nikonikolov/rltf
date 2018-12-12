@@ -1,13 +1,13 @@
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models.dqn  import BaseDQN
-from rltf.models      import tf_utils
+from rltf.models import BaseDQN
+from rltf.models import tf_utils
 
 
 class QRDQN(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, N, k):
+  def __init__(self, N, k, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -16,7 +16,7 @@ class QRDQN(BaseDQN):
       N: int. number of quantiles
       k: int. Huber loss order
     """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma)
+    super().__init__(**kwargs)
     self.N = N
     self.k = k
 
@@ -63,7 +63,7 @@ class QRDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
-    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    a_mask  = tf.one_hot(self.act_t_ph, self.n_actions, dtype=tf.float32)   # out: [None, n_actions]
     a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
     z       = tf.reduce_sum(agent_net * a_mask, axis=1)                     # out: [None, N]
     return z
@@ -221,24 +221,48 @@ class QRDQN(BaseDQN):
     action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
 
     # Add debugging plot for the variance of the return
-    center  = agent_net - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
-    z_var   = tf.reduce_mean(tf.square(center), axis=-1)  # out: [None, n_actions]
+    z_var   = self._compute_z_variance(z=agent_net, normalize=True)  # [None, n_actions]
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 
+    # Set plotting options
     p_a     = tf.identity(action[0],    name="plot/train/a")
     p_q     = tf.identity(q[0],         name="plot/train/q")
     p_z_var = tf.identity(z_var[0],     name="plot/train/z_var")
 
-    self.plot_train["train_actions"] = {
+    train_actions = {
       "a_q":      dict(height=p_q,      a=p_a),
       "a_z_var":  dict(height=p_z_var,  a=p_a),
       # "a_z":      dict(height=p_z,      a=p_a),
     }
+    self.plot_conf.set_train_spec(dict(train_actions=train_actions))
 
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    self.plot_eval["eval_actions"] = dict(self.plot_train["train_actions"])
-    return tf.identity(self.a_train, name=name)
+    self.plot_conf.set_eval_spec(dict(eval_actions=self.plot_conf.true_train_spec["train_actions"]))
+
+    return dict(action=tf.identity(self.train_dict["action"], name=name))
+
+
+  def _compute_z_variance(self, z, normalize=True):
+    """Compute the return distribution variance. Only one of `z` and `logits` must be set
+    Args:
+      z: tf.Tensor, shape `[None, n_actions, N]`. Return atoms
+      normalize: bool. If True, normalize the variance values such that the mean of the
+        return variances of all actions in a given state is 1.
+    Returns:
+      tf.Tensor of shape `[None, n_actions]`
+    """
+
+    # Var(X) = sum_x p(X)*[X - E[X]]^2
+    center  = z - tf.reduce_mean(z, axis=-1, keepdims=True)   # out: [None, n_actions, N]
+    z_var   = tf.reduce_mean(tf.square(center), axis=-1)      # out: [None, n_actions]
+
+    # Normalize the variance across the action axis
+    if normalize:
+      mean  = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
+      z_var = z_var / (mean + 1e-6)                           # out: [None, n_actions]
+
+    return z_var

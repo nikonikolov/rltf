@@ -1,128 +1,99 @@
-import logging
 import gym
 import numpy as np
-import tensorflow as tf
 
-from rltf.agents.off_pi import ParallelOffPolicyAgent
-from rltf.agents.off_pi import SequentialOffPolicyAgent
-from rltf.memory        import ReplayBuffer
-
-
-logger = logging.getLogger(__name__)
+from rltf.agents      import QlearnAgent
+from rltf.memory      import ReplayBuffer
+from rltf.monitoring  import Monitor
 
 
-class AgentDQN(ParallelOffPolicyAgent):
+class AgentDQN(QlearnAgent):
 
   def __init__(self,
+               env_maker,
                model,
-               model_kwargs,
-               opt_conf,
-               exploration,
-               update_target_freq=10000,
+               epsilon_train,
+               epsilon_eval,
                memory_size=int(1e6),
-               obs_len=4,
-               epsilon_eval=0.001,
+               stack_frames=4,
                **agent_kwargs
               ):
     """
     Args:
+      env_maker: callable. Function that takes the mode of an env and retruns a new environment instance
       model: rltf.models.Model. TF implementation of a model network
-      model_kwargs: dict. Model-specific keyword arguments to pass to the model
-      opt_conf: rltf.optimizers.OptimizerConf. Config for the network optimizer
-      exploration: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
-      update_target_freq: Period in number of agent steps at which to update the target net
+      epsilon_train: rltf.schedules.Schedule. Epsilon value for e-greedy exploration
+      epsilon_eval: float. Epsilon value for selecting random action during evaluation
       memory_size: int. Size of the replay buffer
-      obs_len: int. How many environment observations comprise a single state.
+      stack_frames: int. How many frames comprise a single state.
       agent_kwargs: Keyword arguments that will be passed to the Agent base class
     """
 
     super().__init__(**agent_kwargs)
 
-    assert isinstance(self.env_train.observation_space, gym.spaces.Box)
-    assert isinstance(self.env_train.action_space,      gym.spaces.Discrete)
+    self.env_train = Monitor(
+                      env=env_maker('t'),
+                      log_dir=self.model_dir,
+                      mode='t',
+                      log_period=self.log_period,
+                      video_spec=self.video_period,
+                    )
 
-    self.opt_conf = opt_conf
-    self.exploration = exploration
+    self.env_eval  = Monitor(
+                      env=env_maker('e'),
+                      log_dir=self.model_dir,
+                      mode='e',
+                      log_period=self.eval_len,
+                      video_spec=self.video_period,
+                      eval_period=self.eval_period,
+                    )
+
+    self.epsilon_train  = epsilon_train
     self.epsilon_eval = epsilon_eval
-    self.update_target_freq = update_target_freq
 
     # Get environment specs
-    n_actions = self.env_train.action_space.n
-    obs_shape = self.env_train.observation_space.shape
-    obs_shape = list(obs_shape)
-    # obs_len   = obs_len if len(obs_shape) == 3 else 1
-    if len(obs_shape) != 3:
-      obs_len = 1
-      logger.warning("Overriding obs_len value since env has low-level observations space ")
+    obs_shape, obs_dtype, obs_len, n_actions = self._state_action_spec(stack_frames)
 
-    model_kwargs["obs_shape"] = obs_shape
-    model_kwargs["n_actions"] = n_actions
-    model_kwargs["opt_conf"]  = opt_conf
-
-    self.model      = model(**model_kwargs)
-    self.replay_buf = ReplayBuffer(memory_size, obs_shape, np.uint8, [], np.uint8, obs_len)
-
-    # Configure what information to log
-    self._define_log_info()
-
-    # Custom TF Tensors and Ops
-    self.learn_rate_ph  = None
-
-
-  def _build(self):
-    # Create Learning rate placeholders
-    self.learn_rate_ph  = tf.placeholder(tf.float32, shape=(), name="learn_rate_ph")
-
-    # Set the learn rate placeholders for the model
-    self.opt_conf.lr_ph = self.learn_rate_ph
-
-    # Add summaries
-    tf.summary.scalar("train/learn_rate", self.learn_rate_ph)
-
-
-  def _append_log_info(self):
-    log_info = [
-      ( "train/learn_rate", "f", self.opt_conf.lr_value ),
-      ( "train/epsilon",    "f", self.exploration.value ),
-    ]
-    return log_info
+    # Initialize the model and the experience buffer
+    self.model      = model(obs_shape=obs_shape, n_actions=n_actions, **self.model_kwargs)
+    self.replay_buf = ReplayBuffer(memory_size, obs_shape, obs_dtype, [], np.uint8, obs_len)
 
 
   def _append_summary(self, summary, t):
-    summary.value.add(tag="train/epsilon", simple_value=self.exploration.value(t))
+    summary.value.add(tag="train/epsilon", simple_value=self.epsilon_train.value(t))
 
 
   def _get_feed_dict(self, batch, t):
     feed_dict = {
-      self.model.obs_t_ph:       batch["obs"],
-      self.model.act_t_ph:       batch["act"],
-      self.model.rew_t_ph:       batch["rew"],
-      self.model.obs_tp1_ph:     batch["obs_tp1"],
-      self.model.done_ph:        batch["done"],
-      self.learn_rate_ph:        self.opt_conf.lr_value(t),
+      self.model.obs_t_ph:        batch["obs"],
+      self.model.act_t_ph:        batch["act"],
+      self.model.rew_t_ph:        batch["rew"],
+      self.model.obs_tp1_ph:      batch["obs_tp1"],
+      self.model.done_ph:         batch["done"],
+      self.model.opt_conf.lr_ph:  self.model.opt_conf.lr_value(t),
     }
-
     return feed_dict
 
 
   def _action_train(self, state, t):
     # Run epsilon greedy policy
-    epsilon = self.exploration.value(t)
+    epsilon = self.epsilon_train.value(t)
     if self.prng.uniform(0,1) < epsilon:
       action = self.env_train.action_space.sample()
     else:
       # Run the network to select an action
-      action = self.model.action_train(self.sess, state)
+      data   = self.model.action_train_ops(self.sess, state)
+      action = data["action"][0]
     return action
 
 
-  def _action_eval(self, state, t):
+  def _action_eval(self, state):
     # Run epsilon greedy policy
     if self.prng.uniform(0,1) < self.epsilon_eval:
       action = self.env_eval.action_space.sample()
     else:
       # Run the network to select an action
-      action = self.model.action_eval(self.sess, state)
+      data   = self.model.action_eval_ops(self.sess, state)
+      action = data["action"][0]
     return action
 
 
@@ -130,29 +101,49 @@ class AgentDQN(ParallelOffPolicyAgent):
     pass
 
 
+  def _state_action_spec(self, stack_frames):
+    assert isinstance(self.env_train.observation_space, gym.spaces.Box)
+    assert isinstance(self.env_train.action_space,      gym.spaces.Discrete)
+
+    n_actions = self.env_train.action_space.n
+    obs_shape = self.env_train.observation_space.shape
+    obs_shape = list(obs_shape)
+
+    if len(obs_shape) == 3:
+      assert stack_frames > 1
+      obs_dtype = np.uint8
+      obs_len   = stack_frames
+    else:
+      obs_dtype = np.float32
+      obs_len   = 1
+
+    return obs_shape, obs_dtype, obs_len, n_actions
+
+
+
 class AgentBDQN(AgentDQN):
 
-  def __init__(self, blr_train_freq=None, blr_batch_size=None, **kwargs):
+  def __init__(self, blr_train_period, blr_batch_size, **kwargs):
     """
     Args:
-      blr_train_freq: int. Period in number of steps at which to train the BLR
+      blr_train_period: int. Period in number of steps at which to train the BLR
       blr_batch_size: int. Number of samples to train BLR in an update step
     """
     super().__init__(**kwargs)
 
-    self.blr_train_freq = blr_train_freq or self.update_target_freq
-    self.blr_batch_size = blr_batch_size or self.update_target_freq
+    self.blr_train_period = blr_train_period
+    self.blr_batch_size = blr_batch_size
 
 
-  def _run_train_step(self, t, run_summary):
-    super()._run_train_step(t, run_summary)
+  def _run_train_step(self, t):
+    super()._run_train_step(t)
 
-    if t % self.blr_train_freq == 0:
+    # Train BLR
+    if t % self.blr_train_period == 0:
       # for batch in self.replay_buf.random_data(self.blr_batch_size, self.batch_size):
       #   feed_dict = self._get_feed_dict(batch, t)
       #   self.sess.run(self.model.train_blr, feed_dict=feed_dict)
 
-      # Train BLR
       n = int(self.blr_batch_size / (self.batch_size * 4))
       for _ in range(n):
         batch = self.replay_buf.sample(self.batch_size)

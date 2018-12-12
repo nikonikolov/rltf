@@ -48,19 +48,11 @@ class CurveData:
     assert self.i is None, "Not safe to filter data which depends on indices."
     "Instead, first compute the y-values to eliminate the indices, then filter the data"
 
-    steps, vals = [], []
+    inds  = self.x % period == 0
+    steps = self.x[inds]
+    vals  = self.y[inds]
 
-    # Filter entries which might be redundant
-    for s, v in zip(self.x, self.y):
-      if s % period == 0:
-        if len(steps) == 0:
-          steps.append(s)
-          vals.append(v)
-        # Avoid duplicates
-        elif len(steps) > 0 and steps[-1] < s:
-          assert s - steps[-1] == period, "Missing step in log"
-          steps.append(s)
-          vals.append(v)
+    assert steps[1:] - steps[:-1] == period, "Missing step in log"
 
     # Check for correct parsing
     assert len(vals) != 0 and len(steps) != 0, "Filtering incorrect:"
@@ -70,11 +62,10 @@ class CurveData:
     self.y = np.asarray(vals,  dtype=np.float32)
 
 
-  def set_length(self, max_step, period, model_name):
+  def set_length(self, max_step, model_name):
     """Limit data up to max_step. If max_step not reached, append the correct step values and -inf
     Args:
       max_step: int. Remove any data after this step
-      period: int. Step period to use if data has not reached max_step and needs to be appended
       model_name: str. Name of the model (i.e. model_dir)
     """
 
@@ -88,7 +79,8 @@ class CurveData:
       warnings.warn("The recorded data for model '%s' has not reached max_step=%d. "
                     "Appending -inf values" % (model_name, max_step))
 
-      assert self.x[-1] % period == 0
+      # Get the data logging period in order to append the values
+      period = self.x[-1] - self.x[-2]
 
       x = np.arange(self.x[-1], max_step, period) + period
       y = np.ones([x.shape[0]] + list(self.y.shape[1:]), dtype=np.float32) * -np.inf
@@ -183,7 +175,7 @@ class CurveData:
 
 class DataWrapper:
 
-  def __init__(self, model_path, max_step, tb_tag=None, data_type=None):
+  def __init__(self, model_path, max_step, tb_tag=None, data_type=None, log_period=None):
     assert os.path.exists(model_path)
 
     if tb_tag is not None:
@@ -203,12 +195,7 @@ class DataWrapper:
     self.tb_tag     = tb_tag
     self._data      = None
 
-    # Processing constants
-    # These should be read from disk (when Monitor is fixed)
-    self.eval_freq  = 250000
-    self.eval_len   = 125000
-    self.log_freq   = 50000     # Careful with this
-    self._a2f_step_scale = 4    # Agent to frames scale
+    self.log_period = log_period
 
     self.model_path = model_path
     self.model_name = os.path.split(os.path.normpath(model_path))[1]
@@ -221,27 +208,36 @@ class DataWrapper:
     """Get the max step for the raw data
     NOTE: Both in TB and NP, evaluation data is in terms of evaluation steps !!!
     """
-    if self.data_type == "t":
-      return self._max_train_step
-    else:
-      return self._max_train_step // self._e2t_step_scale
+    return self._max_train_step
+
 
   @property
   def period(self):
-    if self.data_type == "t":
-      return self.log_freq
-    else:
-      return self.eval_len
+    return self.log_period
+
+    # If no log_period provided on command line or not yet read, read the value from file
+    if self.log_period is None:
+
+      if self.data_type == 't':
+        file = os.path.join(self.model_path, "env_monitor/data/train_stats_summary.json")
+      else:
+        file = os.path.join(self.model_path, "env_monitor/data/eval_stats_summary.json")
+
+      with open(file, 'r') as f:
+        data = json.load(f)
+
+      log_period = data.get("log_period", None)
+      assert log_period is not None, "'log_period' not saved by Monitor. "
+        "You must provide correct value as argument"
+
+      self.log_period = log_period
+
+    return self.log_period
+
 
   @property
   def data(self):
     return self._data
-
-  @property
-  def _e2t_step_scale(self):
-    """Compute the multiplicative factor which scales steps from eval to train"""
-    assert self.eval_freq % self.eval_len == 0
-    return self.eval_freq // self.eval_len
 
 
   # def get_data_copy(self, step_mode="t"):
@@ -249,25 +245,7 @@ class DataWrapper:
     assert step_mode in ["t", "e"]
     assert self._data.i is None, "Data must be processed before accessed"
 
-    # if step_mode == self.data_type:
-    #   return self._data
-    # else:
-    #   if step_mode == "t":
-    #     x = self._data.x * self._e2t_step_scale
-    #   else:
-    #     x = self._data.x // self._e2t_step_scale
-    #   return CurveData(x=x, y=self._data.y, i=None)
-
-    if step_mode == self.data_type:
-      x = self._data.x
-    else:
-      if step_mode == "t":
-        x = self._data.x * self._e2t_step_scale
-      else:
-        x = self._data.x // self._e2t_step_scale
-
-    x = x * self._a2f_step_scale
-    return CurveData(x=x, y=self._data.y, i=None)
+    return CurveData(x=self._data.x, y=self._data.y, i=None)
 
 
   def read_data(self):
@@ -282,10 +260,10 @@ class DataWrapper:
     else:
       data = self._read_np_data()
       data = CurveData(**data)
-      # Cannot filter NP data before computing the values !!!
+      # Cannot filter NP data before computing the values (because of episode indices) !!!
 
     # Set the data to match max_step in length
-    data.set_length(max_step=self.max_step, period=self.period, model_name=self.model_name)
+    data.set_length(max_step=self.max_step, model_name=self.model_name)
 
     self._data = data
 
@@ -350,7 +328,12 @@ class DataWrapper:
 
 
   def _get_tb_files(self):
-    tb_dir = os.path.join(self.model_path, "tf/tb")
+    # Get the TB directory
+    tb_dir = os.path.join(self.model_path, "monitor/tb")
+    # Check if the model follows the old directory structure
+    if not os.path.exists(tb_dir):
+      tb_dir = os.path.join(self.model_path, "tf/tb")
+
     files  = os.listdir(tb_dir)
     if self.data_type == "t":
       files = [file for file in files if file.endswith("train")]
