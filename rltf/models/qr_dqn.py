@@ -7,7 +7,7 @@ from rltf.models import tf_utils
 
 class QRDQN(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, N, k):
+  def __init__(self, N, k, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -16,7 +16,7 @@ class QRDQN(BaseDQN):
       N: int. number of quantiles
       k: int. Huber loss order
     """
-    super().__init__(obs_shape, n_actions, opt_conf, gamma)
+    super().__init__(**kwargs)
     self.N = N
     self.k = k
 

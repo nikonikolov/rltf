@@ -5,7 +5,7 @@ from rltf.models import BaseDQN
 
 class DQN(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss):
+  def __init__(self, huber_loss, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor

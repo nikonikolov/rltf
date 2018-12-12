@@ -7,7 +7,7 @@ from rltf.models import tf_utils
 
 class C51(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, V_min, V_max, N):
+  def __init__(self, V_min, V_max, N, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -19,7 +19,7 @@ class C51(BaseDQN):
       N: int. number of histogram bins
     """
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma)
+    super().__init__(**kwargs)
 
     self.N      = N
     self.V_min  = V_min

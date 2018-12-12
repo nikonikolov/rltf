@@ -6,7 +6,7 @@ from rltf.models import tf_utils
 
 class BaseBstrapDQN(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+  def __init__(self, huber_loss, n_heads, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -17,7 +17,7 @@ class BaseBstrapDQN(BaseDQN):
       n_heads: Number of bootstrap heads
     """
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma)
+    super().__init__(**kwargs)
 
     self.huber_loss = huber_loss
     self.n_heads    = n_heads
@@ -202,9 +202,9 @@ class BaseBstrapDQN(BaseDQN):
 
 class BstrapDQN(BaseBstrapDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads):
+  def __init__(self, **kwargs):
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+    super().__init__(**kwargs)
 
     # Custom TF Tensors and Ops
     self._active_head   = None
@@ -250,8 +250,8 @@ class BstrapDQN(BaseBstrapDQN):
 class BstrapDQN_UCB(BaseBstrapDQN):
   """UCB policy from Boostrapped DQN"""
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads, n_stds=0.1):
-    super().__init__(obs_shape, n_actions, opt_conf, gamma, huber_loss, n_heads)
+  def __init__(self, n_stds=0.1, **kwargs):
+    super().__init__(**kwargs)
     self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
 
 
