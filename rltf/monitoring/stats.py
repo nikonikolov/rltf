@@ -114,6 +114,7 @@ class StatsRecorder:
     self.step_rew = 0
 
 
+  #pylint: disable=unused-argument
   def after_agent_step(self, obs, reward, done, info):
     # Append stats data for the agent
     info["rltfmon.ep_rew"]   = self.ep_reward
@@ -317,8 +318,7 @@ class StatsRecorder:
       # Build the list of tuples for printing TB summary data to stdout
       # Make names appear with "debug/" prefix on stdout
       names   = sorted(names)
-      # tb_spec = [(name, ".4f", lambda t: self.summary_dict[name]) for name in names]
-      tb_spec = [("debug" + name[6:], ".4f", lambda t: self.summary_dict[name]) for name in names]
+      tb_spec = [("debug" + name[6:], ".4f", lambda t, k=name: self.summary_dict[k]) for name in names]
 
       # Initialize the summary dictionary
       self.summary_dict = {name: np.nan for name in names}

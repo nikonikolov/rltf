@@ -3,7 +3,7 @@ import os
 
 from rltf.cmdutils          import ArgSpec
 from rltf.cmdutils          import LambdaArgSpec
-from rltf.cmdutils.defaults import *
+from rltf.cmdutils.defaults import * #pylint: disable=wildcard-import,unused-wildcard-import
 
 
 def str2bool(v):

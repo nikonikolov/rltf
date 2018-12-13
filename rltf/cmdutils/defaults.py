@@ -5,10 +5,10 @@ from rltf               import agents
 from rltf               import models
 from rltf.cmdutils      import ArgSpec
 from rltf.exploration   import DecayedExplorationNoise
-from rltf.exploration   import GaussianNoise
+from rltf.exploration   import GaussianNoise #pylint: disable=unused-import
 from rltf.exploration   import OrnsteinUhlenbeckNoise
 from rltf.optimizers    import OptimizerConf
-from rltf.schedules     import ConstSchedule
+from rltf.schedules     import ConstSchedule #pylint: disable=unused-import
 from rltf.schedules     import PiecewiseSchedule
 
 

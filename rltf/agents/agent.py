@@ -411,14 +411,14 @@ class Agent:
     ckpt = tf.train.get_checkpoint_state(ckpt_dir)
     if ckpt is None:
       raise ValueError("No checkpoint found in {}".format(ckpt_dir))
-    ckpt_path = ckpt.model_checkpoint_path
+    ckpt_path = ckpt.model_checkpoint_path #pylint: disable=no-member
     return ckpt_path
 
 
   @staticmethod
   def _get_sess():
     config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
+    config.gpu_options.allow_growth = True #pylint: disable=no-member
     return tf.Session(config=config)
 
 
@@ -427,7 +427,7 @@ class Agent:
 
     in_exit_call = False
 
-    def safe_exit(*args, **kwargs):
+    def safe_exit(*args, **kwargs): #pylint: disable=unused-argument
       nonlocal in_exit_call
 
       # If Ctrl+C pressed twice consecutively, then exit

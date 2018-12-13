@@ -125,11 +125,13 @@ class Monitor(Wrapper):
     self.base_env.render  = self._env_render
 
 
+  #pylint: disable=method-hidden
   def step(self, action):
     """Corresponds to the step function executed by the agent"""
     return self._agent_step(action)
 
 
+  #pylint: disable=method-hidden
   def reset(self, **kwargs):
     self._before_agent_reset()
     obs = self.env.reset(**kwargs)
