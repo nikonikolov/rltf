@@ -56,12 +56,14 @@ class MaxEpisodeLen(gym.Wrapper):
     self.max_steps  = max_episode_steps
     self.steps      = None
 
+  #pylint: disable=method-hidden
   def step(self, action):
     self.steps += 1
     obs, reward, done, info = self.env.step(action)
     done = done or (self.steps >= self.max_steps)
     return obs, reward, done, info
 
+  #pylint: disable=method-hidden
   def reset(self, **kwargs):
     self.steps = 0
     return self.env.reset(**kwargs)

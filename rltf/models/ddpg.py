@@ -102,12 +102,8 @@ class DDPG(BaseQlearn):
     actor_loss      = self._get_actor_loss(actor_critic_q)
     critic_loss     = self._get_critic_loss(target_q, act_t_q)
 
-    # Build the optimizers
-    actor_opt       = self.actor_opt_conf.build(lr_tb_name="train/actor_learn_rate")
-    critic_opt      = self.critic_opt_conf.build(lr_tb_name="train/critic_learn_rate")
-
     # Create train Op
-    self._train_op  = self._build_train_op(actor_opt, critic_opt, actor_loss, critic_loss, actor_vars, critic_vars)
+    self._train_op  = self._build_train_op(actor_loss, critic_loss, actor_vars, critic_vars)
 
     # Create the Op that updates the target
     logger.debug("Creating target net update Op")
@@ -182,7 +178,12 @@ class DDPG(BaseQlearn):
     return control_deps
 
 
-  def _build_train_op(self, actor_opt, critic_opt, actor_loss, critic_loss, actor_vars, critic_vars):
+  def _build_train_op(self, actor_loss, critic_loss, actor_vars, critic_vars):
+    # Build the optimizers
+    actor_opt       = self.actor_opt_conf.build(lr_tb_name="train/actor_learn_rate")
+    critic_opt      = self.critic_opt_conf.build(lr_tb_name="train/critic_learn_rate")
+
+    # Compute gradients
     actor_grads     = actor_opt.compute_gradients(actor_loss,   var_list=actor_vars)
     critic_grads    = critic_opt.compute_gradients(critic_loss, var_list=critic_vars)
 
@@ -258,7 +259,7 @@ class DDPG(BaseQlearn):
 
     x = state
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-      regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg)
+      regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg) #pylint: disable=no-member
 
       x = tf.layers.dense(x, 400, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense1")

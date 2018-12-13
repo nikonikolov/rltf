@@ -128,6 +128,7 @@ class LoggingAgent(Agent):
     return []
 
 
+  #pylint: disable=unused-argument
   def _append_summary(self, summary, t):
     """To be overriden by the subclass.
     Append the tf.Summary that will be written to disk at timestep t with custom data.

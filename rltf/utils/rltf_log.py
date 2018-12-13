@@ -24,7 +24,6 @@ COLORS = dict(
 def conf_logs(model_dir, stdout_lvl="DEBUG", file_lvl="DEBUG"):
 
   run_file    = os.path.join(model_dir, "run.log")
-  param_file  = os.path.join(model_dir, "params.txt")
 
   conf = {
     'version': 1,

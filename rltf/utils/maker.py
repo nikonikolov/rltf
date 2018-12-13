@@ -32,10 +32,10 @@ def get_env_maker(env_id, seed, wrap=None, max_ep_steps_train=None, max_ep_steps
 
   if isinstance(env_id, str):
     if "Roboschool" in env_id:
-      import roboschool
+      import roboschool #pylint: disable=unused-variable
 
     if "Bullet" in env_id:
-      import pybullet_envs
+      import pybullet_envs #pylint: disable=unused-variable
 
     make = lambda: gym.make(env_id)
 

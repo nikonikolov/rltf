@@ -15,7 +15,7 @@ class DQN(BaseDQN):
       huber_loss: bool. Whether to use huber loss or not
     """
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma)
+    super().__init__(**kwargs)
 
     self.huber_loss = huber_loss
 
