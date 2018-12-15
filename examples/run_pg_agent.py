@@ -1,11 +1,12 @@
 from rltf.cmdutils      import cmdargs
-from rltf.envs          import wrap_deepmind_ddpg
+from rltf.envs          import wrap_pg
+from rltf.envs          import wrap_ddpg
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
 
 
 def parse_args():
-  model_choices = ["DDPG"]
+  model_choices = ["DDPG", "REINFORCE"]
   return cmdargs.parse_args(model_choices)
 
 
@@ -24,7 +25,7 @@ def make_agent():
   env_kwargs = {**agent_kwargs.pop("env_kwargs"), **dict(
     env_id=args.env_id,
     seed=args.seed,
-    wrap=wrap_deepmind_ddpg,
+    wrap=wrap_pg if args.model != "DDPG" else wrap_ddpg,
   )}
   env_maker = maker.get_env_maker(**env_kwargs)
 
@@ -35,26 +36,26 @@ def make_agent():
 
   # Create the agent
   agent_type  = agent_kwargs.pop("agent")
-  ddpg_agent  = agent_type(**agent_kwargs)
+  pg_agent    = agent_type(**agent_kwargs)
 
-  return ddpg_agent, args
+  return pg_agent, args
 
 
 def main():
   # Create the agent
-  ddpg_agent, args = make_agent()
+  pg_agent, args = make_agent()
 
   # Build the agent and the TF graph
-  ddpg_agent.build()
+  pg_agent.build()
 
   # Train or eval the agent
   if args.mode == 'train':
-    ddpg_agent.train()
+    pg_agent.train()
   else:
-    ddpg_agent.play()
+    pg_agent.play()
 
   # Close on exit
-  ddpg_agent.close()
+  pg_agent.close()
 
 
 if __name__ == "__main__":

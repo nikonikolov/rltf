@@ -101,7 +101,6 @@ class BaseBuffer():
     self.reward[self.next_idx]  = rew_tp1
     self.done[self.next_idx]    = done_tp1
 
-    # idx = self.next_idx
     self.next_idx = (self.next_idx + 1) % self.max_size
     self.size_now = min(self.max_size, self.size_now + 1)
 

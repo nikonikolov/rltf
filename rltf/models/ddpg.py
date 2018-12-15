@@ -118,7 +118,8 @@ class DDPG(BaseQlearn):
     self._init_op   = tf_utils.assign_vars(target_vars, agent_vars, name="init_op")
 
     # Rememeber the model variables
-    self._vars      = agent_vars + target_vars
+    self._vars        = agent_vars + target_vars
+    self._agent_vars  = agent_vars
 
     self._add_summaries(actor_loss, critic_loss, act_t_q, target_q)
 

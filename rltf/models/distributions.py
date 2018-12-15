@@ -61,6 +61,8 @@ class CategoricalPD(ProbabilityDistribution):
       tf.Tensor of shape `[batch_size]`
     """
     assert x.shape.ndims == 1
+    if x.dtype.base_dtype == tf.uint8:
+      x = tf.cast(x, dtype=tf.int32)
     return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=x, logits=self.logits)
 
 
@@ -99,8 +101,8 @@ class DiagGaussianPD(ProbabilityDistribution):
 
     self.mean   = mean                # [batch_size, self.dim]
     self.logstd = logstd              # [batch_size, self.dim] or [1, self.dim]
-    self.std    = tf.exp(self.std)
-    self.dim    = self.mean.shape[1]
+    self.std    = tf.exp(self.logstd)
+    self.dim    = self.mean.shape.as_list()[1]
 
 
   def sample(self):

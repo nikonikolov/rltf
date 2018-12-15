@@ -123,8 +123,7 @@ class Agent:
     self.train_saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
 
     # Create a separate saver for the best agent
-    var_list = [v for v in self.model.variables if "agent_net" in v.name]
-    self.eval_saver = tf.train.Saver(var_list, max_to_keep=1, save_relative_paths=True)
+    self.eval_saver = tf.train.Saver(self.model.agent_vars, max_to_keep=1, save_relative_paths=True)
 
 
   def train(self):

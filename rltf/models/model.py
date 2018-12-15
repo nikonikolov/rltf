@@ -30,8 +30,8 @@ class Model:
     # restored and reused from an already trained model
     self.notrain_re = None
 
-    # List of all model variables
-    self._vars      = None
+    self._vars        = None  # List of all model variables
+    self._agent_vars  = None  # List of savable model variables
 
 
   def build(self):
@@ -148,3 +148,15 @@ class Model:
       return self._vars
     else:
       raise NotImplementedError()
+
+
+  @property
+  def agent_vars(self):
+    """
+    Returns:
+      `list` of `tf.Variable`s which contains the variables needed to evaluate an agent (no training).
+    """
+    if self._agent_vars is not None:
+      return self._agent_vars
+    else:
+      return self.variables
