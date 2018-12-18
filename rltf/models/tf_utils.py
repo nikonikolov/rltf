@@ -50,7 +50,7 @@ def scope_vars(var_list, scope):
     var_list: list of `tf.Variable`s. Contains all variables that should be searched
     scope: str. Scope of the variables that should be selected
   """
-  return [v for v in var_list if v.name.startswith(scope)]
+  return [v for v in var_list if scope in v.name]
 
 
 # ------------------------------------ OPERATIONS ------------------------------------

@@ -263,16 +263,16 @@ class C51(BaseDQN):
     if logits is not None:
       z = tf_utils.softmax(logits, axis=-1)
     if q is None:
-      q = tf.reduce_sum(z * self.bins, axis=-1)
+      q = tf.reduce_sum(z * self.bins, axis=-1, keepdims=True)
 
     # Var(X) = sum_x p(X)*[X - E[X]]^2
-    center  = self.bins - tf.expand_dims(q, axis=-1)          # out: [None, n_actions, N]
+    center  = self.bins - q                                   # out: [None, n_actions, N]
     z_var   = tf.square(center) * z                           # out: [None, n_actions, N]
     z_var   = tf.reduce_sum(z_var, axis=-1)                   # out: [None, n_actions]
 
     # Normalize the variance across the action axis
     if normalize:
       mean  = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-      z_var = z_var / (mean + 1e-6)                           # out: [None, n_actions]
+      z_var = z_var / (mean + 1e-8)                           # out: [None, n_actions]
 
     return z_var
