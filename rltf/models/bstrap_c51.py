@@ -142,12 +142,12 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
     target_z = C51._select_target(self, target_z)
     backup_z = C51._compute_backup(self, target_z)
     backup_z = tf.stop_gradient(backup_z)
-    return dict(taget_q=backup_q, target_p=backup_z)
+    return dict(target_q=backup_q, target_p=backup_z)
 
 
   def _compute_loss(self, estimate, target, name):
     q, logits_z         = estimate["q_values"], estimate["logits"]
-    target_q, target_p  = target["target_q"], tagret["target_p"]
+    target_q, target_p  = target["target_q"], target["target_p"]
 
     head_loss = BstrapDQN_IDS._compute_loss(self, q, target_q, name)
     z_loss    = C51._compute_loss(self, logits_z, target_p, "train/z_loss")
