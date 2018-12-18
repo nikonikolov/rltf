@@ -67,9 +67,8 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
       x = tf.layers.dense(x, N*n_actions, activation=None)
       x = tf.reshape(x, [-1, n_actions, N])
       # Compute Softmax probabilities in numerically stable way
-      # C = tf.stop_gradient(tf.reduce_max(x, axis=-1, keepdims=True))
-      # x = tf.nn.softmax(x-C, axis=-1)
-      return x
+      p = tf_utils.softmax(x, axis=-1)
+      return x, p
 
     with tf.variable_scope("conv_net"):
       x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
@@ -82,13 +81,13 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
 
     # Build the C51 head
     with tf.variable_scope("distribution_value"):
-      z = build_z_head(x)
+      l, p = build_z_head(x)
 
     # Build the Bootstrap heads
     with tf.variable_scope("action_value"):
       heads = [build_bstrap_head(x) for _ in range(self.n_heads)]
       x = tf.concat(heads, axis=-2)
-    return x, z
+    return dict(q_values=x, logits=l, softmax=p)
 
 
   def _compute_estimate(self, agent_net):
@@ -99,10 +98,10 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
     Returns:
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
-    q, z = agent_net
+    q, z = agent_net["q_values"], agent_net["logits"]
     q = BstrapDQN_IDS._compute_estimate(self, q)  # out: [None, n_heads]
     z = C51._compute_estimate(self, z)            # logits; out: [None, N]
-    return q, z
+    return dict(q_values=q, logits=z)
 
 
   def _select_target(self, target_net):
@@ -117,7 +116,7 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
 
     # Compute the Q-estimate with the agent network variables and select the maximizing action
     agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")       # out: [None, n_heads, n_actions]
-    agent_net   = agent_net[0]  # Select only the Q-tensor
+    agent_net   = agent_net["q_values"]  # Select only the Q-tensor
     target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)   # out: [None, n_heads]
 
     # Select the target Q-function
@@ -135,7 +134,7 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
     Returns:
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
-    target_q, target_z = target_net
+    target_q, target_z = target_net["q_values"], target_net["logits"]
     # BstrapDQN_IDS call to self._select_target resolves to the BstrapC51_IDS._select_target()
     backup_q = BstrapDQN_IDS._compute_target(self, target_q)
     # NOTE: Do NOT call C51._compute_target(self, target_z) - call to self._select_target()
@@ -143,22 +142,22 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
     target_z = C51._select_target(self, target_z)
     backup_z = C51._compute_backup(self, target_z)
     backup_z = tf.stop_gradient(backup_z)
-    return backup_q, backup_z
+    return dict(taget_q=backup_q, target_p=backup_z)
 
 
   def _compute_loss(self, estimate, target, name):
-    q, logits_z         = estimate
-    target_q, target_z  = target
+    q, logits_z         = estimate["q_values"], estimate["logits"]
+    target_q, target_p  = target["target_q"], tagret["target_p"]
 
     head_loss = BstrapDQN_IDS._compute_loss(self, q, target_q, name)
-    z_loss    = C51._compute_loss(self, logits_z, target_z, "train/z_loss")
+    z_loss    = C51._compute_loss(self, logits_z, target_p, "train/z_loss")
 
-    return head_loss, z_loss
+    return dict(head_loss=head_loss, z_loss=z_loss)
 
 
   def _build_train_op(self, optimizer, loss, agent_vars, name):
-    head_loss = loss[0]
-    z_loss    = loss[1]
+    head_loss = loss["head_loss"]
+    z_loss    = loss["z_loss"]
 
     # Get the Bootsrapped heads and conv net train op
     train_net = BstrapDQN_IDS._build_train_op(self, optimizer, head_loss, agent_vars, name=None)
@@ -175,10 +174,11 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
   def _act_train(self, agent_net, name):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
-    z_var     = self._compute_z_variance(logits=agent_net[1], normalize=True)  # [None, n_actions]
+    z_var     = self._compute_z_variance(logits=agent_net["logits"], normalize=True)  # [None, n_actions]
+    # z_var     = self._compute_z_variance(z=agent_net["softmax"], normalize=True)  # [None, n_actions]
     self.rho2 = tf.maximum(z_var, 0.25)
 
-    action    = BstrapDQN_IDS._act_train(self, agent_net[0], name)
+    action    = BstrapDQN_IDS._act_train(self, agent_net["q_values"], name)
 
     # Add debugging data for TB
     tf.summary.histogram("debug/a_rho2", self.rho2)
@@ -193,4 +193,4 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
 
 
   def _act_eval(self, agent_net, name):
-    return BstrapDQN_IDS._act_eval(self, agent_net[0], name)
+    return BstrapDQN_IDS._act_eval(self, agent_net["q_values"], name)

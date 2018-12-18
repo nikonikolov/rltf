@@ -306,8 +306,10 @@ class BstrapDQN_IDS(BaseBstrapDQN):
     regret    = tf.reduce_max(mean + self.n_stds * std, axis=-1, keepdims=True)
     regret    = regret - (mean - self.n_stds * std)
     regret_sq = tf.square(regret)
-    info_gain = tf.log(1 + var / self.rho2) + 1e-6
-    ids_score = regret_sq / info_gain
+    # info_gain = tf.log(1 + var / self.rho2) + 1e-6
+    # ids_score = regret_sq / info_gain
+    info_gain = tf.log(1 + var / self.rho2) + 1e-5
+    ids_score = tf.div(regret_sq, info_gain)
     action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
 
     # Add debug histograms
