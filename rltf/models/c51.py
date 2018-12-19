@@ -273,6 +273,6 @@ class C51(BaseDQN):
     # Normalize the variance across the action axis
     if normalize:
       mean  = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-      z_var = z_var / (mean + 1e-8)                           # out: [None, n_actions]
+      z_var = z_var / mean                                    # out: [None, n_actions]
 
     return z_var

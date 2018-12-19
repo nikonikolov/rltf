@@ -66,9 +66,7 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
       x = tf.layers.dense(x, 512,         activation=tf.nn.relu)
       x = tf.layers.dense(x, N*n_actions, activation=None)
       x = tf.reshape(x, [-1, n_actions, N])
-      # Compute Softmax probabilities in numerically stable way
-      p = tf_utils.softmax(x, axis=-1)
-      return x, p
+      return x
 
     with tf.variable_scope("conv_net"):
       x = tf.layers.conv2d(x, filters=32, kernel_size=8, strides=4, padding="SAME", activation=tf.nn.relu)
@@ -81,13 +79,13 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
 
     # Build the C51 head
     with tf.variable_scope("distribution_value"):
-      l, p = build_z_head(x)
+      z = build_z_head(x)
 
     # Build the Bootstrap heads
     with tf.variable_scope("action_value"):
       heads = [build_bstrap_head(x) for _ in range(self.n_heads)]
       x = tf.concat(heads, axis=-2)
-    return dict(q_values=x, logits=l, softmax=p)
+    return dict(q_values=x, logits=z)
 
 
   def _compute_estimate(self, agent_net):
@@ -175,7 +173,6 @@ class BstrapC51_IDS(BstrapDQN_IDS, C51):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
     z_var     = self._compute_z_variance(logits=agent_net["logits"], normalize=True)  # [None, n_actions]
-    # z_var     = self._compute_z_variance(z=agent_net["softmax"], normalize=True)  # [None, n_actions]
     self.rho2 = tf.maximum(z_var, 0.25)
 
     action    = BstrapDQN_IDS._act_train(self, agent_net["q_values"], name)
