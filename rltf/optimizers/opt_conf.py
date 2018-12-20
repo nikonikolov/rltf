@@ -48,7 +48,7 @@ class OptimizerConf:
     if lr_tb_name is not None:
       tf.summary.scalar(lr_tb_name, self.lr_ph)
 
-    self.opt = self.opt_type(self.lr_ph, **self.kwargs)
+    self.opt = self.opt_type(learning_rate=self.lr_ph, **self.kwargs)
 
     return self.opt
 

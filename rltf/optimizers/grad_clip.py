@@ -1,28 +1,34 @@
 import tensorflow as tf
 
 
-class AdamGradClipOptimizer(tf.train.AdamOptimizer):
+def GradClipOptimizer(base_opt, *args, **kwargs):
+  import inspect
 
-  def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-08,
-               use_locking=False, grad_clip=None, name='AdamGradClipOptimizer'):
-
-    super().__init__(learning_rate=learning_rate,
-                     beta1=beta1,
-                     beta2=beta2,
-                     epsilon=epsilon,
-                     use_locking=use_locking,
-                     name=name,
-                    )
-    self.grad_clip = grad_clip
-
+  assert inspect.isclass(base_opt), "'base_opt' must be a valid Optimizer class"
+  assert issubclass(base_opt, tf.train.Optimizer), "'base_opt' must be a subclass of 'tf.train.Optimizer'"
 
   def compute_gradients(self, *args, **kwargs):
-    gradients = super().compute_gradients(*args, **kwargs)
-    return self._clip_gradients(gradients)
+    gradients = super(self.__class__, self).compute_gradients(*args, **kwargs)
 
-
-  def _clip_gradients(self, gradients):
+    # Clip the gradients
     for i, (grad, var) in enumerate(gradients):
       if grad is not None:
         gradients[i] = (tf.clip_by_norm(grad, self.grad_clip), var)
     return gradients
+
+
+  def __init__(self, *args, grad_clip=None, **kwargs):
+    super(self.__class__, self).__init__(*args, **kwargs)
+    assert grad_clip is not None
+    self.grad_clip = grad_clip
+
+  # Determine the name of the class
+  classname = str(base_opt.__name__).replace("Optimizer", "") + "GradClipOptimizer"
+
+  # Create the new class
+  OptClass = type(classname, (base_opt,), dict(__init__=__init__, compute_gradients=compute_gradients))
+
+  # Create the optimizer
+  opt = OptClass(*args, **kwargs)
+
+  return opt
