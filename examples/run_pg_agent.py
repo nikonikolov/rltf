@@ -1,11 +1,12 @@
 from rltf.cmdutils      import cmdargs
-from rltf.envs          import wrap_dqn
+from rltf.envs          import wrap_pg
+from rltf.envs          import wrap_ddpg
 from rltf.utils         import rltf_log
 from rltf.utils         import maker
 
 
 def parse_args():
-  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble"]
+  model_choices = ["DDPG", "REINFORCE", "PPO"]
   return cmdargs.parse_args(model_choices)
 
 
@@ -24,9 +25,7 @@ def make_agent():
   env_kwargs = {**agent_kwargs.pop("env_kwargs"), **dict(
     env_id=args.env_id,
     seed=args.seed,
-    wrap=wrap_dqn,
-    # Wrapper kwargs
-    stack=agent_kwargs["stack_frames"],
+    wrap=wrap_pg if args.model != "DDPG" else wrap_ddpg,
   )}
   env_maker = maker.get_env_maker(**env_kwargs)
 
@@ -37,26 +36,26 @@ def make_agent():
 
   # Create the agent
   agent_type  = agent_kwargs.pop("agent")
-  dqn_agent   = agent_type(**agent_kwargs)
+  pg_agent    = agent_type(**agent_kwargs)
 
-  return dqn_agent, args
+  return pg_agent, args
 
 
 def main():
   # Create the agent
-  dqn_agent, args = make_agent()
+  pg_agent, args = make_agent()
 
   # Build the agent and the TF graph
-  dqn_agent.build()
+  pg_agent.build()
 
   # Train or eval the agent
   if args.mode == 'train':
-    dqn_agent.train()
+    pg_agent.train()
   else:
-    dqn_agent.play()
+    pg_agent.play()
 
   # Close on exit
-  dqn_agent.close()
+  pg_agent.close()
 
 
 if __name__ == "__main__":

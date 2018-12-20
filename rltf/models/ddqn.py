@@ -13,7 +13,7 @@ class DDQN(DQN):
       `tf.Tensor` of shape `[None]`
     """
     # Compute the Q-estimate with the agent network variables and select the maximizing action
-    agent_net   = self._nn_model(self._obs_tp1, scope="agent_net")
+    agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")
     target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)
 
     # Select the target Q-function

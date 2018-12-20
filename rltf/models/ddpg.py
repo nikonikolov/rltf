@@ -1,8 +1,8 @@
 import logging
 import tensorflow as tf
 
-from rltf.models.model  import Model
-from rltf.models        import tf_utils
+from rltf.models import BaseQlearn
+from rltf.models import tf_utils
 
 
 logger = logging.getLogger(__name__)
@@ -18,13 +18,14 @@ def init_output_uniform_conv():
   return tf.random_uniform_initializer(-3e-4, 3e-4)
 
 
-class DDPG(Model):
+class DDPG(BaseQlearn):
 
-  def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
-               tau, gamma, batch_norm, obs_norm, huber_loss=False):
+  def __init__(self, obs_shape, act_shape, actor_opt_conf, critic_opt_conf, critic_reg,
+               tau, gamma, batch_norm, obs_norm, critic_huber_loss=False):
     """
     Args:
       obs_shape: list. Shape of a single state input
+      act_shape: list of 1 element. Shape of a single action
       actor_opt_conf: rltf.optimizers.OptimizerConf. Configuration for the actor optimizer
       critic_opt_conf: rltf.optimizers.OptimizerConf. Configuration for the critic optimizer
       critic_reg: float. Regularization parameter for the weights of the critic
@@ -32,13 +33,13 @@ class DDPG(Model):
       gamma: float. Discount factor
       batch_norm: bool. Whether to add batch normalization layers
       obs_norm: bool. Whether to normalize input observations
-      huber_loss: bool. Whether to use Huber loss or not
+      critic_huber_loss: bool. Whether to use Huber loss or not
     """
 
     super().__init__()
 
     self.tau          = tau
-    self.huber_loss   = huber_loss
+    self.huber_loss   = critic_huber_loss
     self.gamma        = gamma
     self.critic_reg   = critic_reg
     self.batch_norm   = batch_norm
@@ -51,8 +52,8 @@ class DDPG(Model):
 
     self.obs_shape = obs_shape
     self.obs_dtype = tf.uint8 if len(obs_shape) == 3 else tf.float32
-    self.n_actions = n_actions
-    self.act_shape = [self.n_actions]
+    self.n_actions = act_shape[0]
+    self.act_shape = act_shape
     self.act_dtype = tf.float32
 
     # Initializers
@@ -64,20 +65,29 @@ class DDPG(Model):
     self._training  = None
     self._action    = None
 
+    # Set the correct actor and critic networks
+    if len(self.obs_shape) == 3 and self.obs_dtype == tf.uint8:
+      self._actor   = self._actor_conv_net
+      self._critic  = self._critic_conv_net
+    elif len(self.obs_shape) == 1 and self.obs_dtype == tf.float32 or self.obs_dtype == tf.float64:
+      self._actor   = self._actor_net
+      self._critic  = self._critic_net
+    else:
+      raise ValueError("Invalid observation shape and type")
+
 
   def build(self):
 
-    super()._build()
-
-    # Placehodler for the running mode - training or evaluation
-    self._training  = tf.placeholder_with_default(True, (), name="training")
+    # Build the input placeholders
+    self._build_ph()
 
     # Preprocess the observations
-    obs_t, obs_tp1  = self._preprocess_obs()
+    obs_t   = tf_utils.preprocess_input(self.obs_t_ph,   norm=self.obs_norm, training=self._training)
+    obs_tp1 = tf_utils.preprocess_input(self.obs_tp1_ph, norm=self.obs_norm, training=self._training)
 
     actor           = self._actor(obs_t,                  scope="agent_net/actor")
     actor_critic_q  = self._critic(obs_t, actor,          scope="agent_net/critic")
-    act_t_q         = self._critic(obs_t, self._act_t_ph, scope="agent_net/critic")
+    act_t_q         = self._critic(obs_t, self.act_t_ph,  scope="agent_net/critic")
 
     target_act      = self._actor(obs_tp1,                scope="target_net/actor")
     target_q        = self._critic(obs_tp1, target_act,   scope="target_net/critic")
@@ -92,28 +102,33 @@ class DDPG(Model):
     actor_loss      = self._get_actor_loss(actor_critic_q)
     critic_loss     = self._get_critic_loss(target_q, act_t_q)
 
-    # Build the optimizers
-    actor_opt       = self.actor_opt_conf.build()
-    critic_opt      = self.critic_opt_conf.build()
-
     # Create train Op
-    self._train_op  = self._build_train_op(actor_opt, critic_opt, actor_loss, critic_loss, actor_vars, critic_vars)
+    self._train_op  = self._build_train_op(actor_loss, critic_loss, actor_vars, critic_vars)
 
     # Create the Op that updates the target
     logger.debug("Creating target net update Op")
     self._update_target = tf_utils.assign_vars(target_vars, agent_vars, self.tau, "update_target")
 
     # Remember the action tensor. name is needed when restoring the graph
-    self._action    = tf.identity(actor, name="action")
+    self.train_dict = dict(action=tf.identity(actor, name="action"))
+    self.eval_dict  = self.train_dict
 
     # Initialization Op
     logger.debug("Creating initialization Op")
     self._init_op   = tf_utils.assign_vars(target_vars, agent_vars, name="init_op")
 
     # Rememeber the model variables
-    self._variables = agent_vars + target_vars
+    self._vars        = agent_vars + target_vars
+    self._agent_vars  = agent_vars
 
     self._add_summaries(actor_loss, critic_loss, act_t_q, target_q)
+
+
+  def _build_ph(self):
+    super()._build_ph()
+
+    # Placehodler for the running mode - training or evaluation
+    self._training  = tf.placeholder_with_default(True, (), name="training")
 
 
   def _add_summaries(self, actor_loss, critic_loss, act_t_q, target_q):
@@ -126,40 +141,10 @@ class DDPG(Model):
     tf.summary.scalar("train/target_q",       tf.reduce_mean(target_q))
 
 
-  def _preprocess_obs(self):
-    # Image observations
-    if len(self.obs_shape) == 3 and self.obs_dtype == tf.uint8:
-      # Normalize observations
-      obs_t   = tf.cast(self._obs_t_ph,   tf.float32) / 255.0
-      obs_tp1 = tf.cast(self._obs_tp1_ph, tf.float32) / 255.0
-
-      self._actor   = self._actor_conv_net
-      self._critic  = self._critic_conv_net
-
-    # Low-dimensional observations
-    elif len(self.obs_shape) == 1 and self.obs_dtype == tf.float32 or self.obs_dtype == tf.float64:
-      if self.obs_norm:
-        # Normalize observations
-        bnorm_args = dict(axis=-1, center=False, scale=False, trainable=False, training=self._training)
-        obs_t   = tf.layers.batch_normalization(self._obs_t_ph,   **bnorm_args)
-        obs_tp1 = tf.layers.batch_normalization(self._obs_tp1_ph, **bnorm_args)
-      else:
-        obs_t   = self._obs_t_ph
-        obs_tp1 = self._obs_tp1_ph
-
-      self._actor   = self._actor_net
-      self._critic  = self._critic_net
-
-    else:
-      raise ValueError("Invalid observation shape and type")
-
-    return obs_t, obs_tp1
-
-
   def _compute_target(self, target_q):
-    done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+    done_mask = tf.cast(tf.logical_not(self.done_ph), tf.float32)
     done_mask = tf.expand_dims(done_mask, axis=-1)
-    reward    = tf.expand_dims(self._rew_t_ph, axis=-1)
+    reward    = tf.expand_dims(self.rew_t_ph, axis=-1)
     target_q  = reward + done_mask * self.gamma * target_q
     target_q  = tf.stop_gradient(target_q)
     return target_q
@@ -194,7 +179,12 @@ class DDPG(Model):
     return control_deps
 
 
-  def _build_train_op(self, actor_opt, critic_opt, actor_loss, critic_loss, actor_vars, critic_vars):
+  def _build_train_op(self, actor_loss, critic_loss, actor_vars, critic_vars):
+    # Build the optimizers
+    actor_opt       = self.actor_opt_conf.build(lr_tb_name="train/actor_learn_rate")
+    critic_opt      = self.critic_opt_conf.build(lr_tb_name="train/critic_learn_rate")
+
+    # Compute gradients
     actor_grads     = actor_opt.compute_gradients(actor_loss,   var_list=actor_vars)
     critic_grads    = critic_opt.compute_gradients(critic_loss, var_list=critic_vars)
 
@@ -220,15 +210,14 @@ class DDPG(Model):
     pass
 
 
-  def action_train(self, sess, state):
-    feed_dict = {self._obs_t_ph: state[None,:], self._training: False}
-    action    = sess.run(self._action, feed_dict=feed_dict)
-    action    = action[0]
-    return action
+  def action_train_ops(self, sess, state, run_dict=None):
+    feed_dict = {self.obs_t_ph: state[None,:], self._training: False}
+    return super()._action_train_ops(sess, run_dict, feed_dict=feed_dict)
 
 
-  def action_eval(self, sess, state):
-    return self.action_train(sess, state)
+  def action_eval_ops(self, sess, state, run_dict=None):
+    feed_dict = {self.obs_t_ph: state[None,:], self._training: False}
+    return super()._action_eval_ops(sess, run_dict, feed_dict=feed_dict)
 
 
   def _actor_net(self, state, scope):
@@ -271,7 +260,7 @@ class DDPG(Model):
 
     x = state
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-      regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg)
+      regularizer = tf.contrib.layers.l2_regularizer(scale=self.critic_reg) #pylint: disable=no-member
 
       x = tf.layers.dense(x, 400, kernel_initializer=self.hidden_init(),
                           kernel_regularizer=regularizer, name="dense1")

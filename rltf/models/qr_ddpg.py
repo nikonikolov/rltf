@@ -12,11 +12,9 @@ logger = logging.getLogger(__name__)
 
 class QRDDPG(DDPG):
 
-  def __init__(self, obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
-               tau, gamma, batch_norm, obs_norm, N, huber_loss):
+  def __init__(self, N, **kwargs):
 
-    super().__init__(obs_shape, n_actions, actor_opt_conf, critic_opt_conf, critic_reg,
-                     tau, gamma, batch_norm, obs_norm, huber_loss)
+    super().__init__(**kwargs)
     self.N = N
     # self.hidden_init = tf_utils.init_default
     # self.output_init = tf_utils.init_default
@@ -34,7 +32,7 @@ class QRDDPG(DDPG):
 
 
   # def _compute_target(self, target_q):
-  #   done_mask = tf.cast(tf.logical_not(self._done_ph), tf.float32)
+  #   done_mask = tf.cast(tf.logical_not(self.done_ph), tf.float32)
   #   done_mask = tf.expand_dims(done_mask, axis=-1)
   #   rew_t_ph  = tf.expand_dims(self.rew_t_ph, axis=-1)
   #   return rew_t_ph + done_mask * self.gamma * target_q

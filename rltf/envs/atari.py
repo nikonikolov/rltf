@@ -44,9 +44,11 @@ class NoopResetEnv(gym.Wrapper):
     assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
     # self.prng = seeding.get_prng()
 
+  #pylint: disable=method-hidden
   def step(self, action):
     return self.env.step(action)
 
+  #pylint: disable=method-hidden
   def reset(self, **kwargs):
     """Do no-op action for a number of steps in [1, noop_max]."""
     self.env.reset(**kwargs)
@@ -68,9 +70,11 @@ class FireResetEnv(gym.Wrapper):
     assert env.unwrapped.get_action_meanings()[1] == 'FIRE'
     assert len(env.unwrapped.get_action_meanings()) >= 3
 
+  #pylint: disable=method-hidden
   def step(self, action):
     return self.env.step(action)
 
+  #pylint: disable=method-hidden
   def reset(self, **kwargs):
     self.env.reset(**kwargs)
     obs, _, done, _ = self.env.step(1)
@@ -93,6 +97,7 @@ class EpisodicLifeEnv(gym.Wrapper):
     self.lives = 0
     self.env_done = True
 
+  #pylint: disable=method-hidden
   def step(self, action):
     obs, reward, done, info = self.env.step(action)
     # Remember done as reported by env
@@ -108,6 +113,7 @@ class EpisodicLifeEnv(gym.Wrapper):
     self.lives = lives
     return obs, reward, done, info
 
+  #pylint: disable=method-hidden
   def reset(self, **kwargs):
     """Reset only when lives are exhausted.
     This way all states are still reachable even though lives are episodic,
@@ -137,6 +143,7 @@ class MaxAndRepeatEnv(gym.Wrapper):
     self._repeat     = repeat
     assert self._repeat >= 1
 
+  #pylint: disable=method-hidden
   def step(self, action):
     """Repeat action, sum reward, and max over last observations."""
     total_reward = 0.0
@@ -153,6 +160,7 @@ class MaxAndRepeatEnv(gym.Wrapper):
 
     return max_frame, total_reward, done, info
 
+  #pylint: disable=method-hidden
   def reset(self, **kwargs):
     return self.env.reset(**kwargs)
 
@@ -194,11 +202,13 @@ class StackFrames(gym.Wrapper):
     dtype         = env.observation_space.dtype
     self.observation_space = gym.spaces.Box(low=0, high=255, shape=state_shape, dtype=dtype)
 
+  #pylint: disable=method-hidden
   def step(self, action):
     obs, reward, done, info = self.env.step(action)
     self.obs_buf.append(obs)
     return self._obs(), reward, done, info
 
+  #pylint: disable=method-hidden
   def reset(self, **kwargs):
     obs = self.env.reset(**kwargs)
     for _ in range(self.k):

@@ -1,13 +1,13 @@
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models.dqn  import BaseDQN
-from rltf.models      import tf_utils
+from rltf.models import BaseDQN
+from rltf.models import tf_utils
 
 
 class C51(BaseDQN):
 
-  def __init__(self, obs_shape, n_actions, opt_conf, gamma, V_min, V_max, N):
+  def __init__(self, V_min, V_max, N, **kwargs):
     """
     Args:
       obs_shape: list. Shape of the observation tensor
@@ -19,7 +19,7 @@ class C51(BaseDQN):
       N: int. number of histogram bins
     """
 
-    super().__init__(obs_shape, n_actions, opt_conf, gamma)
+    super().__init__(**kwargs)
 
     self.N      = N
     self.V_min  = V_min
@@ -75,7 +75,7 @@ class C51(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None, N]`
     """
-    a_mask  = tf.one_hot(self._act_t_ph, self.n_actions, dtype=tf.float32)  # out: [None, n_actions]
+    a_mask  = tf.one_hot(self.act_t_ph, self.n_actions, dtype=tf.float32)   # out: [None, n_actions]
     a_mask  = tf.expand_dims(a_mask, axis=-1)                               # out: [None, n_actions, 1]
     z       = tf.reduce_sum(agent_net * a_mask, axis=1)                     # out: [None, N]
     return z
@@ -234,11 +234,11 @@ class C51(BaseDQN):
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 
-    return action
+    return dict(action=action)
 
 
   def _act_eval(self, agent_net, name):
-    return tf.identity(self.a_train, name=name)
+    return dict(action=tf.identity(self.train_dict["action"], name=name))
 
 
   def _compute_z_variance(self, z=None, logits=None, q=None, normalize=True):
@@ -257,16 +257,16 @@ class C51(BaseDQN):
     if logits is not None:
       z = tf_utils.softmax(logits, axis=-1)
     if q is None:
-      q = tf.reduce_sum(z * self.bins, axis=-1)
+      q = tf.reduce_sum(z * self.bins, axis=-1, keepdims=True)
 
     # Var(X) = sum_x p(X)*[X - E[X]]^2
-    center  = self.bins - tf.expand_dims(q, axis=-1)          # out: [None, n_actions, N]
+    center  = self.bins - q                                   # out: [None, n_actions, N]
     z_var   = tf.square(center) * z                           # out: [None, n_actions, N]
     z_var   = tf.reduce_sum(z_var, axis=-1)                   # out: [None, n_actions]
 
     # Normalize the variance across the action axis
     if normalize:
       mean  = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-      z_var = z_var / (mean + 1e-6)                           # out: [None, n_actions]
+      z_var = z_var / (mean + 1e-8)                           # out: [None, n_actions]
 
     return z_var
