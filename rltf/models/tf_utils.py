@@ -198,3 +198,38 @@ def sherman_morrison_inverse(A_inv, u, v):
   inverse = A_inv - num / denom
 
   return inverse
+
+
+def woodburry_inverse(A_inv, U, V):
+  """Compute the inverse of (A + UV) using Woodburry formula:
+  `(A + UV)^-1 = A^-1 - A^-1 U (I + V A^-1 U)^-1 V A^-1`. For details see:
+  https://en.wikipedia.org/wiki/Woodbury_matrix_identity
+  Args:
+    A_inv: tf.Tensor. The inverse of A, `shape=[N, N]`
+    U: tf.Tensor, `shape=[N, M]`
+    V: tf.Tensor. `shape=[M, N]`
+  Returns: (A + UV)^-1 with the same shape and dtype as `A_inv`
+  """
+
+  # NOTE: Must make sure to use double precision. Otherwise results are very inaccurate
+  A_inv_64  = tf.cast(A_inv, tf.float64) if  A_inv.dtype.base_dtype == tf.float32 else A_inv
+  U_64      = tf.cast(U,     tf.float64) if      U.dtype.base_dtype == tf.float32 else U
+  V_64      = tf.cast(V,     tf.float64) if      V.dtype.base_dtype == tf.float32 else V
+
+  assert  A_inv_64.dtype.base_dtype == tf.float64
+  assert      U_64.dtype.base_dtype == tf.float64
+  assert      V_64.dtype.base_dtype == tf.float64
+
+  A_inv_U = tf.matmul(A_inv_64, U_64)
+  V_A_inv = tf.matmul(V_64, A_inv_64)
+  I       = tf.eye(tf.shape(V)[0], dtype=tf.float64)
+  inverse = tf.matrix_inverse(I + tf.matmul(V_64, A_inv_U))
+  inverse = tf.matmul(A_inv_U, inverse)
+  inverse = tf.matmul(inverse, V_A_inv)
+  inverse = A_inv_64 - inverse
+
+  assert  inverse.dtype.base_dtype == tf.float64
+  inverse = tf.cast(inverse, tf.float32) if A_inv.dtype.base_dtype == tf.float32 else inverse
+  assert  inverse.dtype.base_dtype == A_inv.dtype.base_dtype
+
+  return inverse

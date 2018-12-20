@@ -94,6 +94,78 @@ BstrapDQN_UCB = {**BstrapDQN, **dict(
 
 BstrapDQN_Ensemble = {**BstrapDQN}
 
+BstrapDQN_IDS = {**dqn_spec, **dict(
+  agent=agents.AgentDQN,
+  model=models.BstrapDQN_IDS,
+  huber_loss=True,
+  n_heads=10,                   # Number of bootstrap heads
+  n_stds=0.1,                   # Uncertainty scale for computing regret
+  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
+  epsilon_train=ArgSpec(ConstSchedule, value=0.0),
+  epsilon_eval=0.0,
+  target_update_period=40000,
+)}
+
+BstrapC51_IDS = {**dqn_spec, **dict(
+  agent=agents.AgentDQN,
+  model=models.BstrapC51_IDS,
+  huber_loss=False,
+  n_heads=10,                   # Number of bootstrap heads
+  n_stds=0.1,                   # Uncertainty scale for computing regret
+  V_min=-10,                    # Lower bound for distribution support
+  V_max=10,                     # Upper bound for distribution support
+  N=51,                         # Number of distribution atoms
+  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
+  epsilon_train=ArgSpec(ConstSchedule, value=0.0),
+  epsilon_eval=0.0,
+  target_update_period=40000,
+)}
+
+BstrapQRDQN_IDS = {**dqn_spec, **dict(
+  agent=agents.AgentDQN,
+  model=models.BstrapQRDQN_IDS,
+  huber_loss=True,              # Huber loss for the bootstrap network
+  n_heads=10,                   # Number of bootstrap heads
+  n_stds=0.1,                   # Uncertainty scale for computing regret
+  N=200,                        # Number of quantiles
+  k=1,                          # Quantile Huber loss order
+  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
+  epsilon_train=ArgSpec(ConstSchedule, value=0.0),
+  epsilon_eval=0.0,
+  target_update_period=40000,
+)}
+
+BDQN = {**dqn_spec, **dict(
+  agent=agents.AgentBDQN,
+  model=models.BDQN,
+  huber_loss=True,              # Huber loss for the hidden network layers
+  sigma_e=1.0,                  # BLR observation noise variance
+  tau=0.01,                     # BLR prior diagonal precision
+  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
+  epsilon_train=ArgSpec(PiecewiseSchedule, endpoints=[(0, 1.0), (10**6, 0.01)], outside_value=0.01),
+  epsilon_eval=0.001,
+  blr_train_period=10000,
+  blr_batch_size=10000,
+)}
+
+BDQN_IDS = {**dqn_spec, **dict(
+  agent=agents.AgentBDQN,
+  model=models.BDQN_IDS,
+  huber_loss=True,              # Huber loss for the hidden network layers
+  n_stds=0.1,                   # Uncertainty scale for computing regret
+  sigma_e=1.0,                  # BLR observation noise variance
+  tau=0.01,                     # BLR prior diagonal precision
+  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
+  epsilon_train=ArgSpec(ConstSchedule, value=0.0),
+  epsilon_eval=0.0,
+  target_update_period=40000,
+  blr_train_period=40000,
+  blr_batch_size=40000,
+)}
+
+BDQN_TS  = {**BDQN}
+BDQN_UCB = {**BDQN_IDS}
+
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -202,6 +274,13 @@ MODELS = dict(
   BstrapDQN=BstrapDQN,
   BstrapDQN_UCB=BstrapDQN_UCB,
   BstrapDQN_Ensemble=BstrapDQN_Ensemble,
+  BstrapDQN_IDS=BstrapDQN_IDS,
+  BstrapC51_IDS=BstrapC51_IDS,
+  BstrapQRDQN_IDS=BstrapQRDQN_IDS,
+  BDQN=BDQN,
+  BDQN_TS=BDQN_TS,
+  BDQN_UCB=BDQN_UCB,
+  BDQN_IDS=BDQN_IDS,
   DDPG=DDPG,
   REINFORCE=REINFORCE,
   PPO=PPO,

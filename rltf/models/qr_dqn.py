@@ -210,13 +210,18 @@ class QRDQN(BaseDQN):
 
 
   def _act_train(self, agent_net, name):
-    # Compute the Q-function as expectation of Z; output shape [None, n_actions]
+    """Select the greedy action based on E[Z]
+    Args:
+      agent_net: `tf.Tensor`, shape `[None, n_actions, N]. The tensor output from `self._nn_model()`
+        for the agent
+    Returns:
+      `tf.Tensor` of shape `[None]`
+    """
     q       = tf.reduce_mean(agent_net, axis=-1)
     action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
 
     # Add debugging plot for the variance of the return
-    center  = agent_net - tf.expand_dims(q, axis=-1)      # out: [None, n_actions, N]
-    z_var   = tf.reduce_mean(tf.square(center), axis=-1)  # out: [None, n_actions]
+    z_var   = self._compute_z_variance(z=agent_net, normalize=True)  # [None, n_actions]
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 
@@ -239,3 +244,25 @@ class QRDQN(BaseDQN):
     self.plot_conf.set_eval_spec(dict(eval_actions=self.plot_conf.true_train_spec["train_actions"]))
 
     return dict(action=tf.identity(self.train_dict["action"], name=name))
+
+
+  def _compute_z_variance(self, z, normalize=True):
+    """Compute the return distribution variance. Only one of `z` and `logits` must be set
+    Args:
+      z: tf.Tensor, shape `[None, n_actions, N]`. Return atoms
+      normalize: bool. If True, normalize the variance values such that the mean of the
+        return variances of all actions in a given state is 1.
+    Returns:
+      tf.Tensor of shape `[None, n_actions]`
+    """
+
+    # Var(X) = sum_x p(X)*[X - E[X]]^2
+    center  = z - tf.reduce_mean(z, axis=-1, keepdims=True)   # out: [None, n_actions, N]
+    z_var   = tf.reduce_mean(tf.square(center), axis=-1)      # out: [None, n_actions]
+
+    # Normalize the variance across the action axis
+    if normalize:
+      mean  = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
+      z_var = z_var / mean                                    # out: [None, n_actions]
+
+    return z_var

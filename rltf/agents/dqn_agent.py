@@ -118,3 +118,34 @@ class AgentDQN(QlearnAgent):
       obs_len   = 1
 
     return obs_shape, obs_dtype, obs_len, n_actions
+
+
+
+class AgentBDQN(AgentDQN):
+
+  def __init__(self, blr_train_period, blr_batch_size, **kwargs):
+    """
+    Args:
+      blr_train_period: int. Period in number of steps at which to train the BLR
+      blr_batch_size: int. Number of samples to train BLR in an update step
+    """
+    super().__init__(**kwargs)
+
+    self.blr_train_period = blr_train_period
+    self.blr_batch_size = blr_batch_size
+
+
+  def _run_train_step(self, t):
+    super()._run_train_step(t)
+
+    # Train BLR
+    if t % self.blr_train_period == 0:
+      # for batch in self.replay_buf.random_data(self.blr_batch_size, self.batch_size):
+      #   feed_dict = self._get_feed_dict(batch, t)
+      #   self.sess.run(self.model.train_blr, feed_dict=feed_dict)
+
+      n = int(self.blr_batch_size / (self.batch_size * 4))
+      for _ in range(n):
+        batch = self.replay_buf.sample(self.batch_size)
+        feed_dict = self._get_feed_dict(batch, t)
+        self.sess.run(self.model.train_blr, feed_dict=feed_dict)

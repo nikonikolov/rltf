@@ -45,7 +45,8 @@ class C51(BaseDQN):
       x: tf.Tensor. Tensor for the input
       scope: str. Scope in which all the model related variables should be created
     Returns:
-      `tf.Tensor` of shape `[batch_size, n_actions, N]`. Contains the distribution of Q for each action
+      `tf.Tensor` of shape `[batch_size, n_actions, N]`. Contains the logits for the
+        return distribution for each action
     """
     n_actions = self.n_actions
     N         = self.N
@@ -59,11 +60,8 @@ class C51(BaseDQN):
     with tf.variable_scope("action_value"):
       x = tf.layers.dense(x, units=512,          activation=tf.nn.relu)
       x = tf.layers.dense(x, units=N*n_actions,  activation=None)
-
-    # Compute Softmax probabilities in numerically stable way
     x = tf.reshape(x, [-1, n_actions, N])
-    # C = tf.stop_gradient(tf.reduce_max(x, axis=-1, keepdims=True))
-    # x = tf.nn.softmax(x-C, axis=-1)
+
     return x
 
 
@@ -114,7 +112,6 @@ class C51(BaseDQN):
     done_mask   = tf.cast(tf.logical_not(self.done_ph), tf.float32)
     done_mask   = tf.expand_dims(done_mask, axis=-1)
     rew_t       = tf.expand_dims(self.rew_t_ph, axis=-1)
-    # bins        = tf.squeeze(self.bins, axis=0)
     bins        = tf.reshape(self.bins, [1, self.N])
     target_bins = rew_t + self.gamma * done_mask * bins
 
@@ -153,6 +150,17 @@ class C51(BaseDQN):
     proj_p  = tf.reduce_sum(weights * p, axis=-1)           # [None, N]
 
     return proj_p
+
+
+  def _compute_loss(self, estimate, target, name):
+    logits_z  = estimate
+    target_z  = target
+    entropy   = tf.nn.softmax_cross_entropy_with_logits_v2(labels=target_z, logits=logits_z)
+    loss      = tf.reduce_mean(entropy)
+
+    tf.summary.scalar(name, loss)
+
+    return loss
 
 
   def _project_distribution_algo(self, atoms, p):
@@ -209,13 +217,11 @@ class C51(BaseDQN):
     return target_z
 
 
-  def _compute_loss(self, estimate, target, name):
+  def _compute_loss_algo(self, estimate, target, name):
+    # The only loss implementation which works with _project_distribution_algo
     logits_z  = estimate
     target_z  = target
-    # Only version which works with project_algo
-    # entropy   = -tf.reduce_sum(target_z * tf.log(tf_utils.softmax(logits_z, axis=-1)), axis=-1)
-    # entropy   = -tf.reduce_sum(target_z * tf_utils.log_softmax(logits_z, axis=-1), axis=-1)
-    entropy   = tf.nn.softmax_cross_entropy_with_logits_v2(labels=target_z, logits=logits_z)
+    entropy   = -tf.reduce_sum(target_z * tf.log(tf_utils.softmax(logits_z, axis=-1)), axis=-1)
     loss      = tf.reduce_mean(entropy)
 
     tf.summary.scalar(name, loss)
@@ -267,6 +273,6 @@ class C51(BaseDQN):
     # Normalize the variance across the action axis
     if normalize:
       mean  = tf.reduce_mean(z_var, axis=-1, keepdims=True)   # out: [None, 1]
-      z_var = z_var / (mean + 1e-8)                           # out: [None, n_actions]
+      z_var = z_var / mean                                    # out: [None, n_actions]
 
     return z_var
