@@ -13,7 +13,8 @@ class AgentPG(LoggingAgent):
                model,
                gamma,
                lam,
-               epochs,
+               path_len,
+               stop_step,
                vf_iters=1,
                stack_frames=3,
                **agent_kwargs
@@ -23,8 +24,8 @@ class AgentPG(LoggingAgent):
       env_maker: callable. Function that takes the mode of an env and retruns a new environment instance
       gamma: float. Discount factor for GAE(gamma, lambda)
       lam: float. Lambda value for GAE(gamma, lambda)
-      epochs: int. Number of training epochs. An epoch comprises collecting experience with the current
-        policy, running several training steps to update the policy and throwing the experience away
+      path_len: int. Number of agent steps before taking a policy gradient step
+      stop_step: int. Total number of agent steps
       vf_iters: int. Number of value function training steps in a single epoch
     """
 
@@ -49,23 +50,25 @@ class AgentPG(LoggingAgent):
                       epochs=True,
                     )
 
+    self.path_len   = path_len
+    self.stop_step  = stop_step
+    self.epochs     = self.stop_step // self.path_len
+    self.vf_iters   = vf_iters
 
-    self.gamma    = gamma
-    self.lam      = lam
-    self.vf_iters = vf_iters
-    self.epochs   = epochs
+    self.gamma      = gamma
+    self.lam        = lam
 
     # Get environment specs
     obs_shape, obs_dtype, act_shape, act_dtype, obs_len = self._state_action_spec(stack_frames)
 
     # Initialize the model and the experience buffer
     self.model  = model(obs_shape=obs_shape, act_space=self.env_train.action_space, **self.model_kwargs)
-    self.buffer = PGBuffer(self.batch_size, obs_shape, obs_dtype, act_shape, act_dtype, obs_len)
+    self.buffer = PGBuffer(self.path_len, obs_shape, obs_dtype, act_shape, act_dtype, obs_len)
 
 
   def _train(self):
     # Get the function that generates trajectories
-    run_policy = self._trajectory_generator(self.batch_size)
+    run_policy = self._trajectory_generator(self.path_len)
 
     for t in range(self.epochs):
       if self._terminate:
@@ -77,7 +80,8 @@ class AgentPG(LoggingAgent):
       # Train the model
       self._run_train_step(t)
 
-      self.env_train.monitor.log_stats()
+      if t % self.log_period == 0:
+        self.env_train.monitor.log_stats()
 
       # Stop and run evaluation procedure
       if self.eval_len > 0 and t % self.eval_period == 0:
@@ -139,21 +143,21 @@ class AgentPG(LoggingAgent):
 
   def _get_feed_dict(self, batch, t):
     feed_dict = {
-      self.model.obs_ph:        batch["obs"],
-      self.model.act_ph:        batch["act"],
-      self.model.adv_ph:        batch["adv"],
-      self.model.ret_ph:        batch["ret"],
-      self.model.old_logp_ph:   batch["logp"],
-      self.model.pi_opt_conf.lr_ph:  self.model.pi_opt_conf.lr_value(t),
-      self.model.vf_opt_conf.lr_ph:  self.model.vf_opt_conf.lr_value(t),
+      self.model.obs_ph:              batch["obs"],
+      self.model.act_ph:              batch["act"],
+      self.model.adv_ph:              batch["adv"],
+      self.model.ret_ph:              batch["ret"],
+      self.model.old_logp_ph:         batch["logp"],
+      self.model.pi_opt_conf.lr_ph:   self.model.pi_opt_conf.lr_value(t),
+      self.model.vf_opt_conf.lr_ph:   self.model.vf_opt_conf.lr_value(t),
     }
 
     return feed_dict
 
 
   def _run_summary_op(self, t, feed_dict):
-    # Run summary after every training epoch
-    self.summary = self.sess.run(self.summary_op, feed_dict=feed_dict)
+    if t % self.log_period == 0:
+      self.summary = self.sess.run(self.summary_op, feed_dict=feed_dict)
 
 
   def _run_train_step(self, t):

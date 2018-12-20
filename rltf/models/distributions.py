@@ -63,6 +63,7 @@ class CategoricalPD(ProbabilityDistribution):
     assert x.shape.ndims == 1
     if x.dtype.base_dtype == tf.uint8:
       x = tf.cast(x, dtype=tf.int32)
+    #pylint: disable=invalid-unary-operand-type
     return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=x, logits=self.logits)
 
 

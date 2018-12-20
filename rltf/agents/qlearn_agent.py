@@ -13,6 +13,7 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
                warm_up,
                train_period,
                target_update_period,
+               batch_size,
                stop_step,
                *args,
                save_buf=True,
@@ -23,7 +24,8 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
       warm_up: int. Number of random steps before training starts
       train_period: int. How many environment actions to take between every 2 learning steps
       target_update_period: Period in number of agent steps at which to update the target net
-      stop_step: int. Training step at which learning stops
+      batch_size: int. Batch size for training the model
+      stop_step: int. Total number of agent steps
       save_buf: bool. If True, save the buffer during calls to `self.save()`. Can also be disabled
         by setting the 'RLTFBUF' environment variable to `/dev/null`.
     """
@@ -34,6 +36,7 @@ class BaseQlearnAgent(LoggingAgent, ThreadedAgent):
     self.learn_started  = False         # Bool: Indicates if learning has started or not
     self.train_period   = train_period  # How often to run a training step
     self.stop_step      = stop_step     # Step at which training stops
+    self.batch_size     = batch_size
 
     self.target_update_period = target_update_period  # Period at which target network is updated
     self.replay_buf = None

@@ -62,6 +62,7 @@ class BasePG(Model):
     self.ret_ph       = None
     self.old_logp_ph  = None
     self.training     = None
+    self.train_op     = None
 
 
   def _parse_layer_spec(self, layers):

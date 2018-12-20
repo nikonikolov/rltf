@@ -18,7 +18,6 @@ class Agent:
   def __init__(self,
                eval_period,
                eval_len,
-               batch_size,
                model_dir,
                save_period=1000000,
                n_plays=0,
@@ -30,7 +29,6 @@ class Agent:
     Args:
       eval_period: int. How many agent steps to take between every 2 evaluation runs
       eval_len: int. How many agent steps an evaluation run lasts. `<=0` means no evaluation
-      batch_size: int. Batch size for training the model
       model_dir: str. Directory path for the model, where logs and checkpoints will be saved. If the
         directory is not empty, the agent will restore the model continue training it
       n_plays: int. Number of separate play (or evaluation) runs to execute when `Agent.play()` is called.
@@ -63,7 +61,6 @@ class Agent:
 
     # Training data
     self.agent_step     = 0             # Current agent step
-    self.batch_size     = batch_size
     self.prng           = seeding.get_prng()
 
     # Evaluation data

@@ -102,9 +102,45 @@ class PGBuffer(BaseBuffer):
 
     # Normalize advanatages
     if norm_adv:
-      self.gae_lambda = (self.gae_lambda - np.mean(self.gae_lambda)) / (np.std(self.gae_lambda) + 10e-6)
+      self.gae_lambda = (self.gae_lambda - np.mean(self.gae_lambda)) / (np.std(self.gae_lambda) + 1e-8)
 
 
   def get_data(self):
     """Return all data"""
-    return dict(obs=self.obs, act=self.action, adv=self.gae_lambda, ret=self.td_lambda, logp=self.logp)
+    return self._batch_samples(np.arange(0, self.size_now))
+
+
+  def iterate(self, batch_size, shuffle=True):
+
+    size = (self.size_now // batch_size) * batch_size
+
+    inds = np.arange(0, self.size_now)
+    if shuffle:
+      # inds = self.prng.shuffle(inds)[:size]
+      self.prng.shuffle(inds)
+    inds = inds[:size]
+
+    for lo in range(0, size, batch_size):
+      hi = lo + batch_size
+      yield self._batch_samples(inds[lo:hi])
+
+
+  def _batch_samples(self, inds):
+    """Takes the samples from the buffer stacks them into a batch
+    Args:
+      inds: np.array or list. Indices for transitions to be sampled from the buffer
+    Returns:
+      See self.sample()
+    """
+    if self.obs_len == 1:
+      obs_batch     = self.obs[inds]
+    else:
+      obs_batch     = np.concatenate([self._encode_img_observation(idx)[None] for idx in inds], 0)
+
+    act_batch   = self.action[inds]
+    gae_batch   = self.gae_lambda[inds]
+    td_batch    = self.td_lambda[inds]
+    logp_batch  = self.logp[inds]
+    vf_batch    = self.vf[inds]
+
+    return dict(obs=obs_batch, act=act_batch, adv=gae_batch, ret=td_batch, logp=logp_batch, vf=vf_batch)

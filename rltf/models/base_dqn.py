@@ -107,7 +107,6 @@ class BaseDQN(BaseQlearn):
 
     assert len(obs_shape) == 3 or len(obs_shape) == 1
 
-    # Model.__init__(self)
     super().__init__()
 
     self.gamma      = gamma

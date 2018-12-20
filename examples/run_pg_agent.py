@@ -6,7 +6,7 @@ from rltf.utils         import maker
 
 
 def parse_args():
-  model_choices = ["DDPG", "REINFORCE"]
+  model_choices = ["DDPG", "REINFORCE", "PPO"]
   return cmdargs.parse_args(model_choices)
 
 

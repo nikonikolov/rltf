@@ -5,6 +5,7 @@ from rltf.models import tf_utils
 
 
 class REINFORCE(BasePG):
+  """Vanilla Policy Gradient Model"""
 
   def build(self):
 
@@ -33,18 +34,18 @@ class REINFORCE(BasePG):
 
     self._vars        = pi_vars + vf_vars
     self._agent_vars  = pi_vars
-    self._train_op    = train_op
+    self.train_op     = train_op
 
 
   def _compute_loss(self, pi, vf, tb_name):
     logp    = pi.logp(self.act_ph)
-    pi_loss = - tf.reduce_mean(logp * self.adv_ph)
+    pg_loss = - tf.reduce_mean(logp * self.adv_ph)
     vf_loss = tf.losses.mean_squared_error(self.ret_ph, vf)
-    loss    = vf_loss + pi_loss
+    loss    = vf_loss + pg_loss
 
     # Remember the ops
     self.ops_dict["loss"]    = loss
-    self.ops_dict["pi_loss"] = pi_loss
+    self.ops_dict["pg_loss"] = pg_loss
     self.ops_dict["vf_loss"] = vf_loss
 
     # Easy-to-compute approximate estimates of KL and entropy (assume uniform weights)
@@ -53,7 +54,7 @@ class REINFORCE(BasePG):
 
     # Add TensorBoard summaries
     tf.summary.scalar(tb_name,               loss)
-    tf.summary.scalar("train/pi_loss",    pi_loss)
+    tf.summary.scalar("train/pg_loss",    pg_loss)
     tf.summary.scalar("train/vf_loss",    vf_loss)
     tf.summary.scalar("train/approx_ent", approxent)
     tf.summary.scalar("train/approx_kl",  approxkl)

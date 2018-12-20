@@ -12,3 +12,4 @@ from rltf.models.qr_dqn       import QRDQN
 from rltf.models.qr_ddpg      import QRDDPG
 from rltf.models.base_pg      import BasePG
 from rltf.models.reinforce    import REINFORCE
+from rltf.models.ppo          import PPO
