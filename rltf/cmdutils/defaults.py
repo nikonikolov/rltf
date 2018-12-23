@@ -199,7 +199,7 @@ DDPG = dict(
   eval_period=500000,           # Period of running evaluation (in number of *agent* steps)
   eval_len=50000,               # Lenght of each evaluation run (in number of *agent* steps)
   log_period=50000,             # Period for logging progress (in number of *agent* steps)
-  video_period=500,             # Period for recording episode videos (in number of episodes)
+  video_period=1000,            # Period for recording episode videos (in number of episodes)
   save_period=500000,           # Period for saving progress (in number of *agent* steps)
   save_buf=True,                # Save the replay buffer
   # environment arguments
@@ -224,8 +224,8 @@ REINFORCE = dict(
   stack_frames=3,               # Number of stacked frames that make an observation
   eval_period=10,               # Period of running evaluation (in number of epochs)
   eval_len=1000,                # Lenght of each evaluation run (in number of *agent* steps)
-  log_period=1,                 # Period for logging progress (in number of *agent* steps)
-  video_period=500,             # Period for recording episode videos (in number of episodes)
+  log_period=10,                # Period for logging progress (in number of *agent* steps)
+  video_period=1000,            # Period for recording episode videos (in number of episodes)
   save_period=10,               # Period for saving progress (in number of *agent* steps)
   # environment arguments
   env_kwargs=ArgSpec(dict, max_ep_steps_train=None, max_ep_steps_eval=None, rew_scale=1.0),
@@ -235,8 +235,8 @@ REINFORCE = dict(
 PPO = dict(
   agent=agents.AgentPPO,
   model=models.PPO,
-  pi_opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-3),
-  vf_opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-3),
+  pi_opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=3e-4),
+  vf_opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=3e-4),
   layers=[64, 64],              # Network layer sizes
   activation=tf.tanh,           # Network activation function
   obs_norm=False,               # Normalize observations
@@ -245,7 +245,7 @@ PPO = dict(
   vf_weight=0.5,                # Weight coefficient for value function loss in the total loss
   gamma=0.99,                   # Discount factor
   lam=0.95,                     # Lambda value for GAE(gamma, lambda)
-  path_len=1000,                # Number of agent steps before taking a policy gradient step
+  path_len=2048,                # Number of agent steps before taking a policy gradient step
   train_steps=4,                # Number of training epochs per single data collection session
   batch_size=512,               # Batch size for training the model
   clip_range=ArgSpec(ConstSchedule, value=0.2),   # Clipping value for PPO objective
@@ -253,8 +253,8 @@ PPO = dict(
   stack_frames=3,               # Number of stacked frames that make an observation
   eval_period=10,               # Period of running evaluation (in number of epochs)
   eval_len=1000,                # Lenght of each evaluation run (in number of *agent* steps)
-  log_period=1,                 # Period for logging progress (in number of *agent* steps)
-  video_period=500,             # Period for recording episode videos (in number of episodes)
+  log_period=10,                # Period for logging progress (in number of *agent* steps)
+  video_period=1000,            # Period for recording episode videos (in number of episodes)
   save_period=10,               # Period for saving progress (in number of *agent* steps)
   # environment arguments
   env_kwargs=ArgSpec(dict, max_ep_steps_train=None, max_ep_steps_eval=None, rew_scale=1.0),
