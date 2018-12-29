@@ -211,8 +211,8 @@ class VideoPlotter:
       # Draw the figure
       fig.canvas.draw()
       # Get the image as np.array of shape (height, width, 3) (removes the unnecessary alpha channel)
-      image = np.array(fig.canvas.renderer._renderer)
-      image = image[:, :, :-1]
+      image = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+      image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
       # Remember the latest image
       self.figs[name]["image"] = image
@@ -278,7 +278,7 @@ class VideoPlotter:
           plot_conf = conf["plot"]
           try:
             p = getattr(ax, plot_conf["method"])
-            # plot_fn = lambda ax, kwargs, env: p(**kwargs, **plot_conf["kwargs"])
+            # plot_fn = lambda ax, kwargs, env, p=p, pkwargs=plot_conf["kwargs"]: p(**kwargs, **pkwargs)
             def plot_fn(ax, kwargs, env, p=p, pkwargs=plot_conf["kwargs"]):
               return p(**kwargs, **pkwargs)
           except AttributeError:
@@ -329,6 +329,7 @@ class VideoPlotter:
     self.obs_align = True
 
 
+  #pylint: disable=too-many-branches
   def _configure_obs_align(self, spec):
     # Check if observation size is already known
     if isinstance(self.env.observation_space, gym.spaces.Box):
@@ -535,8 +536,9 @@ class VideoPlotter:
         # Draw the figure
         fig.canvas.draw()
         # Get the image as np.array of shape (height, width, 3) (removes the unnecessary alpha channel)
-        image = np.array(fig.canvas.renderer._renderer)
-        image = image[:, :, :-1]
+        image = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
 
         # Remember the latest image
         self.figs[name]["image"] = image

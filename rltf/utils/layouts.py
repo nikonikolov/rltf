@@ -113,7 +113,7 @@ qrdqn_layout = {
 }
 
 
-ids_layout = {
+ids_homoscedastic_layout = {
   "width": 800,
   "height": 300,
   "obs_align": dict(vertical='center', horizontal='left'),
@@ -249,8 +249,8 @@ ids_heteroscedastic_layout = {
 
 layouts = {
   "QRDQN": qrdqn_layout,
-  "BstrapDQN_IDS": ids_layout,
-  "BDQN_IDS": ids_layout,
+  "BstrapDQN_IDS": ids_homoscedastic_layout,
+  "BDQN_IDS": ids_homoscedastic_layout,
   "BstrapC51_IDS": ids_heteroscedastic_layout,
   "BstrapQRDQN_IDS": ids_heteroscedastic_layout,
 }
