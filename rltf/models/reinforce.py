@@ -33,7 +33,6 @@ class REINFORCE(BasePG):
     self.eval_dict  = self._act_eval(pi, name="a_eval")
 
     self._vars        = pi_vars + vf_vars
-    self._agent_vars  = pi_vars
     self.train_op     = train_op
 
 

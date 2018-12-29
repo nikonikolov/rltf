@@ -76,8 +76,8 @@ class Agent:
     # TensorFlow attributes
     self.sess           = None
 
-    if not os.path.exists(self.tf_dir):
-      os.makedirs(self.tf_dir)
+    os.makedirs(self.last_ckpt_dir, exist_ok=True)
+    os.makedirs(self.best_ckpt_dir, exist_ok=True)
 
 
   def build(self):
@@ -119,8 +119,8 @@ class Agent:
     # Create a saver for the training model
     self.train_saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
 
-    # Create a separate saver for the best agent
-    self.eval_saver = tf.train.Saver(self.model.agent_vars, max_to_keep=1, save_relative_paths=True)
+    # Create a separate saver for the best agent; does not include optimizer variables
+    self.eval_saver = tf.train.Saver(self.model.variables, max_to_keep=1, save_relative_paths=True)
 
 
   def train(self):
@@ -337,7 +337,7 @@ class Agent:
     logger.info("Saving the TF model and stats to %s", self.model_dir)
 
     # Save the model
-    self.train_saver.save(self.sess, self.tf_dir, global_step=self.agent_step)
+    self.train_saver.save(self.sess, self.last_ckpt_dir, global_step=self.agent_step)
 
     # Execute additional agent-specific save proceudres
     self._save()
@@ -371,7 +371,7 @@ class Agent:
     if not best_agent or self.play_mode:
       return
 
-    save_dir = self.best_agent_dir
+    save_dir = self.best_ckpt_dir
     logger.info("Saving best agent so far to %s", save_dir)
     # Save the model
     self.eval_saver.save(self.sess, save_dir, global_step=self.agent_step+1)
@@ -384,23 +384,23 @@ class Agent:
 
 
   @property
-  def tf_dir(self):
-    return os.path.join(self.model_dir, "tf/")
+  def last_ckpt_dir(self):
+    return os.path.join(self.model_dir, "snapshots/latest/")
 
 
   @property
-  def best_agent_dir(self):
-    return os.path.join(self.model_dir, "tf/best_agent/")
+  def best_ckpt_dir(self):
+    return os.path.join(self.model_dir, "snapshots/best/")
 
 
   @property
   def reuse_ckpt(self):
-    return self._ckpt_path(os.path.join(self.reuse_model, "tf/best_agent/"))
+    return self._ckpt_path(os.path.join(self.reuse_model, "snapshots/best/"))
 
 
   @property
   def restore_ckpt(self):
-    return self._ckpt_path(self.tf_dir)
+    return self._ckpt_path(self.last_ckpt_dir)
 
 
   def _ckpt_path(self, ckpt_dir):

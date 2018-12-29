@@ -101,7 +101,6 @@ class BaseDQN(BaseQlearn):
     self.train_op       = train_op
     self.update_target  = update_target
     self._vars          = agent_vars + target_vars
-    self._agent_vars    = agent_vars
 
 
   def _nn_model(self, x, scope):

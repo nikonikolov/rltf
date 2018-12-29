@@ -35,7 +35,6 @@ def parse_args(model_choices):
   parser.add_argument('--model',         required=True,   type=str,   choices=model_choices)
 
   parser.add_argument('--seed',          default=42,      type=int,   help='global seed; random if <=0')
-  parser.add_argument('--mode',          default='train', type=str,   choices=['train', 'play'])
   parser.add_argument('--n-plays',       default=0,       type=int,   help='number of runs in play mode')
   parser.add_argument('--log-lvl',       default='INFO',  type=str,   help='logger lvl')
   parser.add_argument('--plot-video',    default=False,   type=s2b,   help='add model plots to videos')
@@ -133,9 +132,11 @@ def verify_args(args):
   assert not (args.restore_model is not None and args.load_model is not None)
 
   # When in play mode, model needs to be loaded
-  if args.mode == 'play':
+  if args.n_plays > 0:
     assert args.load_model is not None
-    assert args.n_plays > 0
+    args.mode = 'play'
+  else:
+    args.mode = 'train'
 
   if args.restore_model is not None:
     args.restore_model = os.path.abspath(args.restore_model)
@@ -145,7 +146,7 @@ def verify_args(args):
   elif args.load_model is not None:
     args.load_model = os.path.abspath(args.load_model)
     assert os.path.exists(args.load_model)
-    assert os.path.exists(os.path.join(args.load_model, "tf"))
+    assert os.path.exists(os.path.join(args.load_model, "snapshots"))
 
   if args.load_regex is not None:
     assert args.load_model is not None
