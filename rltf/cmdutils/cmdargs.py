@@ -31,20 +31,21 @@ def parse_args(model_choices):
   # Create the parser and add args
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-  parser.add_argument('--env-id',        required=True,   type=str,   help='full environment name')
+  parser.add_argument('--env_id',        required=True,   type=str,   help='full environment name')
   parser.add_argument('--model',         required=True,   type=str,   choices=model_choices)
 
   parser.add_argument('--seed',          default=42,      type=int,   help='global seed; random if <=0')
-  parser.add_argument('--n-plays',       default=0,       type=int,   help='number of runs in play mode')
-  parser.add_argument('--log-lvl',       default='INFO',  type=str,   help='logger lvl')
-  parser.add_argument('--plot-video',    default=False,   type=s2b,   help='add model plots to videos')
+  parser.add_argument('--n_plays',       default=0,       type=int,   help='number of runs in play mode')
+  parser.add_argument('--log_lvl',       default='INFO',  type=str,   help='logger lvl')
+  parser.add_argument('--plot_video',    default=False,   type=s2b,   help='add model plots to videos')
+  parser.add_argument('--tag',           default="",      type=str,   help='additional custom info')
 
   # Optional arguments
-  parser.add_argument('--restore-model', default=None,    type=str,
+  parser.add_argument('--restore_model', default=None,    type=str,
     help='(optional) directory path of existing model to restore and continue training')
-  parser.add_argument('--load-model',    default=None,    type=str,
+  parser.add_argument('--load_model',    default=None,    type=str,
     help='(optional) directory path of existing model whose weights will be loaded initially')
-  parser.add_argument('--load-regex',    default=None,    type=str,
+  parser.add_argument('--load_regex',    default=None,    type=str,
     help='(optional) regex for matching the set of vars to load with --load-model')
 
   # Parse only the known args
