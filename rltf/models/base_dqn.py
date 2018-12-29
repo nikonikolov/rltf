@@ -12,84 +12,24 @@ class BaseQlearn(Model):
     super().__init__()
 
     # Input TF placeholders that must be set
-    self._obs_t_ph    = None
-    self._act_t_ph    = None
-    self._rew_t_ph    = None
-    self._obs_tp1_ph  = None
-    self._done_ph     = None
+    self.obs_t_ph   = None
+    self.act_t_ph   = None
+    self.rew_t_ph   = None
+    self.obs_tp1_ph = None
+    self.done_ph    = None
 
     # TF Ops that should be set
-    self._train_op      = None
-    self._update_target = None  # Optional
+    self.train_op       = None
+    self.update_target  = None  # Optional
 
 
   def _build_ph(self):
     """Build the input placehodlers"""
-    self._obs_t_ph    = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_t_ph")
-    self._act_t_ph    = tf.placeholder(self.act_dtype,  [None] + self.act_shape, name="act_t_ph")
-    self._rew_t_ph    = tf.placeholder(tf.float32,      [None],                  name="rew_t_ph")
-    self._obs_tp1_ph  = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_tp1_ph")
-    self._done_ph     = tf.placeholder(tf.bool,         [None],                  name="done_ph")
-
-
-  @property
-  def obs_t_ph(self):
-    """Returns: `tf.placeholder` for observations at time t from the training batch"""
-    if self._obs_t_ph is not None:
-      return self._obs_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def act_t_ph(self):
-    """Returns: `tf.placeholder` for actions at time t from the training batch"""
-    if self._act_t_ph is not None:
-      return self._act_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def rew_t_ph(self):
-    """Returns: `tf.placeholder` for actions at time t from the training batch"""
-    if self._rew_t_ph is not None:
-      return self._rew_t_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def obs_tp1_ph(self):
-    """Returns: `tf.placeholder` for observations at the next time step from the training batch"""
-    if self._obs_tp1_ph is not None:
-      return self._obs_tp1_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def done_ph(self):
-    """Returns: `tf.placeholder` to indicate end of episode for examples in the training batch"""
-    if self._done_ph is not None:
-      return self._done_ph
-    else:
-      raise NotImplementedError()
-
-  @property
-  def update_target(self):
-    """Returns: `tf.Op` that updates the target network (if one is used)."""
-    if self._update_target is not None:
-      return self._update_target
-    else:
-      raise NotImplementedError()
-
-  @property
-  def train_op(self):
-    """Returns: `tf.Op` that trains the network. Requires that `self.obs_t_ph`,
-      `self.act_t_ph`, `self.obs_tp1_ph`, `self.done_ph` placeholders
-      are set via feed_dict. Might require other placeholders based on the exact Model.
-    """
-    if self._train_op is not None:
-      return self._train_op
-    else:
-      raise NotImplementedError()
+    self.obs_t_ph   = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_t_ph")
+    self.act_t_ph   = tf.placeholder(self.act_dtype,  [None] + self.act_shape, name="act_t_ph")
+    self.rew_t_ph   = tf.placeholder(tf.float32,      [None],                  name="rew_t_ph")
+    self.obs_tp1_ph = tf.placeholder(self.obs_dtype,  [None] + self.obs_shape, name="obs_tp1_ph")
+    self.done_ph    = tf.placeholder(tf.bool,         [None],                  name="done_ph")
 
 
 
@@ -158,8 +98,8 @@ class BaseDQN(BaseQlearn):
     self.train_dict = self._act_train(agent_net, name="a_train")
     self.eval_dict  = self._act_eval(agent_net,  name="a_eval")
 
-    self._train_op      = train_op
-    self._update_target = update_target
+    self.train_op       = train_op
+    self.update_target  = update_target
     self._vars          = agent_vars + target_vars
     self._agent_vars    = agent_vars
 
@@ -220,7 +160,7 @@ class BaseDQN(BaseQlearn):
 
   def initialize(self, sess):
     """Initialize the model. See Model.initialize()"""
-    sess.run(self._update_target)
+    sess.run(self.update_target)
 
 
   def reset(self, sess):

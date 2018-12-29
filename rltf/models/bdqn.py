@@ -83,7 +83,7 @@ class BDQN(DDQN):
 
     def train_blr(blr, a):
       """Given a BLR instance, select only the examples for the corresponding action"""
-      mask = tf.expand_dims(tf.equal(self._act_t_ph, a), axis=-1)
+      mask = tf.expand_dims(tf.equal(self.act_t_ph, a), axis=-1)
       mask = tf.cast(mask, tf.float32)  # out shape: [None]
       X = phi * mask                    # out shape: [None, dim_phi]
       y = target * mask                 # out shape: [None, 1]

@@ -103,11 +103,11 @@ class DDPG(BaseQlearn):
     critic_loss     = self._get_critic_loss(target_q, act_t_q)
 
     # Create train Op
-    self._train_op  = self._build_train_op(actor_loss, critic_loss, actor_vars, critic_vars)
+    self.train_op   = self._build_train_op(actor_loss, critic_loss, actor_vars, critic_vars)
 
     # Create the Op that updates the target
     logger.debug("Creating target net update Op")
-    self._update_target = tf_utils.assign_vars(target_vars, agent_vars, self.tau, "update_target")
+    self.update_target = tf_utils.assign_vars(target_vars, agent_vars, self.tau, "update_target")
 
     # Remember the action tensor. name is needed when restoring the graph
     self.train_dict = dict(action=tf.identity(actor, name="action"))
