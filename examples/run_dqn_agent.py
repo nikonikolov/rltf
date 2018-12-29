@@ -5,9 +5,8 @@ from rltf.utils         import maker
 
 
 def parse_args():
-  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "BstrapDQN_Ensemble",
-                  "BstrapDQN_IDS", "BstrapC51_IDS", "BstrapQRDQN_IDS",
-                  "BDQN", "BDQN_TS", "BDQN_UCB", "BDQN_IDS"]
+  model_choices = ["DQN", "DDQN", "C51", "QRDQN", "BstrapDQN", "BstrapDQN_UCB", "DQN_Ensemble",
+                  "DQN_IDS", "C51_IDS", "QRDQN_IDS", "BDQN", "BDQN_TS", "BDQN_UCB", "BDQN_IDS"]
   return cmdargs.parse_args(model_choices)
 
 

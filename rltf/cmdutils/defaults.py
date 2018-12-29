@@ -93,11 +93,11 @@ BstrapDQN_UCB = {**BstrapDQN, **dict(
   target_update_period=40000,
 )}
 
-BstrapDQN_Ensemble = {**BstrapDQN}
+DQN_Ensemble = {**BstrapDQN}
 
-BstrapDQN_IDS = {**dqn_spec, **dict(
+DQN_IDS = {**dqn_spec, **dict(
   agent=agents.AgentDQN,
-  model=models.BstrapDQN_IDS,
+  model=models.DQN_IDS,
   huber_loss=True,
   n_heads=10,                   # Number of bootstrap heads
   n_stds=0.1,                   # Uncertainty scale for computing regret
@@ -107,9 +107,9 @@ BstrapDQN_IDS = {**dqn_spec, **dict(
   target_update_period=40000,
 )}
 
-BstrapC51_IDS = {**dqn_spec, **dict(
+C51_IDS = {**dqn_spec, **dict(
   agent=agents.AgentDQN,
-  model=models.BstrapC51_IDS,
+  model=models.C51_IDS,
   huber_loss=False,
   n_heads=10,                   # Number of bootstrap heads
   n_stds=0.1,                   # Uncertainty scale for computing regret
@@ -122,9 +122,9 @@ BstrapC51_IDS = {**dqn_spec, **dict(
   target_update_period=40000,
 )}
 
-BstrapQRDQN_IDS = {**dqn_spec, **dict(
+QRDQN_IDS = {**dqn_spec, **dict(
   agent=agents.AgentDQN,
-  model=models.BstrapQRDQN_IDS,
+  model=models.QRDQN_IDS,
   huber_loss=True,              # Huber loss for the bootstrap network
   n_heads=10,                   # Number of bootstrap heads
   n_stds=0.1,                   # Uncertainty scale for computing regret
@@ -277,10 +277,10 @@ MODELS = dict(
   QRDQN=QRDQN,
   BstrapDQN=BstrapDQN,
   BstrapDQN_UCB=BstrapDQN_UCB,
-  BstrapDQN_Ensemble=BstrapDQN_Ensemble,
-  BstrapDQN_IDS=BstrapDQN_IDS,
-  BstrapC51_IDS=BstrapC51_IDS,
-  BstrapQRDQN_IDS=BstrapQRDQN_IDS,
+  DQN_Ensemble=DQN_Ensemble,
+  DQN_IDS=DQN_IDS,
+  C51_IDS=C51_IDS,
+  QRDQN_IDS=QRDQN_IDS,
   BDQN=BDQN,
   BDQN_TS=BDQN_TS,
   BDQN_UCB=BDQN_UCB,

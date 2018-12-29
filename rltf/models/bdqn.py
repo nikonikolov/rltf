@@ -108,6 +108,7 @@ class BDQN(DDQN):
 
 
 class BDQN_TS(BDQN):
+  """Bayesian Double DQN with Thompson Sampling exploration policy"""
 
   def __init__(self, **kwargs):
 
@@ -132,6 +133,7 @@ class BDQN_TS(BDQN):
 
 
 class BDQN_UCB(BDQN):
+  """Bayesian Double DQN with UCB exploration policy"""
 
   def __init__(self, n_stds, **kwargs):
 
@@ -154,6 +156,7 @@ class BDQN_UCB(BDQN):
 
 
 class BDQN_IDS(BDQN):
+  """Bayesian Double DQN with IDS exploration policy"""
 
   def __init__(self, n_stds, **kwargs):
     super().__init__(mode="mean", **kwargs)

@@ -273,7 +273,7 @@ class BstrapDQN_UCB(BaseBstrapDQN):
 
 
 
-class BstrapDQN_Ensemble(BaseBstrapDQN):
+class DQN_Ensemble(BaseBstrapDQN):
   """Ensemble policy from Boostrapped DQN"""
 
   def _act_train(self, agent_net, name):
@@ -288,7 +288,7 @@ class BstrapDQN_Ensemble(BaseBstrapDQN):
 
 
 
-class BstrapDQN_IDS(BaseBstrapDQN):
+class DQN_IDS(BaseBstrapDQN):
   """IDS policy from Boostrapped DQN"""
 
   def __init__(self, n_stds, **kwargs):
