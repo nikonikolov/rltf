@@ -218,20 +218,21 @@ REINFORCE = dict(
   nn_std=False,                 # If True, stddev of a Gaussian policy is a function of the state
   gamma=0.99,                   # Discount factor
   lam=0.97,                     # Lambda value for GAE(gamma, lambda)
-  path_len=1000,                # Number of agent steps before taking a policy gradient step
+  rollout_len=1000,             # Number of agent steps before taking a policy gradient step
   stop_step=1000000,            # Total environment interaction steps
   vf_iters=1,                   # Number of value function training iterations per epochs
   stack_frames=3,               # Number of stacked frames that make an observation
   eval_period=10,               # Period of running evaluation (in number of epochs)
   eval_len=1000,                # Lenght of each evaluation run (in number of *agent* steps)
-  log_period=10,                # Period for logging progress (in number of *agent* steps)
+  log_period=10,                # Period for logging progress (in number of epochs)
   video_period=1000,            # Period for recording episode videos (in number of episodes)
-  save_period=10,               # Period for saving progress (in number of *agent* steps)
+  save_period=-1,               # Period for saving progress (in number of epochs)
   # environment arguments
   env_kwargs=ArgSpec(dict, max_ep_steps_train=None, max_ep_steps_eval=None, rew_scale=1.0),
 )
 
 
+# Defaults for PyBullet
 PPO = dict(
   agent=agents.AgentPPO,
   model=models.PPO,
@@ -245,17 +246,17 @@ PPO = dict(
   vf_weight=0.5,                # Weight coefficient for value function loss in the total loss
   gamma=0.99,                   # Discount factor
   lam=0.95,                     # Lambda value for GAE(gamma, lambda)
-  path_len=2048,                # Number of agent steps before taking a policy gradient step
+  rollout_len=2000,             # Number of agent steps before taking a policy gradient step
   train_steps=4,                # Number of training epochs per single data collection session
   batch_size=512,               # Batch size for training the model
   clip_range=ArgSpec(ConstSchedule, value=0.2),   # Clipping value for PPO objective
-  stop_step=1000000,            # Total environment interaction steps
+  stop_step=2000000,            # Total environment interaction steps
   stack_frames=3,               # Number of stacked frames that make an observation
   eval_period=10,               # Period of running evaluation (in number of epochs)
   eval_len=1000,                # Lenght of each evaluation run (in number of *agent* steps)
-  log_period=10,                # Period for logging progress (in number of *agent* steps)
+  log_period=10,                # Period for logging progress (in number of epochs)
   video_period=1000,            # Period for recording episode videos (in number of episodes)
-  save_period=10,               # Period for saving progress (in number of *agent* steps)
+  save_period=-1,               # Period for saving progress (in number of epochs)
   # environment arguments
   env_kwargs=ArgSpec(dict, max_ep_steps_train=None, max_ep_steps_eval=None, rew_scale=1.0),
 )

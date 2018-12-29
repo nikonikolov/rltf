@@ -174,7 +174,6 @@ class BDQN_IDS(BDQN):
     ids_score = tf.check_numerics(ids_score, "IDS score is NaN or Inf")
 
     action    = tf.argmin(ids_score, axis=-1, output_type=tf.int32, name=name)
-    a_ucb     = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32)
 
     # Add debug histograms
     tf.summary.histogram("debug/a_mean",    mean)

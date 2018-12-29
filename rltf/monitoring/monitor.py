@@ -45,7 +45,7 @@ class Monitor(Wrapper):
     - The TF graph is available in the thread running `env.step()`
   """
 
-  def __init__(self, env, log_dir, mode, log_period=None, video_spec=None, epochs=False, eval_period=None):
+  def __init__(self, env, log_dir, mode, log_period=None, video_spec=None, eval_period=None):
     """
     Args:
       log_dir: str. The directory where to save the monitor videos and stats
@@ -56,7 +56,6 @@ class Monitor(Wrapper):
         - `int` specifies a period in episodes
         - `False`, disables video recording
         - If `None`, every 1000th episode is recorded
-      epochs: If True, statistics are logged in terms of epochs, not agent steps
       eval_period: int. Required only in evaluation mode. Needed to compute the correct logging step.
     """
 
@@ -76,7 +75,7 @@ class Monitor(Wrapper):
     self._make_log_dir()
 
     # Composition objects
-    self.stats_recorder = StatsRecorder(log_dir, mode, log_period, epochs, eval_period)
+    self.stats_recorder = StatsRecorder(log_dir, mode, log_period, eval_period)
     self.video_plotter  = VideoPlotter(self.env, mode=mode)
     self.video_recorder = None
 

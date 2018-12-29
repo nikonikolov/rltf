@@ -20,7 +20,7 @@ N_EPS_STATS   = 100
 
 class StatsRecorder:
 
-  def __init__(self, log_dir, mode, log_period=None, epochs=False, eval_period=None):
+  def __init__(self, log_dir, mode, log_period=None, eval_period=None):
     """
     Args:
       log_dir: str. The path for the directory where the videos are saved
@@ -28,7 +28,6 @@ class StatsRecorder:
       log_period: int. The period for logging statistics. If provided, statistics are logged automatically.
         Otherwise, log_stats() has to be called from outside. If mode == 'e', then it must be provided and
         must equal the evaluation length in order to keep correct evaluation statistics
-      epochs: If True, statistics are logged in terms of epochs, not agent steps
       eval_period: int. Required only in evaluation mode. Needed to compute the correct logging step.
     """
 
@@ -46,7 +45,7 @@ class StatsRecorder:
     self.autolog      = autolog
     self.log_period   = log_period
     self._mode        = mode      # Running mode: either 't' (train) or 'e' (eval)
-    self._epochs      = 0 if epochs else None # If not None, stats are logged in terms of epochs
+    self.n_episodes   = N_EPS_STATS if log_period is not None else None
     self.eval_period  = eval_period
 
     # Stdout data
@@ -213,7 +212,7 @@ class StatsRecorder:
 
   def _init_stdout(self):
 
-    n_eps = " (%d eps)"%(N_EPS_STATS) if self._epochs is None else ""
+    n_eps = " (%d eps)"%(self.n_episodes) if self.n_episodes is not None else ""
 
     if self.mode == "t":
       # Function to compute the total time
@@ -225,7 +224,6 @@ class StatsRecorder:
       self.log_spec = [
         ("train/total_time",                      "",     total_time),
         ("train/mean_steps_per_sec",              ".3f",  lambda t: self.stats["steps_per_sec"]),
-        ("train/epochs",                          "d",    lambda t: self._log_epoch),
         ("train/agent_steps",                     "d",    lambda t: self._log_step),
         ("train/env_steps",                       "d",    lambda t: self._env_steps+self.ep_steps),
         ("train/episodes",                        "d",    lambda t: self._env_eps),
@@ -237,14 +235,9 @@ class StatsRecorder:
         ("train/std_ep_reward%s"%n_eps,           ".3f",  lambda t: self.stats["std_ep_rew"]),
       ]
 
-      # Remove epochs if necessary
-      if self._epochs is None:
-        self.log_spec = self.log_spec[:2] + self.log_spec[3:]
-
     else:
 
       self.log_spec = [
-        ("eval/epochs",                           "d",    lambda t: self._log_epoch),
         ("eval/agent_steps",                      "d",    lambda t: self._log_step),
         ("eval/best_episode_rew",                 ".3f",  lambda t: self.stats["best_ep_rew"]),
         ("eval/ep_len_mean",                      ".3f",  lambda t: self.stats["ep_len_mean"]),
@@ -254,10 +247,6 @@ class StatsRecorder:
         ("eval/score_episodes",                   "d",    lambda t: self.stats["score_episodes"]),
         ("eval/best_score",                       ".3f",  lambda t: self.stats["best_mean_rew"]),
       ]
-
-      # Remove epochs if necessary
-      if self._epochs is None:
-        self.log_spec = self.log_spec[1:]
 
 
   def set_stdout_logs(self, stdout_spec):
@@ -407,10 +396,6 @@ class StatsRecorder:
   def _update_stats(self, info):
     """Update the values of the runtime statistics variables"""
 
-    # Update epochs if necessary
-    if self._epochs is not None:
-      self._epochs += 1
-
     # Configure the stdout on the first logging event
     if not self.stdout_set:
       self._build_stdout()
@@ -424,7 +409,7 @@ class StatsRecorder:
     if self.mode == 't':
       time_now      = time.time()
       steps_per_sec = (self._agent_steps - stats["last_log_step"]) / (time_now - stats["last_log_time"])
-      lo            = stats["last_log_ep"] if self._epochs is not None else -N_EPS_STATS
+      lo            = stats["last_log_ep"] if self.n_episodes is None else -self.n_episodes
 
       stats["mean_ep_rew"]    = stats_mean(self.ep_rews[lo:])
       stats["std_ep_rew"]     = stats_std(self.ep_rews[lo:])
@@ -460,7 +445,7 @@ class StatsRecorder:
       info["rltfmon.best_agent"] = stats["mean_ep_rew"] == stats["best_mean_rew"]
 
     # Update the stats logging steps and indices
-    self.stats_steps.append(self._log_step if self.epochs is None else self._log_epoch)
+    self.stats_steps.append(self._log_step)
     self.stats_inds.append(len(self.ep_rews))
 
     # Append the TensorBoard summary data
@@ -495,8 +480,7 @@ class StatsRecorder:
 
     # Log the summary to TensorBoard
     if self.summary is not None:
-      global_step = self._log_step if self._epochs is None else self._log_epoch
-      self.tb_writer.add_summary(self.summary, global_step=global_step)
+      self.tb_writer.add_summary(self.summary, global_step=self._log_step)
 
 
   def save(self):
@@ -508,7 +492,6 @@ class StatsRecorder:
     data = {
       "env_steps":      self._env_steps,
       "agent_steps":    self._agent_steps,
-      "epochs":         self._epochs,
       "env_episodes":   self._env_eps,
       "agent_episodes": self._agent_eps,
       "best_mean_rew":  self.stats["best_mean_rew"],
@@ -567,7 +550,6 @@ class StatsRecorder:
     if data:
       self._env_steps   = data["env_steps"]
       self._agent_steps = data["agent_steps"]
-      self._epochs      = data["epochs"] if self._epochs is not None else None
       self._env_eps     = data["env_episodes"]
       self._agent_eps   = data["agent_episodes"]
       self.stats["best_mean_rew"] = data["best_mean_rew"]
@@ -621,15 +603,6 @@ class StatsRecorder:
 
 
   @property
-  def _log_epoch(self):
-    if self._mode == 't':
-      return self._epochs
-    else:
-      # Scale evaluation mode ecochs to agent training epochs
-      return int(self._epochs // self.log_period * self.eval_period)
-
-
-  @property
   def mode(self):
     return self._mode
 
@@ -640,10 +613,6 @@ class StatsRecorder:
   @property
   def env_steps(self):
     return self._env_steps
-
-  @property
-  def epochs(self):
-    return self._epochs
 
   @property
   def agent_eps(self):

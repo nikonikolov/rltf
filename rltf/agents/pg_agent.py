@@ -13,7 +13,7 @@ class AgentPG(LoggingAgent):
                model,
                gamma,
                lam,
-               path_len,
+               rollout_len,
                stop_step,
                vf_iters=1,
                stack_frames=3,
@@ -24,7 +24,7 @@ class AgentPG(LoggingAgent):
       env_maker: callable. Function that takes the mode of an env and retruns a new environment instance
       gamma: float. Discount factor for GAE(gamma, lambda)
       lam: float. Lambda value for GAE(gamma, lambda)
-      path_len: int. Number of agent steps before taking a policy gradient step
+      rollout_len: int. Number of agent steps before taking a policy gradient step
       stop_step: int. Total number of agent steps
       vf_iters: int. Number of value function training steps in a single epoch
     """
@@ -37,7 +37,6 @@ class AgentPG(LoggingAgent):
                       mode='t',
                       log_period=None,
                       video_spec=self.video_period,
-                      epochs=True,
                     )
 
     self.env_eval  = Monitor(
@@ -46,31 +45,30 @@ class AgentPG(LoggingAgent):
                       mode='e',
                       log_period=self.eval_len,
                       video_spec=self.video_period,
-                      eval_period=self.eval_period,
-                      epochs=True,
+                      eval_period=self.eval_period * rollout_len,
                     )
 
-    self.path_len   = path_len
-    self.stop_step  = stop_step
-    self.epochs     = self.stop_step // self.path_len
-    self.vf_iters   = vf_iters
+    self.rollout_len  = rollout_len
+    self.stop_step    = stop_step
+    self.epochs       = self.stop_step // self.rollout_len
+    self.vf_iters     = vf_iters
 
-    self.gamma      = gamma
-    self.lam        = lam
+    self.gamma  = gamma
+    self.lam    = lam
 
     # Get environment specs
     obs_shape, obs_dtype, act_shape, act_dtype, obs_len = self._state_action_spec(stack_frames)
 
     # Initialize the model and the experience buffer
     self.model  = model(obs_shape=obs_shape, act_space=self.env_train.action_space, **self.model_kwargs)
-    self.buffer = PGBuffer(self.path_len, obs_shape, obs_dtype, act_shape, act_dtype, obs_len)
+    self.buffer = PGBuffer(self.rollout_len, obs_shape, obs_dtype, act_shape, act_dtype, obs_len)
 
 
   def _train(self):
     # Get the function that generates trajectories
-    run_policy = self._trajectory_generator(self.path_len)
+    run_policy = self._trajectory_generator(self.rollout_len)
 
-    for t in range(self.epochs):
+    for t in range(self.agent_step+1, self.epochs+1):
       if self._terminate:
         break
 
@@ -156,7 +154,7 @@ class AgentPG(LoggingAgent):
 
 
   def _run_summary_op(self, t, feed_dict):
-    if t % self.log_period == 0:
+    if t * self.rollout_len % self.log_period == 0:
       self.summary = self.sess.run(self.summary_op, feed_dict=feed_dict)
 
 

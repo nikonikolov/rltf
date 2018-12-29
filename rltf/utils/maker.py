@@ -92,9 +92,9 @@ def make_model_dir(args, base=rltf_conf.MODELS_DIR):
     model_dir = restore_dir
 
   # If evaluating, create a subdirectory
-  elif args.mode == 'eval':
+  elif args.mode == 'play':
     assert reuse_dir is not None
-    model_dir = os.path.join(reuse_dir, "eval/")
+    model_dir = os.path.join(reuse_dir, "play/")
     os.makedirs(model_dir)
 
   # Create a new model directory
