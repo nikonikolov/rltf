@@ -20,15 +20,14 @@ class PiecewiseSchedule(Schedule):
         if the value is requested outside of all the intervals sepecified in
         `endpoints` this value is returned.
     """
-    idxes = [e[0] for e in endpoints]
-    assert idxes == sorted(idxes)
+    inds = [e[0] for e in endpoints]
+    assert inds == sorted(inds)
     self._interpolation = interpolation
     self._outside_value = outside_value
     self._endpoints     = endpoints
 
   def value(self, t):
     """See Schedule.value
-
     Raises:
       AssertionError if outside_value is None and outside value is requested.
     """
@@ -37,9 +36,10 @@ class PiecewiseSchedule(Schedule):
         alpha = float(t - l_t) / (r_t - l_t)
         return self._interpolation(l, r, alpha)
 
-    # t does not belong to any of the pieces, so doom.
-    assert self._outside_value is not None
-    return self._outside_value
+    if self._outside_value is None:
+      return self._endpoints[-1][1]
+    else:
+      return self._outside_value
 
 
   def __repr__(self):

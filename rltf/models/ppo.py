@@ -89,6 +89,7 @@ class PPO(BasePG):
     tf.summary.scalar("train/pi_entropy",   entropy)
     tf.summary.scalar("train/approx_kl",    approxkl)
     tf.summary.scalar("train/frac_clip",    frac_clip)
+    tf.summary.scalar("train/vf",           tf.reduce_mean(vf))
 
     # Add summaries for stdout
     tf.summary.scalar("stdout/pg_loss",     pg_loss)
