@@ -81,7 +81,7 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
     with tf.variable_scope("action_value"):
       heads = [build_bstrap_head(x) for _ in range(self.n_heads)]
       x = tf.concat(heads, axis=-2)
-    return x, z
+    return dict(q_values=x, quantiles=z)
 
 
   def _compute_estimate(self, agent_net):
@@ -92,10 +92,10 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
     Returns:
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
-    q, z = agent_net
-    q = DQN_IDS._compute_estimate(self, q)  # out: [None, n_heads]
+    q, z = agent_net["q_values"], agent_net["quantiles"]
+    q = DQN_IDS._compute_estimate(self, q)        # out: [None, n_heads]
     z = QRDQN._compute_estimate(self, z)          # out: [None, N]
-    return q, z
+    return dict(q_values=q, quantiles=z)
 
 
   def _select_target(self, target_net):
@@ -109,8 +109,8 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
     n_actions   = self.n_actions
 
     # Compute the Q-estimate with the agent network variables and select the maximizing action
-    agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")      # out: [None, n_heads, n_actions]
-    agent_net   = agent_net[0]  # Select only the Q-tensor
+    agent_net   = self._nn_model(self.obs_tp1, scope="agent_net")       # out: [None, n_heads, n_actions]
+    agent_net   = agent_net["q_values"]  # Select only the Q-tensor
     target_act  = tf.argmax(agent_net, axis=-1, output_type=tf.int32)   # out: [None, n_heads]
 
     # Select the target Q-function
@@ -128,7 +128,7 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
     Returns:
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
-    target_q, target_z = target_net
+    target_q, target_z = target_net["q_values"], target_net["quantiles"]
     # DQN_IDS call to self._select_target resolves to the QRDQN_IDS._select_target()
     backup_q = DQN_IDS._compute_target(self, target_q)
     # NOTE: Do NOT call QRDQN._compute_target(self, target_z) - call to self._select_target()
@@ -136,22 +136,23 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
     target_z = QRDQN._select_target(self, target_z)
     backup_z = QRDQN._compute_backup(self, target_z)
     backup_z = tf.stop_gradient(backup_z)
-    return backup_q, backup_z
+    return dict(target_q=backup_q, target_z=backup_z)
 
 
   def _compute_loss(self, estimate, target, name):
-    q, z                = estimate
-    target_q, target_z  = target
+    q, z                = estimate["q_values"], estimate["quantiles"]
+    target_q, target_z  = target["target_q"], target["target_z"]
+
 
     head_loss = DQN_IDS._compute_loss(self, q, target_q, name)
     z_loss    = QRDQN._compute_loss(self, z, target_z, "train/z_loss")
 
-    return head_loss, z_loss
+    return dict(head_loss=head_loss, z_loss=z_loss)
 
 
   def _build_train_op(self, optimizer, loss, agent_vars, name):
-    head_loss = loss[0]
-    z_loss    = loss[1]
+    head_loss = loss["head_loss"]
+    z_loss    = loss["z_loss"]
 
     # Get the bootsrapped heads and conv net train op
     train_net = DQN_IDS._build_train_op(self, optimizer, head_loss, agent_vars, name=None)
@@ -167,8 +168,8 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
 
   # Propagate QR loss gradients
   # def _build_train_op(self, optimizer, loss, agent_vars, name):
-  #   head_loss = loss[0]
-  #   z_loss    = loss[1]
+  #   head_loss = loss["head_loss"]
+  #   z_loss    = loss["z_loss"]
 
   #   # Update the Bootstrap heads variables. Do not backpropagate gradients to the conv layers
   #   head_vars   = tf_utils.scope_vars(agent_vars, scope='agent_net/action_value')
@@ -190,10 +191,10 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
   def _act_train(self, agent_net, name):
     # agent_net tuple of shapes: [None, n_heads, n_actions], [None, n_actions, N]
 
-    z_var     = self._compute_z_variance(agent_net[1], normalize=True)  # [None, n_actions]
+    z_var     = self._compute_z_variance(agent_net["quantiles"], normalize=True)  # [None, n_actions]
     self.rho2 = tf.maximum(z_var, 0.25)
 
-    action    = DQN_IDS._act_train(self, agent_net[0], name)
+    action    = DQN_IDS._act_train(self, agent_net["q_values"], name)
 
     # Add debugging data for TB
     tf.summary.histogram("debug/a_rho2", self.rho2)
@@ -208,4 +209,4 @@ class QRDQN_IDS(DQN_IDS, QRDQN):
 
 
   def _act_eval(self, agent_net, name):
-    return DQN_IDS._act_eval(self, agent_net[0], name)
+    return DQN_IDS._act_eval(self, agent_net["q_values"], name)
