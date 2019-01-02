@@ -76,8 +76,9 @@ class Agent:
     # TensorFlow attributes
     self.sess           = None
 
-    os.makedirs(self.last_ckpt_dir, exist_ok=True)
-    os.makedirs(self.best_ckpt_dir, exist_ok=True)
+    if not self.play_mode:
+      os.makedirs(self.last_ckpt_dir, exist_ok=True)
+      os.makedirs(self.best_ckpt_dir, exist_ok=True)
 
 
   def build(self):
@@ -333,6 +334,13 @@ class Agent:
     """
     if self.play_mode or not self._save_allowed():
       return
+
+    # Check if the current state differs from the saved state
+    if os.path.exists(self.state_file):
+      with open(self.state_file, 'r') as f:
+        data = json.load(f)
+      if data["train_step"] == self.agent_step and data["eval_step"] == self.eval_step:
+        return
 
     logger.info("Saving the TF model and stats to %s", self.model_dir)
 
