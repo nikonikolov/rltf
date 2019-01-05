@@ -1,8 +1,8 @@
 import gym
 import tensorflow as tf
 
-from rltf.models import Model
-from rltf.models import distributions
+from rltf.models    import Model
+from rltf.tf_utils  import tf_dist
 
 
 class BasePG(Model):
@@ -133,7 +133,7 @@ class BasePG(Model):
 
       # Use Categorical distribution
       if self.discrete:
-        pd = distributions.CategoricalPD(pi_out)
+        pd = tf_dist.CategoricalPD(pi_out)
 
       # Use Gaussian distribution
       else:
@@ -145,7 +145,7 @@ class BasePG(Model):
           mean    = pi_out
           logstd  = tf.get_variable("logstd", shape=[1, n_outputs], initializer=tf.zeros_initializer())
 
-        pd = distributions.DiagGaussianPD(mean, logstd)
+        pd = tf_dist.DiagGaussianPD(mean, logstd)
 
     return pd
 

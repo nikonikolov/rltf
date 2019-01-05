@@ -1,8 +1,8 @@
 import tensorflow as tf
 
-from rltf.models  import DQN_IDS
-from rltf.models  import QRDQN
-from rltf.models  import tf_utils
+from rltf.models    import DQN_IDS
+from rltf.models    import QRDQN
+from rltf.tf_utils  import tf_utils
 
 
 class QRDQN_IDS(DQN_IDS, QRDQN):

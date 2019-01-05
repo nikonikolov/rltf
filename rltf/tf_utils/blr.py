@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from rltf.models.tf_utils import woodburry_inverse
+from rltf.tf_utils import tf_inv
 
 
 class BLR(tf.layers.Layer):
@@ -137,7 +137,7 @@ class BLR(tf.layers.Layer):
 
     # Compute the posterior covariance matrix
     X_norm  = 1.0 / self.sigma * X
-    w_Sigma = woodburry_inverse(self.w_Sigma, tf.transpose(X_norm), X_norm)
+    w_Sigma = tf_inv.woodburry_inverse(self.w_Sigma, tf.transpose(X_norm), X_norm)
 
     error = tf.losses.mean_squared_error(tf.matmul(w_Lambda, w_Sigma), tf.eye(self.w_dim))
     tf.summary.scalar("debug/BLR/inv_error", error)

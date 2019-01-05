@@ -1,8 +1,7 @@
 import tensorflow as tf
 
 from rltf.models      import DDQN
-from rltf.models      import tf_utils
-from rltf.models.blr  import BLR
+from rltf.tf_utils    import BLR, tf_utils
 
 
 class BDQN(DDQN):

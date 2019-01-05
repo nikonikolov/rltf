@@ -1,8 +1,8 @@
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models import BaseDQN
-from rltf.models import tf_utils
+from rltf.models    import BaseDQN
+from rltf.tf_utils  import tf_ops
 
 
 class C51(BaseDQN):
@@ -88,7 +88,7 @@ class C51(BaseDQN):
       `tf.Tensor` of shape `[None, N]`
     """
     n_actions   = self.n_actions
-    target_z    = tf_utils.softmax(target_net, axis=-1)
+    target_z    = tf_ops.softmax(target_net, axis=-1)
 
     # Get the target Q probabilities for the greedy action; output shape [None, N]
     target_q    = tf.reduce_sum(target_z * self.bins, axis=-1)            # out: [None, n_actions]
@@ -221,7 +221,7 @@ class C51(BaseDQN):
     # The only loss implementation which works with _project_distribution_algo
     logits_z  = estimate
     target_z  = target
-    entropy   = -tf.reduce_sum(target_z * tf.log(tf_utils.softmax(logits_z, axis=-1)), axis=-1)
+    entropy   = -tf.reduce_sum(target_z * tf.log(tf_ops.softmax(logits_z, axis=-1)), axis=-1)
     loss      = tf.reduce_mean(entropy)
 
     tf.summary.scalar(name, loss)
@@ -231,7 +231,7 @@ class C51(BaseDQN):
 
   def _act_train(self, agent_net, name):
     # Compute the Q-function as expectation of Z; output shape [None, n_actions]
-    z       = tf_utils.softmax(agent_net, axis=-1)
+    z       = tf_ops.softmax(agent_net, axis=-1)
     q       = tf.reduce_sum(z * self.bins, axis=-1)
     action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
 
@@ -261,7 +261,7 @@ class C51(BaseDQN):
     assert (z is None) != (logits is None), "Only one of 'z' and 'logits' must be set"
 
     if logits is not None:
-      z = tf_utils.softmax(logits, axis=-1)
+      z = tf_ops.softmax(logits, axis=-1)
     if q is None:
       q = tf.reduce_sum(z * self.bins, axis=-1, keepdims=True)
 

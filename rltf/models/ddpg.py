@@ -1,8 +1,8 @@
 import logging
 import tensorflow as tf
 
-from rltf.models import BaseQlearn
-from rltf.models import tf_utils
+from rltf.models    import BaseQlearn
+from rltf.tf_utils  import tf_utils
 
 
 logger = logging.getLogger(__name__)

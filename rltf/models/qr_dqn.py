@@ -1,8 +1,8 @@
 import numpy      as np
 import tensorflow as tf
 
-from rltf.models import BaseDQN
-from rltf.models import tf_utils
+from rltf.models    import BaseDQN
+from rltf.tf_utils  import tf_utils, tf_ops
 
 
 class QRDQN(BaseDQN):
@@ -141,7 +141,7 @@ class QRDQN(BaseDQN):
     # Quantile Huber Loss
     else:
       quant_weight  = tf.abs(quant_weight)
-      huber_loss    = tf_utils.huber_loss(td_z, delta=np.float32(self.k))
+      huber_loss    = tf_ops.huber_loss(td_z, delta=np.float32(self.k))
       quantile_loss = quant_weight * huber_loss               # out: [None, N, N]
 
     quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)    # Expected loss for each quntile
@@ -191,7 +191,7 @@ class QRDQN(BaseDQN):
   #     # Quantile Huber Loss
   #     else:
   #       quant_weight  = tf.abs(quant_weight)
-  #       huber_loss    = tf_utils.huber_loss(td_error, delta=np.float32(self.k))
+  #       huber_loss    = tf_ops.huber_loss(td_error, delta=np.float32(self.k))
   #       quantile_loss = quant_weight * huber_loss         # out: [None, N]
 
   #     # Compute the expected loss for this theta

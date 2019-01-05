@@ -1,8 +1,8 @@
 import tensorflow as tf
 
-from rltf.models  import DQN_IDS
-from rltf.models  import C51
-from rltf.models  import tf_utils
+from rltf.models    import DQN_IDS
+from rltf.models    import C51
+from rltf.tf_utils  import tf_utils
 
 
 class C51_IDS(DQN_IDS, C51):
