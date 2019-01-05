@@ -161,6 +161,12 @@ class BasePG(Model):
     return vf
 
 
+  @property
+  def adv_norm(self):
+    mean, var = tf.nn.moments(self.adv_ph, axes=[0], keep_dims=True)
+    return (self.adv_ph - mean) / (tf.sqrt(var) + 1e-8)
+
+
   def _act_train(self, pi, vf, name):
     action  = tf.identity(pi.sample(), name=name)
     logp    = pi.logp(action)

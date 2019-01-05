@@ -52,10 +52,11 @@ class PPO(BasePG):
     CLIP_RANGE = self.cliprange_ph
 
     # Compute the policy gradient loss
+    adv       = self.adv_norm
     logp      = pi.logp(self.act_ph)
     weights   = tf.exp(logp - self.old_logp_ph)
-    pg_loss_1 = weights * self.adv_ph
-    pg_loss_2 = tf.clip_by_value(weights, 1 - CLIP_RANGE, 1 + CLIP_RANGE) * self.adv_ph
+    pg_loss_1 = weights * adv
+    pg_loss_2 = tf.clip_by_value(weights, 1 - CLIP_RANGE, 1 + CLIP_RANGE) * adv
     pg_loss   = -tf.reduce_mean(tf.minimum(pg_loss_1, pg_loss_2))
 
     # Compute the policy entropy for Max-Ent learning

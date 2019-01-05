@@ -72,7 +72,7 @@ class PGBuffer(BaseBuffer):
     return obs, self.action[i], self.reward[i], self.done[i], self.vf[i], self.next_vf[i]
 
 
-  def compute_estimates(self, gamma, lam, next_vf=0, norm_adv=True):
+  def compute_estimates(self, gamma, lam, next_vf=0):
     """Compute the advantage estimates using the GAE(gamma, lambda) estimator and
     the value function targets using the TD(lambda) estimator
     Args:
@@ -80,8 +80,6 @@ class PGBuffer(BaseBuffer):
       lam: float. The value of lambda for GAE(gamma, lambda) and TD(lambda)
       next_vf: float. The value function estimate for the observation encountered after the
         last step. Must be 0 if the episode was done
-      norm_adv: bool. If True, the advantages will be normalized such that their mean is 0
-        and standard deviation is 1
     """
 
     # Assert that the buffer is exactly filled
@@ -99,10 +97,6 @@ class PGBuffer(BaseBuffer):
 
     # Compute TD(lambda)
     self.td_lambda = self.gae_lambda + self.vf
-
-    # Normalize advanatages
-    if norm_adv:
-      self.gae_lambda = (self.gae_lambda - np.mean(self.gae_lambda)) / (np.std(self.gae_lambda) + 1e-8)
 
 
   def get_data(self):

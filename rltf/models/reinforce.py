@@ -38,7 +38,7 @@ class REINFORCE(BasePG):
 
   def _compute_loss(self, pi, vf, tb_name):
     logp    = pi.logp(self.act_ph)
-    pg_loss = - tf.reduce_mean(logp * self.adv_ph)
+    pg_loss = - tf.reduce_mean(logp * self.adv_norm)
     vf_loss = tf.losses.mean_squared_error(self.ret_ph, vf)
     loss    = vf_loss + pg_loss
 
