@@ -31,6 +31,12 @@ class AgentPG(LoggingAgent):
 
     super().__init__(**agent_kwargs)
 
+    assert self.log_period % rollout_len == 0, "Log period must be divisible by rollout length"
+    if self.eval_len > 0:
+      assert self.eval_period % rollout_len == 0, "Eval period must be divisible by rollout length"
+    if self.save_period > np.inf:
+      assert self.save_period % rollout_len == 0, "Save period must be divisible by rollout length"
+
     self.env_train = Monitor(
                       env=env_maker('t'),
                       log_dir=self.model_dir,
@@ -45,7 +51,7 @@ class AgentPG(LoggingAgent):
                       mode='e',
                       log_period=self.eval_len,
                       video_spec=self.video_period,
-                      eval_period=self.eval_period * rollout_len,
+                      eval_period=self.eval_period,
                     )
 
     self.rollout_len  = rollout_len
@@ -72,24 +78,26 @@ class AgentPG(LoggingAgent):
       if self._terminate:
         break
 
+      step = t * self.rollout_len
+
       # Collect experience in the environment
       run_policy()
 
       # Train the model
       self._run_train_step(t)
 
-      if t % self.log_period == 0:
+      if step % self.log_period == 0:
         self.env_train.monitor.log_stats()
 
       # Stop and run evaluation procedure
-      if self.eval_len > 0 and t % self.eval_period == 0:
+      if self.eval_len > 0 and step % self.eval_period == 0:
         self._eval_agent()
 
       # Update the agent step - corresponds to number of epochs
-      self.agent_step = t
+      self.agent_step = step
 
       # Save **after** agent step is correct and completed
-      if t % self.save_period == 0:
+      if step % self.save_period == 0:
         self.save()
 
 
@@ -232,3 +240,7 @@ class AgentPG(LoggingAgent):
 
   def _reset(self):
     pass
+
+
+  def _append_log_spec(self):
+    return [ ( "pi_learn_rate", "f", self.model.pi_opt_conf.lr_value), ]
