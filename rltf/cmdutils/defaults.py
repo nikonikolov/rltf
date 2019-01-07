@@ -95,47 +95,6 @@ BstrapDQN_UCB = {**BstrapDQN, **dict(
 
 DQN_Ensemble = {**BstrapDQN}
 
-DQN_IDS = {**dqn_spec, **dict(
-  agent=agents.AgentDQN,
-  model=models.DQN_IDS,
-  huber_loss=True,
-  n_heads=10,                   # Number of bootstrap heads
-  n_stds=0.1,                   # Uncertainty scale for computing regret
-  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
-  epsilon_train=ArgSpec(ConstSchedule, value=0.0),
-  epsilon_eval=0.0,
-  target_update_period=40000,
-)}
-
-C51_IDS = {**dqn_spec, **dict(
-  agent=agents.AgentDQN,
-  model=models.C51_IDS,
-  huber_loss=False,
-  n_heads=10,                   # Number of bootstrap heads
-  n_stds=0.1,                   # Uncertainty scale for computing regret
-  V_min=-10,                    # Lower bound for distribution support
-  V_max=10,                     # Upper bound for distribution support
-  N=51,                         # Number of distribution atoms
-  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
-  epsilon_train=ArgSpec(ConstSchedule, value=0.0),
-  epsilon_eval=0.0,
-  target_update_period=40000,
-)}
-
-QRDQN_IDS = {**dqn_spec, **dict(
-  agent=agents.AgentDQN,
-  model=models.QRDQN_IDS,
-  huber_loss=True,              # Huber loss for the bootstrap network
-  n_heads=10,                   # Number of bootstrap heads
-  n_stds=0.1,                   # Uncertainty scale for computing regret
-  N=200,                        # Number of quantiles
-  k=1,                          # Quantile Huber loss order
-  opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=5e-5, epsilon=.01/32),
-  epsilon_train=ArgSpec(ConstSchedule, value=0.0),
-  epsilon_eval=0.0,
-  target_update_period=40000,
-)}
-
 BDQN = {**dqn_spec, **dict(
   agent=agents.AgentBDQN,
   model=models.BDQN,
@@ -278,9 +237,6 @@ MODELS = dict(
   BstrapDQN=BstrapDQN,
   BstrapDQN_UCB=BstrapDQN_UCB,
   DQN_Ensemble=DQN_Ensemble,
-  DQN_IDS=DQN_IDS,
-  C51_IDS=C51_IDS,
-  QRDQN_IDS=QRDQN_IDS,
   BDQN=BDQN,
   BDQN_TS=BDQN_TS,
   BDQN_UCB=BDQN_UCB,

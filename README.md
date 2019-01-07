@@ -26,6 +26,7 @@ RLTF is a research framework that provides high-quality implementations of commo
 
 
 Coming additions:
+ - Official release for DQN-IDS and C51-IDS
  - MPI support for policy gradients
  - Dueling DQN
  - Prioritized Experience Replay
