@@ -153,62 +153,6 @@ class QRDQN(BaseDQN):
     return loss
 
 
-  # def _compute_loss(self, estimate, target, name):
-  #   """Compute the QRDQN loss.
-  #   Args:
-  #     agent_net: `tf.Tensor`, shape `[None, N]. The tensor output from `self._compute_estimate()`
-  #     target_net: `tf.Tensor`, shape `[None, N]. The tensor output from `self._compute_target()`
-  #   Returns:
-  #     `tf.Tensor` of scalar shape `()`
-  #   """
-  #   z             = estimate
-  #   target_z      = target
-
-  #   # Compute the tensor of mid-quantiles
-  #   mid_quantiles = (np.arange(0, self.N, 1, dtype=np.float64) + 0.5) / float(self.N)
-  #   mid_quantiles = np.asarray(mid_quantiles, dtype=np.float32)
-  #   mid_quantiles = tf.constant(mid_quantiles[None, :], dtype=tf.float32)
-
-  #   def theta_loss(theta, target_thetas):
-  #     """
-  #     Args:
-  #       theta: tf.Tensor, shape `[None, 1]`. Estimated location for a single quantile
-  #       target_theta: tf.Tensor, shape `[None, N]`. Target quantile locations
-  #     Returns:
-  #       tf.Tensor of shape `[None]`
-  #     """
-  #     td_error      = theta - target_thetas               # out: [None, N]
-  #     indicator     = tf.to_float(td_error < 0.0)         # out: [None, N]
-
-  #     # Compute the quantile penalty weights
-  #     quant_weight  = mid_quantiles - indicator           # out: [None, N]
-  #     # Make sure no gradient flows through the indicator function. The penalty is only a scaling factor
-  #     quant_weight  = tf.stop_gradient(quant_weight)
-
-  #     # Pure Quantile Regression Loss
-  #     if self.k == 0:
-  #       quantile_loss = quant_weight * td_error           # out: [None, N]
-  #     # Quantile Huber Loss
-  #     else:
-  #       quant_weight  = tf.abs(quant_weight)
-  #       huber_loss    = tf_ops.huber_loss(td_error, delta=np.float32(self.k))
-  #       quantile_loss = quant_weight * huber_loss         # out: [None, N]
-
-  #     # Compute the expected loss for this theta
-  #     quantile_loss = tf.reduce_mean(quantile_loss, axis=-1)
-
-  #     return quantile_loss
-
-  #   thetas  = tf.split(z, self.N, axis=-1)                        # Split estimated quantiles
-  #   losses  = [theta_loss(theta, target_z) for theta in thetas]   # Compute loss for each quantile
-  #   loss    = tf.add_n(losses)                                    # Sum loss over all quantiles
-  #   loss    = tf.reduce_mean(loss)                                # Average loss over the batch
-
-  #   tf.summary.scalar(name, loss)
-
-  #   return loss
-
-
   def _act_train(self, agent_net, name):
     """Select the greedy action based on E[Z]
     Args:
