@@ -27,8 +27,8 @@ class C51_IDS(DQN_IDS, C51):
     self.rho2   = None
 
     # Use C51 algo projection and log loss
-    C51._project_distribution = C51._project_distribution_algo
-    C51._compute_loss = C51._compute_loss_algo
+    C51._project_distribution = self._c51_project_distribution_algo
+    C51._compute_loss = self._c51_compute_loss_algo
 
 
   def _conv_nn(self, x):
@@ -97,7 +97,7 @@ class C51_IDS(DQN_IDS, C51):
       Tuple of `tf.Tensor`s of shapes `[batch_size, n_heads]` and `[batch_size, N]`
     """
     q, z = agent_net["q_values"], agent_net["logits"]
-    q = DQN_IDS._compute_estimate(self, q)  # out: [None, n_heads]
+    q = DQN_IDS._compute_estimate(self, q)        # out: [None, n_heads]
     z = C51._compute_estimate(self, z)            # logits; out: [None, N]
     return dict(q_values=q, logits=z)
 
@@ -191,3 +191,69 @@ class C51_IDS(DQN_IDS, C51):
 
   def _act_eval(self, agent_net, name):
     return DQN_IDS._act_eval(self, agent_net["q_values"], name)
+
+
+  def _c51_project_distribution_algo(self, atoms, p):
+    """Project the distribution given by (atoms, p) onto the support of self.bins
+      using the loop in Algorithm 1 from the Categorical DQN paper (Bellemare et. al. 2017)
+    Args:
+      atoms: tf.Tensor, shape `[None, N]`. Atoms for the support of the distribution
+      p: tf.Tensor, shape `[None, N]`. Probability of each atom of the distribution
+    Returns:
+      tf.Tensor of shape `[None, N]`, which contains the projected distribution
+    """
+    def build_inds_tensors(bin_inds_lo, bin_inds_hi):
+      batch       = tf.shape(self.done_ph)[0]
+
+      batch_inds  = tf.range(0, limit=batch, delta=1, dtype=tf.int32)
+      batch_inds  = tf.expand_dims(batch_inds, axis=-1)               # out: [None, 1]
+      batch_inds  = tf.tile(batch_inds, [1, self.N])                  # out: [None, N]
+      batch_inds  = tf.expand_dims(batch_inds, axis=-1)               # out: [None, N, 1]
+
+      bin_inds_lo = tf.expand_dims(tf.to_int32(bin_inds_lo), axis=-1) # out: [None, N, 1]
+      bin_inds_hi = tf.expand_dims(tf.to_int32(bin_inds_hi), axis=-1) # out: [None, N, 1]
+      bin_inds_lo = tf.concat([batch_inds, bin_inds_lo], axis=-1)     # out: [None, N, 2]
+      bin_inds_hi = tf.concat([batch_inds, bin_inds_hi], axis=-1)     # out: [None, N, 2]
+
+      return bin_inds_lo, bin_inds_hi
+
+    target_z    = p
+
+    # Project the target distribution onto the support [V_min, V_max]
+    atoms       = tf.clip_by_value(atoms, self.V_min, self.V_max)
+
+    # Projected bin indices; output shape [None, N], dtype=float
+    bin_inds    = (atoms - self.V_min) / self.dz
+    bin_inds_lo = tf.floor(bin_inds)
+    bin_inds_hi = tf.ceil(bin_inds)
+
+    lo_add      = target_z * (bin_inds_hi - bin_inds)
+    hi_add      = target_z * (bin_inds - bin_inds_lo)
+
+    # Initialize the Variable holding the target distribution - gets reset to 0 every time
+    zeros       = tf.zeros_like(atoms, dtype=tf.float32)
+    target_z    = tf.Variable(0, trainable=False, dtype=tf.float32, validate_shape=False)
+    target_z    = tf.assign(target_z, zeros, validate_shape=False)
+
+    # Compute indices for scatter_nd_add
+    inds        = build_inds_tensors(bin_inds_lo, bin_inds_hi)
+    bin_inds_lo = inds[0]     # out: [None, N, 2]
+    bin_inds_hi = inds[1]     # out: [None, N, 2]
+
+    with tf.control_dependencies([target_z]):
+      target_z  = tf.scatter_nd_add(target_z, bin_inds_lo, lo_add, use_locking=True)
+      target_z  = tf.scatter_nd_add(target_z, bin_inds_hi, hi_add, use_locking=True)
+
+    return target_z
+
+
+  def _c51_compute_loss_algo(self, estimate, target, name):
+    # The only loss implementation which works with _project_distribution_algo
+    logits_z  = estimate
+    target_z  = target
+    entropy   = -tf.reduce_sum(target_z * tf.log(tf_ops.softmax(logits_z, axis=-1)), axis=-1)
+    loss      = tf.reduce_mean(entropy)
+
+    tf.summary.scalar(name, loss)
+
+    return loss
