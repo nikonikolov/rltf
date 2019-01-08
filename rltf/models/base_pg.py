@@ -43,7 +43,7 @@ class BasePG(Model):
     if self.discrete:
       self.act_dim    = act_space.n
       self.act_shape  = []
-      self.act_dtype  = tf.uint8 if act_space.n <= 256 else tf.int32
+      self.act_dtype  = tf.int32
     else:
       self.act_dim    = act_space.shape[0]
       self.act_shape  = [self.act_dim]
@@ -133,7 +133,7 @@ class BasePG(Model):
 
       # Use Categorical distribution
       if self.discrete:
-        pd = tf_dist.CategoricalPD(pi_out)
+        pd = tf.distributions.Categorical(logits=pi_out)
 
       # Use Gaussian distribution
       else:
@@ -145,7 +145,7 @@ class BasePG(Model):
           mean    = pi_out
           logstd  = tf.get_variable("logstd", shape=[1, n_outputs], initializer=tf.zeros_initializer())
 
-        pd = tf_dist.DiagGaussianPD(mean, logstd)
+        pd = tf_dist.MultivariateNormalDiag(mean, logstd)
 
     return pd
 
@@ -180,7 +180,7 @@ class BasePG(Model):
       action = tf.identity(tf.argmax(pi.logits, axis=-1), name=name)
     # If the policy is Gaussian, we want the mean action during evaluation
     else:
-      action = tf.identity(pi.mean, name=name)
+      action = tf.identity(pi.mean(), name=name)
 
     return dict(action=action)
 

@@ -2,146 +2,93 @@ import numpy      as np
 import tensorflow as tf
 
 
-class ProbabilityDistribution:
-  """Probability distribution class"""
-
-  def sample(self):
-    raise NotImplementedError()
-
-  def log_prob(self, x):
-    """Compute the log probability of x
-    Args:
-      x: tf.Tensor. Shape varies by class
-    Returns:
-      tf.Tensor of shape `[None]` and containing the log probabilities. Size is determined by batch_size
-    """
-    raise NotImplementedError()
-
-  def entropy(self):
-    """Compute the entropy H(p) = - E_p [log p], where p = self
-    Returns:
-      tf.Tensor of shape `[None]`. The size is determined by the batch size
-    """
-    raise NotImplementedError()
-
-  def kl_divergence(self, other):
-    """Compute D_KL(self || other)
-    Returns:
-      tf.Tensor of shape `[None]`. The size is determined by the batch size
-    """
-    raise NotImplementedError()
-
-
-
-class CategoricalPD(ProbabilityDistribution):
-  """Categorical distribution class"""
-
-  def __init__(self, logits):
-    """
-    Args:
-      logits: tf.Tensor, shape=[batch_size, n_classes]. Logits for the class probabilities
-    """
-    assert logits.shape.ndims == 2
-    self.logits = logits
-
-
-  def sample(self):
-    """
-    Returns:
-      tf.Tensor of shape `[batch_size]`. Contains the indices of the sampled classes
-    """
-    return tf.squeeze(tf.multinomial(self.logits, num_samples=1), axis=-1)
-
-
-  def log_prob(self, x):
-    """
-    Args:
-      x: tf.Tensor, shape=`[batch_size]`. The class for which to compute logp
-    Returns:
-      tf.Tensor of shape `[batch_size]`
-    """
-    assert x.shape.ndims == 1
-    if x.dtype.base_dtype == tf.uint8:
-      x = tf.cast(x, dtype=tf.int32)
-    #pylint: disable=invalid-unary-operand-type
-    return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=x, logits=self.logits)
-
-
-  def entropy(self):
-    logits  = self.logits - tf.stop_gradient(tf.reduce_max(self.logits, axis=-1, keepdims=True))
-    exp     = tf.exp(logits)
-    Z       = tf.reduce_sum(exp, axis=-1, keepdims=True)
-    p       = exp / Z
-    entropy = tf.reduce_sum(p * (tf.log(Z) - logits), axis=-1)
-    return entropy
-
-
-  def kl_divergence(self, other):
-    assert isinstance(other, self.__class__)
-    assert self.logits.shape[-1] == other.logits.shape[-1]
-
-    plogits = self.logits  - tf.stop_gradient(tf.reduce_max(self.logits,  axis=-1, keepdims=True))
-    qlogits = other.logits - tf.stop_gradient(tf.reduce_max(other.logits, axis=-1, keepdims=True))
-    pexp    = tf.exp(plogits)
-    qexp    = tf.exp(qlogits)
-    pZ      = tf.reduce_sum(pexp, axis=-1, keepdims=True)
-    qZ      = tf.reduce_sum(qexp, axis=-1, keepdims=True)
-    pp      = pexp / pZ
-    kl      = tf.reduce_sum(pp * ((plogits - tf.log(pZ)) - (qlogits - tf.log(qZ))), axis=-1)
-    return kl
-
-
-
-class DiagGaussianPD(ProbabilityDistribution):
+class MultivariateNormalDiag(tf.distributions.Distribution):
   """Multivariate Gaussian distribution with diagonal covariance matrix"""
 
-  def __init__(self, mean, logstd):
+  def __init__(self, loc, log_scale=None, scale=None, validate_args=False, allow_nan_stats=True):
 
-    assert mean.shape.ndims   == 2
-    assert logstd.shape.ndims == 2
+    parameters = dict(locals())
 
-    self.mean   = mean                # [batch_size, self.dim]
-    self.logstd = logstd              # [batch_size, self.dim] or [1, self.dim]
-    self.std    = tf.exp(self.logstd)
-    self.dim    = self.mean.shape.as_list()[1]
+    assert log_scale.shape.ndims == 2
+    assert (log_scale is None) != (scale is None)
+
+    with tf.name_scope(self.__class__.__name__):
+
+      if log_scale is not None:
+        loc       = tf.identity(loc, name="loc")
+        scale     = tf.exp(log_scale, name="scale")
+        log_scale = tf.identity(log_scale, name="log_scale")
+      elif scale is not None:
+        with tf.control_dependencies([tf.assert_positive(scale)]):
+          loc       = tf.identity(loc, name="loc")
+          scale     = tf.identity(scale, name="scale")
+          log_scale = tf.log(scale, name="log_scale")
+
+      assert loc.dtype.base_dtype == tf.float32 or loc.dtype.base_dtype == tf.float64
+      assert loc.dtype.base_dtype == log_scale.dtype.base_dtype == scale.dtype.base_dtype
+
+    self.loc        = loc             # [batch_size, self.dim]
+    self.log_scale  = log_scale       # [batch_size, self.dim] or [1, self.dim]
+    self.scale      = scale           # [batch_size, self.dim] or [1, self.dim]
+    self.dim        = self.loc.shape.as_list()[1]
+
+    super().__init__(dtype=self.loc.dtype,
+                     reparameterization_type=tf.distributions.FULLY_REPARAMETERIZED,
+                     validate_args=validate_args,
+                     allow_nan_stats=allow_nan_stats,
+                     parameters=parameters,
+                    )
 
 
   def sample(self):
     """
     Returns:
       tf.Tensor of shape as `[None, self.dim]`. The size of the first dimension is
-        determined from self.mean
+        determined from self.loc
     """
-    return self.mean + tf.random_normal(shape=tf.shape(self.mean)) * self.std
+    return self.loc + tf.random_normal(shape=tf.shape(self.loc)) * self.scale
 
 
-  def log_prob(self, x):
+  def _log_prob(self, value):
     """
     Args:
-      x: tf.Tensor, shape=`[batch_size, self.dim]`
+      value: tf.Tensor, shape=`[batch_size, self.dim]`
     Returns:
       tf.Tensor of shape `[batch_size]`
     """
-    assert x.shape.ndims == self.mean.shape.ndims
-    logp = - 0.5 * tf.reduce_sum(tf.square((x - self.mean) / self.std), axis=-1) \
-           - 0.5 * np.log(2.0 * np.pi) * self.dim - tf.reduce_sum(self.logstd, axis=-1)
+    assert value.shape.ndims == self.loc.shape.ndims
+    logp = - 0.5 * tf.reduce_sum(tf.square((value - self.loc) / self.scale), axis=-1) \
+           - 0.5 * np.log(2.0 * np.pi) * self.dim - tf.reduce_sum(self.log_scale, axis=-1)
     return logp
 
 
-  def entropy(self):
-    return 0.5 * self.dim * (np.log(2*np.pi) + 1) + tf.reduce_sum(self.logstd, axis=-1)
+  def _entropy(self):
+    return 0.5 * self.dim * (np.log(2*np.pi) + 1) + tf.reduce_sum(self.log_scale, axis=-1)
 
 
-  def kl_divergence(self, other):
+  def _kl_divergence(self, other):
     assert isinstance(other, self.__class__)
     assert other.dim == self.dim
 
     return tf.reduce_sum( (
-                            0.5 * tf.square(self.std / other.std) +
-                            0.5 * tf.square((self.mean - other.mean) / other.std) +
-                            other.logstd - self.logstd
+                            0.5 * tf.square(self.scale / other.scale) +
+                            0.5 * tf.square((self.loc - other.loc) / other.scale) +
+                            other.log_scale - self.log_scale
                           ),
                           axis=-1) - 0.5 * self.dim
+
+
+  def _mean(self):
+    return self.loc
+
+
+  def _mode(self):
+    return self.loc
+
+
+  def _stddev(self):
+    return self.scale
+
 
   @property
   def dimension(self):
