@@ -4,33 +4,39 @@ import numpy as np
 import tensorflow as tf
 
 
-def conjugate_gradient(f_Av: Callable, b: tf.Tensor, iterations: int, tolerance=1e-10) -> tf.Tensor:
+def conjugate_gradient(f_Av: Callable, b: tf.Tensor, iterations: int, damping=0.0,
+                       tolerance=1e-10) -> tf.Tensor:
   """Compute the solution to Ax=b using the Conjugate Gradient method. Uses tf operations
   Args:
     b: tf.Tensor, shape `[None]`
     f_Av: lambda. Takes a vector `v` as argument and computes the matrix-vector product `Av`
     iterations: int. Number of iterations
+    damping: float. CG damping coefficient
     tolerance: float or tf.Tensor. Return `x`, if the square of the residual gets below this tolerance
   Returns:
     tf.Tensor of the same shape as `b` which contains the solution
   """
   assert b.shape.ndims == 1
+  assert tolerance > 0.0
 
   def cg_body(i, x, r, p, rTr):
     Ap      = f_Av(p)
+    if damping > 0.0:
+      Ap      = Ap + damping * p
     alpha   = rTr / tf.reduce_sum(p * Ap)
     x       = x + alpha * p
     r       = r + alpha * Ap
     rTr_    = tf.reduce_sum(tf.square(r))
-    beta    = rTr_ / rTr
+    # Make sure division by 0 is avoided
+    beta    = rTr_ / tf.maximum(rTr, tolerance)
     p       = - r + beta * p
     i       = tf.add(i, 1)
 
-    return i, x, r, p, rTr_
+    return [i, x, r, p, rTr_]
 
   #pylint: disable=unused-argument
   def cg_cond(i, x, r, p, rTr):
-    return tf.logical_and(tf.less(i, iterations), tf.greater(rTr, tolerance))
+    return tf.greater(rTr, tolerance)
 
   # Initial CG values
   x   = tf.zeros_like(b, dtype=tf.float32)  # [None, 1]
@@ -39,7 +45,18 @@ def conjugate_gradient(f_Av: Callable, b: tf.Tensor, iterations: int, tolerance=
   i   = tf.constant(0)
   rTr = tf.reduce_sum(tf.square(r))
 
-  _, x, _, _, _ = tf.while_loop(cg_cond, cg_body, loop_vars=[i, x, r, p, rTr])
+  # _, x, _, _, _ = tf.while_loop(cg_cond, cg_body, loop_vars=[i, x, r, p, rTr])
+
+  loop_vars = [i, x, r, p, rTr]
+
+  # Use unrolled loop; TF does not allow computing gradients inside a tf.while_loop
+  for _ in range(iterations):
+    cond      = cg_cond(*loop_vars)
+    update    = lambda: cg_body(*loop_vars)
+    identity  = lambda: loop_vars
+    loop_vars = tf.cond(pred=cond, true_fn=update, false_fn=identity)
+
+  x = loop_vars[1]
 
   return tf.check_numerics(x, message="Invalid Conjugate Gradient solution", name="cg_x")
 

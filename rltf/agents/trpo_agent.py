@@ -9,16 +9,15 @@ logger = logging.getLogger(__name__)
 
 class AgentTRPO(AgentPG):
 
-  def __init__(self, vf_batch_size, line_search_steps, max_kl, **agent_kwargs):
+  def __init__(self, vf_batch_size, line_search_steps, **agent_kwargs):
     """
     Args:
       vf_batch_size: int. Batch size for training the value function
       line_search_steps: int. Number of max line search iterations
-      max_kl: float. Maximum allowed KL divergence between the old and the new policy
     """
-    super().__init__(**agent_kwargs, max_kl=max_kl)
+    super().__init__(**agent_kwargs)
 
-    self.max_kl             = max_kl
+    self.max_kl             = self.model.pi_opt_conf.kwargs["max_kl"]
     self.vf_batch_size      = vf_batch_size
     self.line_search_steps  = line_search_steps
 
@@ -31,7 +30,7 @@ class AgentTRPO(AgentPG):
     # Update the old policy to match the current one
     self.sess.run(self.model.update_old_pi)
 
-    # Compute the policy surrogate gain before the update and the TNPG step
+    # Compute the TNPG step and the policy surrogate gain before the update
     pi_gain_lo, _ = self.sess.run([self.model.pi_gain, self.model.step_op], feed_dict=feed_dict)
 
     # Perform line search for the new policy
@@ -66,7 +65,7 @@ class AgentTRPO(AgentPG):
         return
 
       # Update the policy
-      self.sess.run(self.model.update_pi, feed_dict={self.model.step_size_ph: step_size})
+      self.sess.run(self.model.update_pi, feed_dict={self.model.pi_opt_conf.lr_ph: step_size})
 
       # Compute the policy surrogate gain and the KL divergence
       kl, pi_gain = self.sess.run([self.model.mean_kl, self.model.pi_gain], feed_dict=feed_dict)
@@ -88,3 +87,7 @@ class AgentTRPO(AgentPG):
       logger.info("Line search could not compute a good step")
       # Reset pi to its initial state
       self.sess.run(self.model.reset_pi)
+
+
+  def _append_log_spec(self):
+    return []

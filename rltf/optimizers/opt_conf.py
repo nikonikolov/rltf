@@ -15,7 +15,7 @@ class OptimizerConf:
       kwargs: dict. All additional keyword arguments will be passed on directly
         to the optimizer constructor
     """
-    if isinstance(learn_rate, float):
+    if learn_rate is None or isinstance(learn_rate, float):
       lr_schedule = ConstSchedule(learn_rate)
     elif isinstance(learn_rate, Schedule):
       lr_schedule = learn_rate
