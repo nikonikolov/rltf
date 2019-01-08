@@ -1,4 +1,4 @@
-from rltf.agents      import AgentPG
+from rltf.agents import AgentPG
 
 
 class AgentPPO(AgentPG):

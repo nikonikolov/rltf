@@ -9,3 +9,4 @@ from rltf.agents.dqn_agent    import AgentDQN
 from rltf.agents.dqn_agent    import AgentBDQN
 from rltf.agents.pg_agent     import AgentPG
 from rltf.agents.ppo_agent    import AgentPPO
+from rltf.agents.trpo_agent   import AgentTRPO

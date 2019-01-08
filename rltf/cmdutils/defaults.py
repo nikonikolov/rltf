@@ -224,6 +224,40 @@ PPO = dict(
 )
 
 
+# Defaults for PyBullet
+TRPO = dict(
+  agent=agents.AgentTRPO,
+  model=models.TRPO,
+  pi_opt_conf=None,
+  vf_opt_conf=ArgSpec(OptimizerConf, opt_type=tf.train.AdamOptimizer, learn_rate=1e-3),
+  vf_iters=5,                   # Number of value function training iterations per epochs
+  vf_batch_size=64,             # Batch size for training the model
+  # layers=[64, 64],              # Network layer sizes
+  layers=[32, 32],              # Network layer sizes
+  activation=tf.tanh,           # Network activation function
+  obs_norm=True,                # Normalize observations
+  nn_std=False,                 # If True, stddev of a Gaussian policy is a function of the state
+  ent_weight=0.1,               # Weight coefficient for entropy in the total loss
+  gamma=0.99,                   # Discount factor
+  lam=0.98,                     # Lambda value for GAE(gamma, lambda)
+  rollout_len=1024,             # Number of agent steps before taking a policy gradient step
+  max_kl=0.01,                  # Maximum allowed KL divergence between the old and the new policy
+  line_search_steps=10,         # Number of max line search iterations
+  cg_iters=10,                  # Number of Conjugate Gradient iterations
+  cg_damping=0.1,
+  stop_step=2048000,            # Total environment interaction steps
+  stack_frames=3,               # Number of stacked frames that make an observation
+  eval_period=40,               # Period of running evaluation (in number of *epochs*)
+  eval_len=4096,                # Lenght of each evaluation run (in number of *agent* steps)
+  log_period=10,                # Period for logging progress (in number of *epochs*)
+  video_period=1000,            # Period for recording episode videos (in number of episodes)
+  save_period=-1,               # Period for saving progress (in number of *epochs*)
+  # environment arguments
+  env_kwargs=ArgSpec(dict, max_ep_steps_train=None, max_ep_steps_eval=None, rew_scale=1.0),
+
+)
+
+
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -244,6 +278,7 @@ MODELS = dict(
   DDPG=DDPG,
   REINFORCE=REINFORCE,
   PPO=PPO,
+  TRPO=TRPO,
 )
 
 
