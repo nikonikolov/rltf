@@ -98,11 +98,11 @@ class TRPO(BasePG):
 
   def _compute_losses(self, pi, old_pi, vf):
     # Compute the KL divergence between the two policies
-    mean_kl = tf.reduce_mean(old_pi.kl(pi))
+    mean_kl = tf.reduce_mean(old_pi.kl_divergence(pi))
 
     # Compute the policy gradient maximization objective: advantage * p_new / p_old
-    pg_objective = self.adv_norm * tf.exp(pi.logp(self.act_ph) - self.old_logp_ph)
-    # pg_objective = self.adv_norm * tf.exp(pi.logp(self.act_ph) - old_pi.logp(self.act_ph))
+    pg_objective = self.adv_norm * tf.exp(pi.log_prob(self.act_ph) - self.old_logp_ph)
+    # pg_objective = self.adv_norm * tf.exp(pi.log_prob(self.act_ph) - old_pi.log_prob(self.act_ph))
     pg_objective = tf.reduce_mean(pg_objective)
 
     # Compute the policy entropy for Max-Ent learning

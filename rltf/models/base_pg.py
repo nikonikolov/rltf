@@ -169,7 +169,7 @@ class BasePG(Model):
 
   def _act_train(self, pi, vf, name):
     action  = tf.identity(pi.sample(), name=name)
-    logp    = pi.logp(action)
+    logp    = pi.log_prob(action)
     return dict(action=action, vf=vf, logp=logp)
 
 

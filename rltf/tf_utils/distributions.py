@@ -8,7 +8,7 @@ class ProbabilityDistribution:
   def sample(self):
     raise NotImplementedError()
 
-  def logp(self, x):
+  def log_prob(self, x):
     """Compute the log probability of x
     Args:
       x: tf.Tensor. Shape varies by class
@@ -24,7 +24,7 @@ class ProbabilityDistribution:
     """
     raise NotImplementedError()
 
-  def kl(self, other):
+  def kl_divergence(self, other):
     """Compute D_KL(self || other)
     Returns:
       tf.Tensor of shape `[None]`. The size is determined by the batch size
@@ -53,7 +53,7 @@ class CategoricalPD(ProbabilityDistribution):
     return tf.squeeze(tf.multinomial(self.logits, num_samples=1), axis=-1)
 
 
-  def logp(self, x):
+  def log_prob(self, x):
     """
     Args:
       x: tf.Tensor, shape=`[batch_size]`. The class for which to compute logp
@@ -76,7 +76,7 @@ class CategoricalPD(ProbabilityDistribution):
     return entropy
 
 
-  def kl(self, other):
+  def kl_divergence(self, other):
     assert isinstance(other, self.__class__)
     assert self.logits.shape[-1] == other.logits.shape[-1]
 
@@ -115,7 +115,7 @@ class DiagGaussianPD(ProbabilityDistribution):
     return self.mean + tf.random_normal(shape=tf.shape(self.mean)) * self.std
 
 
-  def logp(self, x):
+  def log_prob(self, x):
     """
     Args:
       x: tf.Tensor, shape=`[batch_size, self.dim]`
@@ -132,23 +132,16 @@ class DiagGaussianPD(ProbabilityDistribution):
     return 0.5 * self.dim * (np.log(2*np.pi) + 1) + tf.reduce_sum(self.logstd, axis=-1)
 
 
-  def kl(self, other):
+  def kl_divergence(self, other):
     assert isinstance(other, self.__class__)
     assert other.dim == self.dim
 
     return tf.reduce_sum( (
-                            0.5 * tf.square((self.std + (self.mean - other.mean)) / other.std)
-                            + other.logstd - self.logstd
+                            0.5 * tf.square(self.std / other.std) +
+                            0.5 * tf.square((self.mean - other.mean) / other.std) +
+                            other.logstd - self.logstd
                           ),
                           axis=-1) - 0.5 * self.dim
-    # return tf.reduce_sum( (
-    #                         0.5 * tf.square(tf.exp(self.logstd - other.std))
-    #                         + 0.5 * tf.square((self.mean - other.mean) / other.std)
-    #                         # + 0.5 * tf.square((self.mean - other.mean) / other.std)
-    #                         + other.logstd - self.logstd
-    #                       ),
-    #                       axis=-1) - 0.5 * self.dim
-
 
   @property
   def dimension(self):
