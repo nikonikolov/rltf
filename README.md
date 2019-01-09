@@ -40,7 +40,6 @@ in the corresponding papers. With tiny exceptions, all implementations should be
 equivalent to the ones described in the original papers.
 
 Implementations known to misbehave:
-- TRPO (in progress)
 - QR-DQN (in progress)
 
 
