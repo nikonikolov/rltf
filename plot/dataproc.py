@@ -45,21 +45,28 @@ class CurveData:
     Returns:
       tuple (x, y)
     """
-    assert self.i is None, "Not safe to filter data which depends on indices."
-    "Instead, first compute the y-values to eliminate the indices, then filter the data"
 
-    inds  = self.x % period == 0
-    steps = self.x[inds]
-    vals  = self.y[inds]
+    # Y-axis values have already been computed based on indices. len(self.y) != len(self.x)
+    if self.i is None:
 
-    assert steps[1:] - steps[:-1] == period, "Missing step in log"
+      inds  = self.x % period == 0
+      steps = self.x[inds]
+      vals  = self.y[inds]
 
-    # Check for correct parsing
-    assert len(vals) != 0 and len(steps) != 0, "Filtering incorrect:"
-    "len(x)=%d, len(y)=%d\nx: %s\ny: %s" % (len(steps), len(vals), steps, vals)
+      assert steps[1:] - steps[:-1] == period, "Missing step in log"
 
-    self.x = np.asarray(steps, dtype=np.int32)
-    self.y = np.asarray(vals,  dtype=np.float32)
+      # Check for correct parsing
+      assert len(vals) != 0 and len(steps) != 0, "Filtering incorrect:"
+      "len(x)=%d, len(y)=%d\nx: %s\ny: %s" % (len(steps), len(vals), steps, vals)
+
+      self.x = np.asarray(steps, dtype=np.int32)
+      self.y = np.asarray(vals,  dtype=np.float32)
+
+    # Y-axis values have not been computed. len(self.y) != len(self.x)
+    else:
+      inds  = self.x % period == 0
+      self.x = self.x[inds]
+      self.i = self.i[inds]
 
 
   def set_length(self, max_step, model_name):
@@ -163,15 +170,7 @@ class CurveData:
 
     self.y = np.asarray(y, dtype=np.float32)
 
-# NOT ALLOWED/IMPLEMENTED:
-# - Using TB and NP data simultaneously (i.e. falling back to one if the other does not exist)
-# - Processing eval and train data simultaneously
-# - Reading NP train data - no runs exist which have the steps !!! - need to convert them manually ...
 
-# TODO:
-# - Allow for scaling train axis (e.g. in terms of frames)
-# - For np train data, just create a function which approximately computes the values ...
-# - Forbid accessing data without the getter
 
 class DataWrapper:
 
@@ -213,8 +212,6 @@ class DataWrapper:
 
   @property
   def period(self):
-    return self.log_period
-
     # If no log_period provided on command line or not yet read, read the value from file
     if self.log_period is None:
 
@@ -227,8 +224,8 @@ class DataWrapper:
         data = json.load(f)
 
       log_period = data.get("log_period", None)
-      assert log_period is not None, "'log_period' not saved by Monitor. "
-        "You must provide correct value as argument"
+      assert log_period is not None, "'log_period' not saved by Monitor. \
+        You must provide correct value as argument"
 
       self.log_period = log_period
 
@@ -260,7 +257,7 @@ class DataWrapper:
     else:
       data = self._read_np_data()
       data = CurveData(**data)
-      # Cannot filter NP data before computing the values (because of episode indices) !!!
+      data.filter(period=self.period)
 
     # Set the data to match max_step in length
     data.set_length(max_step=self.max_step, model_name=self.model_name)
@@ -272,7 +269,6 @@ class DataWrapper:
     if self.data_type == "t":
       x = read_npy(os.path.join(self.model_path, "env_monitor/data/train_log_steps.npy"))
       y = read_npy(os.path.join(self.model_path, "env_monitor/data/train_ep_rews.npy"))
-      # i = read_npy(os.path.join(self.model_path, "env_monitor/data/train_ep_lens.npy"))
       i = read_npy(os.path.join(self.model_path, "env_monitor/data/train_log_inds.npy"))
 
     else:

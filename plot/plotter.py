@@ -62,8 +62,9 @@ def parse_cmd_args():
 
 def parse_args():
   args = parse_cmd_args()
-  conf = args.conf + ".json"
-  conf = dataio.read_conf(conf)
+
+  assert args.conf.endswith(".yml") or args.conf.endswith(".yaml")
+  conf = dataio.read_conf(args.conf)
 
   # Default to the conf name for output files
   if args.filename is None:
@@ -101,7 +102,6 @@ def parse_args():
 def make_figure(args, nplots):
   dpi = 100.0
 
-  # TODO: If custom figure values, take them into account
   ncols   = args.ncols
   nrows   = args.nrows
   width   = args.width  * ncols
@@ -307,7 +307,6 @@ def plot_histos(args, groups):
   envs    = sorted(groups.keys())
   nplots  = sum([len(labels) for env, labels in groups.items()])
 
-  # TODO: Add functionality for plotting on separate figures
   fig, axes = make_figure(args, nplots)
 
   i = 0
@@ -339,7 +338,6 @@ def plot_figure(args, groups):
   envs    = sorted(groups.keys())
   nplots  = len(envs)
 
-  # TODO: Add functionality for plotting on separate figures
   fig, axes = make_figure(args, nplots)
 
   # Plot each figure

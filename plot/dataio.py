@@ -1,4 +1,4 @@
-import json
+import yaml
 import os
 from collections import OrderedDict
 
@@ -6,8 +6,6 @@ import numpy as np
 import tensorflow as tf
 import tabulate
 
-CODE_DIR   = os.path.abspath(os.path.dirname(__file__))
-CONF_DIR   = os.path.join(CODE_DIR, "conf")
 
 def save_scores(scores, file, args):
   """Write scores in table format to a .txt file and to a .tex file (in latex format)
@@ -77,12 +75,10 @@ def get_model_dir(model, args):
 
 
 def read_conf(file):
-  file = os.path.join(CONF_DIR, file)
   if not os.path.exists(file):
-    raise ValueError("Configuration file does not exist")
+    raise ValueError("Configuration file {} does not exist".format(file))
   with open(file, 'r') as f:
-    # conf = json.load(f)
-    conf = json.load(f, object_pairs_hook=OrderedDict)
+    conf = yaml.load(f)
 
   assert "legend" in conf
   assert "root_dir" in conf
