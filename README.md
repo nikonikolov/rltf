@@ -14,8 +14,8 @@ RLTF is a research framework that provides high-quality implementations of commo
 | [C51](https://arxiv.org/abs/1707.06887)                   | [C51](rltf/models/c51.py)                       | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [QR-DQN](https://arxiv.org/abs/1710.10044)                | [QRDQN](rltf/models/qr_dqn.py)                  | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [Bootstrapped DQN](https://arxiv.org/pdf/1602.04621.pdf)  | [BstrapDQN](rltf/models/bstrap_dqn.py)          | [AgentDQN](rltf/agents/dqn_agent.py)   |
-| [Bootstrapped UCB](https://arxiv.org/pdf/1706.01502.pdf)  | [BstrapDQN_UCB](rltf/models/bstrap_dqn.py)      | [AgentDQN](rltf/agents/dqn_agent.py)   |
-| [DQN Ensemble](https://arxiv.org/pdf/1706.01502.pdf)      | [DQN_Ensemble](rltf/models/bstrap_dqn.py)       | [AgentDQN](rltf/agents/dqn_agent.py)   |
+| [Bootstrapped UCB](https://arxiv.org/pdf/1706.01502.pdf)  | [DQN_UCB](rltf/models/dqn_ucb.py)               | [AgentDQN](rltf/agents/dqn_agent.py)   |
+| [DQN Ensemble](https://arxiv.org/pdf/1706.01502.pdf)      | [DQN_Ensemble](rltf/models/dqn_ensemble.py)     | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [BDQN](https://arxiv.org/abs/1802.04412)                  | [BDQN](rltf/models/bdqn.py)                     | [AgentBDQN](rltf/agents/dqn_agent.py)  |
 | [DQN-IDS](https://arxiv.org/abs/1812.07544)               | [DQN-IDS](rltf/models/bstrap_dqn.py)            | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [C51-IDS](https://arxiv.org/abs/1812.07544)               | [C51-IDS](rltf/models/c51_ids.py)               | [AgentDQN](rltf/agents/dqn_agent.py)   |

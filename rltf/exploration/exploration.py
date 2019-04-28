@@ -1,11 +1,14 @@
+from abc import ABCMeta, abstractmethod
+
 from rltf.utils import seeding
 
 
-class ExplorationNoise:
+class ExplorationNoise(metaclass=ABCMeta):
 
   def __init__(self):
     self.prng = seeding.get_prng()
 
+  @abstractmethod
   def sample(self, t):
     """Get a sample from the noise process for the given time step
     Args:
@@ -13,8 +16,9 @@ class ExplorationNoise:
     Returns:
       float: the sampled noise value
     """
-    raise NotImplementedError()
+    pass
 
+  @abstractmethod
   def reset(self):
     """Reset the noise process"""
-    raise NotImplementedError()
+    pass

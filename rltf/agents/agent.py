@@ -3,6 +3,9 @@ import logging
 import os
 import re
 import signal
+
+from abc import ABCMeta, abstractmethod
+
 import numpy as np
 import tensorflow as tf
 
@@ -12,7 +15,7 @@ from rltf.utils import seeding
 logger = logging.getLogger(__name__)
 
 
-class Agent:
+class Agent(metaclass=ABCMeta):
   """Base class for a Reinforcement Learning agent"""
 
   def __init__(self,
@@ -239,9 +242,10 @@ class Agent:
     saver.restore(self.sess, self.reuse_ckpt)
 
 
+  @abstractmethod
   def _train(self):
     """Evaluate the agent. To be implemented by the inheriting class"""
-    raise NotImplementedError()
+    pass
 
 
   def _build(self):
@@ -249,34 +253,38 @@ class Agent:
     pass
 
 
+  @abstractmethod
   def _reset(self):
     """Reset method to be implemented by the inheriting class"""
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def _get_feed_dict(self, batch, t):
     """Get the placeholder parameters to feed to the model while training
     Args:
       t: int. Current timestep
       batch: dict. Data to pack in feed_dict
     """
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def _run_train_step(self, t):
     """Get the placeholder parameters to feed to the model while training
     Args:
       t: int. Current timestep
     """
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def _action_eval(self, state):
     """Return action selected by the agent for an evaluation step
     Args:
       state: np.array. Current state
     """
-    raise NotImplementedError()
+    pass
 
 
   def _eval_agent(self):

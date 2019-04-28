@@ -71,9 +71,9 @@ class DQN(BaseDQN):
   def _compute_estimate(self, agent_net):
     # Get the Q value for the selected action; output shape [None]
     a_mask  = tf.one_hot(self.act_t_ph, self.n_actions, dtype=tf.float32)
-    q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
+    qf      = tf.reduce_sum(agent_net * a_mask, axis=-1)
 
-    return q
+    return qf
 
 
   def _select_target(self, target_net):

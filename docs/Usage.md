@@ -49,7 +49,7 @@ Usage:
 ```bash
 python3 -m examples.run_dqn_agent --model=<model> --env_id=<env>
 ```
-Allowed models include: `DQN, DDQN, C51, QRDQN, BstrapDQN, BstrapDQN_UCB,
+Allowed models include: `DQN, DDQN, C51, QRDQN, BstrapDQN, DQN_UCB,
 DQN_Ensemble, DQN_IDS, C51_IDS, QRDQN_IDS, BDQN, BDQN_TS, BDQN_UCB, BDQN_IDS`
 
 From the Atari family only `<AtariEnv>NoFrameskip-v4` and `<AtariEnv>NoFrameskip-v0`
@@ -89,14 +89,14 @@ python3 -m examples.run_dqn_agent --model=DQN --env_id=PongNoFrameskip-v4 --opt_
 ### Restoring a Model
 
 ```bash
-python3 -m examples.run_dqn_agent --model=DQN --env_id=PongNoFrameskip-v4 --restore_model=trained_models/dqn/PongNoFrameskip-v4_2018-12-28_12.44.17
+python3 -m examples.run_dqn_agent --model=DQN --env_id=PongNoFrameskip-v4 --restore=trained_models/dqn/PongNoFrameskip-v4_2018-12-28_12.44.17
 ```
-This will restore the latest checkpoint in `--restore_model` and
+This will restore the latest checkpoint in `--restore` and
 continue training from where it left off.
 
 **NOTE**: You still need to make sure to provide the same `model`, `env_id`
 and hyperparameters that were used to launch the original model. Restoring
-the model won't create a new directory, but use the one provided in `--restore_model`.
+the model won't create a new directory, but use the one provided in `--restore`.
 
 
 ### Evaluating a Model

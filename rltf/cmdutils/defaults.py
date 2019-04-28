@@ -89,12 +89,15 @@ QRDQN = {**dqn_spec, **dict(
   epsilon_eval=0.001,
 )}
 
-BstrapDQN_UCB = {**BstrapDQN, **dict(
+DQN_UCB = {**BstrapDQN, **dict(
+  model=models.DQN_UCB,
   n_stds=0.1,
   target_update_period=40000,
 )}
 
-DQN_Ensemble = {**BstrapDQN}
+DQN_Ensemble = {**BstrapDQN, **dict(
+  model=models.DQN_Ensemble,
+)}
 
 BDQN = {**dqn_spec, **dict(
   agent=agents.AgentBDQN,
@@ -267,7 +270,7 @@ MODELS = dict(
   C51=C51,
   QRDQN=QRDQN,
   BstrapDQN=BstrapDQN,
-  BstrapDQN_UCB=BstrapDQN_UCB,
+  DQN_UCB=DQN_UCB,
   DQN_Ensemble=DQN_Ensemble,
   BDQN=BDQN,
   BDQN_TS=BDQN_TS,

@@ -67,8 +67,8 @@ class BaseBstrapDQN(BaseDQN):
     """
     a_mask  = tf.one_hot(self.act_t_ph, self.n_actions, dtype=tf.float32)
     a_mask  = tf.tile(tf.expand_dims(a_mask, axis=-2), [1, self.n_heads, 1])
-    q       = tf.reduce_sum(agent_net * a_mask, axis=-1)
-    return q
+    qf      = tf.reduce_sum(agent_net * a_mask, axis=-1)
+    return qf
 
 
   def _select_target(self, target_net):
@@ -244,44 +244,3 @@ class BstrapDQN(BaseBstrapDQN):
 
   def reset(self, sess):
     sess.run(self._set_act_head)
-
-
-
-class BstrapDQN_UCB(BaseBstrapDQN):
-  """UCB policy from Boostrapped DQN"""
-
-  def __init__(self, n_stds=0.1, **kwargs):
-    super().__init__(**kwargs)
-    self.n_stds = n_stds       # Number of standard deviations for computing uncertainty
-
-
-  def _act_train(self, agent_net, name):
-    mean    = tf.reduce_mean(agent_net, axis=1)
-    std     = agent_net - tf.expand_dims(mean, axis=-2)
-    std     = tf.sqrt(tf.reduce_mean(tf.square(std), axis=1))
-    action  = tf.argmax(mean + self.n_stds * std, axis=-1, output_type=tf.int32, name=name)
-
-    # Add debug histograms
-    tf.summary.histogram("debug/a_std",   std)
-    tf.summary.histogram("debug/a_mean",  mean)
-
-    return dict(action=action)
-
-
-  def _act_eval(self, agent_net, name):
-    return dict(action=self._act_eval_vote(agent_net, name))
-
-
-
-class DQN_Ensemble(BaseBstrapDQN):
-  """Ensemble policy from Boostrapped DQN"""
-
-  def _act_train(self, agent_net, name):
-    action = self._act_eval_vote(agent_net, name)
-    # Set the plottable tensors for episode recordings
-    self.plot_conf.set_train_spec(dict(eval_actions=self.plot_conf.true_eval_spec["eval_actions"]))
-    return dict(action=action)
-
-
-  def _act_eval(self, agent_net, name):
-    return dict(action=tf.identity(self.train_dict["action"], name=name))

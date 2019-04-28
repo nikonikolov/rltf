@@ -1,10 +1,12 @@
+from abc import ABCMeta, abstractmethod
+
 import tensorflow as tf
 
 from rltf.models    import Model
 from rltf.tf_utils  import tf_utils
 
 
-class BaseQlearn(Model):
+class BaseQlearn(Model, metaclass=ABCMeta):
   """Abstract Q-learning class"""
 
   def __init__(self):
@@ -73,12 +75,12 @@ class BaseDQN(BaseQlearn):
     self.obs_tp1  = tf_utils.preprocess_input(self.obs_tp1_ph)
 
     # Construct the Q-network and the target network
-    agent_net     = self._nn_model(self.obs_t,   scope="agent_net")
-    target_net    = self._nn_model(self.obs_tp1, scope="target_net")
+    agent_out     = self._nn_model(self.obs_t,   scope="agent_net")
+    target_out    = self._nn_model(self.obs_tp1, scope="target_net")
 
     # Compute the estimated Q-function and its backup value
-    estimate      = self._compute_estimate(agent_net)
-    target        = self._compute_target(target_net)
+    estimate      = self._compute_estimate(agent_out)
+    target        = self._compute_target(target_out)
 
     # Compute the loss
     loss          = self._compute_loss(estimate, target, name="train/loss")
@@ -95,8 +97,8 @@ class BaseDQN(BaseQlearn):
     update_target = tf_utils.assign_vars(target_vars, agent_vars, name="update_target")
 
     # Compute the train and eval actions
-    self.train_dict = self._act_train(agent_net, name="a_train")
-    self.eval_dict  = self._act_eval(agent_net,  name="a_eval")
+    self.train_dict = self._act_train(agent_out, name="a_train")
+    self.eval_dict  = self._act_eval(agent_out,  name="a_eval")
 
     self.train_op       = train_op
     self.update_target  = update_target
@@ -111,24 +113,28 @@ class BaseDQN(BaseQlearn):
         return self._dense_nn(x)
 
 
+  @abstractmethod
   def _conv_nn(self, x):
-    raise NotImplementedError()
+    pass
 
 
   def _dense_nn(self, x):
     raise NotImplementedError()
 
 
+  @abstractmethod
   def _act_train(self, agent_net, name):
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def _act_eval(self, agent_net, name):
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def _compute_estimate(self, agent_net):
-    raise NotImplementedError()
+    pass
 
 
   def _compute_target(self, target_net):
@@ -140,16 +146,19 @@ class BaseDQN(BaseQlearn):
     return backup
 
 
+  @abstractmethod
   def _select_target(self, target_net):
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def _compute_backup(self, target):
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def _compute_loss(self, estimate, target, name):
-    raise NotImplementedError()
+    pass
 
 
   def _build_train_op(self, optimizer, loss, agent_vars, name):

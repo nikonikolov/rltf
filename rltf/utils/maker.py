@@ -84,7 +84,7 @@ def make_model_dir(args, base=rltf_conf.MODELS_DIR):
   # Get the model, the env, values of restore and reuse
   model_type  = args.model
   env_id      = args.env_id
-  restore_dir = args.restore_model
+  restore_dir = args.restore
   reuse_dir   = args.load_model
 
   # If restoring, do not create a new directory

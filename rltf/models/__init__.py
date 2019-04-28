@@ -2,12 +2,12 @@ from rltf.models.model        import Model
 from rltf.models.base_dqn     import BaseQlearn
 from rltf.models.base_dqn     import BaseDQN
 from rltf.models.bstrap_dqn   import BstrapDQN
-from rltf.models.bstrap_dqn   import BstrapDQN_UCB
-from rltf.models.bstrap_dqn   import DQN_Ensemble
 from rltf.models.c51          import C51
 from rltf.models.ddpg         import DDPG
 from rltf.models.ddqn         import DDQN
 from rltf.models.dqn          import DQN
+from rltf.models.dqn_ucb      import DQN_UCB
+from rltf.models.dqn_ensemble import DQN_Ensemble
 from rltf.models.qr_dqn       import QRDQN
 from rltf.models.bdqn         import BDQN
 from rltf.models.bdqn         import BDQN_IDS

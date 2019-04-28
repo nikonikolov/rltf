@@ -161,8 +161,8 @@ class QRDQN(BaseDQN):
     Returns:
       `tf.Tensor` of shape `[None]`
     """
-    q       = tf.reduce_mean(agent_net, axis=-1)
-    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
+    qf      = tf.reduce_mean(agent_net, axis=-1)
+    action  = tf.argmax(qf, axis=-1, output_type=tf.int32, name=name)
 
     # Add debugging plot for the variance of the return
     z_var   = self._compute_z_variance(z=agent_net, normalize=True)  # [None, n_actions]
@@ -171,7 +171,7 @@ class QRDQN(BaseDQN):
 
     # Set plotting options
     p_a     = tf.identity(action[0],    name="plot/train/a")
-    p_q     = tf.identity(q[0],         name="plot/train/q")
+    p_q     = tf.identity(qf[0],        name="plot/train/qf")
     p_z_var = tf.identity(z_var[0],     name="plot/train/z_var")
 
     train_actions = {

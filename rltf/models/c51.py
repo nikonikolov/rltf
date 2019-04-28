@@ -166,11 +166,11 @@ class C51(BaseDQN):
   def _act_train(self, agent_net, name):
     # Compute the Q-function as expectation of Z; output shape [None, n_actions]
     z       = tf_ops.softmax(agent_net, axis=-1)
-    q       = tf.reduce_sum(z * self.bins, axis=-1)
-    action  = tf.argmax(q, axis=-1, output_type=tf.int32, name=name)
+    qf      = tf.reduce_sum(z * self.bins, axis=-1)
+    action  = tf.argmax(qf, axis=-1, output_type=tf.int32, name=name)
 
     # Add debugging plot for the variance of the return
-    z_var   = self._compute_z_variance(z=z, q=q, normalize=True)  # [None, n_actions]
+    z_var   = self._compute_z_variance(z=z, qf=qf, normalize=True)  # [None, n_actions]
     tf.summary.scalar("debug/z_var", tf.reduce_mean(z_var))
     tf.summary.histogram("debug/a_rho2", z_var)
 
@@ -181,12 +181,12 @@ class C51(BaseDQN):
     return dict(action=tf.identity(self.train_dict["action"], name=name))
 
 
-  def _compute_z_variance(self, z=None, logits=None, q=None, normalize=True):
+  def _compute_z_variance(self, z=None, logits=None, qf=None, normalize=True):
     """Compute the return distribution variance. Only one of `z` and `logits` must be set
     Args:
       z: tf.Tensor, shape `[None, n_actions, N]`. Return atoms probabilities
       logits: tf.Tensor, shape `[None, n_actions, N]`. Logits of the return
-      q: tf.Tensor, shape `[None, n_actions]`. Optionally provide a tensor for the Q-function
+      qf: tf.Tensor, shape `[None, n_actions]`. Optionally provide a tensor for the Q-function
       normalize: bool. If True, normalize the variance values such that the mean of the
         return variances of all actions in a given state is 1.
     Returns:
@@ -196,13 +196,13 @@ class C51(BaseDQN):
 
     if logits is not None:
       z = tf_ops.softmax(logits, axis=-1)
-    if q is None:
-      q = tf.reduce_sum(z * self.bins, axis=-1, keepdims=True)
+    if qf is None:
+      qf = tf.reduce_sum(z * self.bins, axis=-1, keepdims=True)
     else:
-      q = tf.reshape(q, [-1] + z.shape.as_list()[1:])
+      qf = tf.reshape(qf, [-1] + z.shape.as_list()[1:])
 
     # Var(X) = sum_x p(X)*[X - E[X]]^2
-    center  = self.bins - q                                   # out: [None, n_actions, N]
+    center  = self.bins - qf                                  # out: [None, n_actions, N]
     z_var   = tf.square(center) * z                           # out: [None, n_actions, N]
     z_var   = tf.reduce_sum(z_var, axis=-1)                   # out: [None, n_actions]
 

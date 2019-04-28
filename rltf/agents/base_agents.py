@@ -1,4 +1,6 @@
 import logging
+from abc import ABCMeta, abstractmethod
+
 import tensorflow as tf
 
 from rltf.agents import Agent
@@ -32,7 +34,7 @@ class ThreadedAgent(Agent):
 
 
 
-class LoggingAgent(Agent):
+class LoggingAgent(Agent, metaclass=ABCMeta):
   """Abstract Agent which takes care of logging training and evaluation progress to stdout
   and TensorBoard. Also takes care of saving data to disk and restoring it"""
 
@@ -101,6 +103,7 @@ class LoggingAgent(Agent):
     self.env_eval.monitor.save()
 
 
+  @abstractmethod
   def _run_summary_op(self, t, feed_dict):
     """Run the summary op and save the result in self.summary
     NOTE:
@@ -113,7 +116,7 @@ class LoggingAgent(Agent):
       t: int. Current time step
       feed_dict: dict. feed_dict to feed to sess.run
     """
-    raise NotImplementedError()
+    pass
 
 
   def _append_log_spec(self):

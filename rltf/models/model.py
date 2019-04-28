@@ -1,4 +1,6 @@
 import logging
+from abc import ABCMeta, abstractmethod
+
 import tensorflow as tf
 
 from rltf.monitoring import vplot_manager
@@ -6,7 +8,7 @@ from rltf.monitoring import vplot_manager
 logger = logging.getLogger(__name__)
 
 
-class Model:
+class Model(metaclass=ABCMeta):
   """The base class for operating a Reinforcement Learning deep net in TensorFlow.
   All network estimators descend from this class
   """
@@ -33,25 +35,29 @@ class Model:
     self._vars      = None  # List of all model variables
 
 
+  @abstractmethod
   def build(self):
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def initialize(self, sess):
     """Run additional initialization for the model when it was created via
     self.build(). Assumes that tf.global_variables_initializer() and
     tf.local_variables_initializer() have already been run
     """
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def reset(self, sess):
     """This method is called by the agent at the end of every episode. Allows for
     internal changes in the model that stay the same for the duration of the whole episode
     """
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def action_train_ops(self, sess, state, run_dict=None):
     """Compute the training action from the model and any additional tensors.
     Args:
@@ -61,9 +67,10 @@ class Model:
     Returns:
       dict of str-np.array pairs. Contains the action, additional model tensors and run_dict
     """
-    raise NotImplementedError()
+    pass
 
 
+  @abstractmethod
   def action_eval_ops(self, sess, state, run_dict=None):
     """Compute the action that should be taken in evaluation mode and any additional tensors.
     Args:
@@ -73,7 +80,7 @@ class Model:
     Returns:
       dict of str-np.array pairs. Contains the action, additional model tensors and run_dict
     """
-    raise NotImplementedError()
+    pass
 
 
   def _action_train_ops(self, sess, run_dict, feed_dict):

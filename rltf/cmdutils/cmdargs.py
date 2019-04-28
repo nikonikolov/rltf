@@ -41,7 +41,7 @@ def parse_args(model_choices):
   parser.add_argument('--tag',           default="",      type=str,   help='additional custom info')
 
   # Optional arguments
-  parser.add_argument('--restore_model', default=None,    type=str,
+  parser.add_argument('--restore', default=None,    type=str,
     help='(optional) directory path of existing model to restore and continue training')
   parser.add_argument('--load_model',    default=None,    type=str,
     help='(optional) directory path of existing model whose weights will be loaded initially')
@@ -129,8 +129,8 @@ def build_kwargs(kwargs):
 
 
 def verify_args(args):
-  # Only one of args.restore_model and args.load_model can be set
-  assert not (args.restore_model is not None and args.load_model is not None)
+  # Only one of args.restore and args.load_model can be set
+  assert not (args.restore is not None and args.load_model is not None)
 
   # When in play mode, model needs to be loaded
   if args.n_plays > 0:
@@ -139,10 +139,10 @@ def verify_args(args):
   else:
     args.mode = 'train'
 
-  if args.restore_model is not None:
-    args.restore_model = os.path.abspath(args.restore_model)
-    assert os.path.exists(args.restore_model)
-    assert os.path.basename(args.restore_model).startswith(args.env_id)
+  if args.restore is not None:
+    args.restore = os.path.abspath(args.restore)
+    assert os.path.exists(args.restore)
+    assert os.path.basename(args.restore).startswith(args.env_id)
 
   elif args.load_model is not None:
     args.load_model = os.path.abspath(args.load_model)
