@@ -162,8 +162,16 @@ class BaseDQN(BaseQlearn):
 
 
   def _build_train_op(self, optimizer, loss, agent_vars, name):
-    train_op = optimizer.minimize(loss, var_list=agent_vars, name=name)
+    grads     = self._compute_gradients(optimizer, loss, agent_vars)
+    train_op  = optimizer.apply_gradients(grads, name=name)
     return train_op
+
+
+  def _compute_gradients(self, optimizer, loss, agent_vars, gate_grads=True):
+    grads = optimizer.compute_gradients(loss, var_list=agent_vars)
+    if gate_grads:
+      grads = tf_utils.gate_gradients(grads)
+    return grads
 
 
   def initialize(self, sess):

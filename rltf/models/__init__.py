@@ -6,9 +6,12 @@ from rltf.models.c51          import C51
 from rltf.models.ddpg         import DDPG
 from rltf.models.ddqn         import DDQN
 from rltf.models.dqn          import DQN
+from rltf.models.dqn_ids      import DQN_IDS
 from rltf.models.dqn_ucb      import DQN_UCB
 from rltf.models.dqn_ensemble import DQN_Ensemble
 from rltf.models.qr_dqn       import QRDQN
+from rltf.models.c51_ids      import C51_IDS
+from rltf.models.qrdqn_ids    import QRDQN_IDS
 from rltf.models.bdqn         import BDQN
 from rltf.models.bdqn         import BDQN_IDS
 from rltf.models.bdqn         import BDQN_TS

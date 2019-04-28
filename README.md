@@ -17,7 +17,7 @@ RLTF is a research framework that provides high-quality implementations of commo
 | [Bootstrapped UCB](https://arxiv.org/pdf/1706.01502.pdf)  | [DQN_UCB](rltf/models/dqn_ucb.py)               | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [DQN Ensemble](https://arxiv.org/pdf/1706.01502.pdf)      | [DQN_Ensemble](rltf/models/dqn_ensemble.py)     | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [BDQN](https://arxiv.org/abs/1802.04412)                  | [BDQN](rltf/models/bdqn.py)                     | [AgentBDQN](rltf/agents/dqn_agent.py)  |
-| [DQN-IDS](https://arxiv.org/abs/1812.07544)               | [DQN-IDS](rltf/models/bstrap_dqn.py)            | [AgentDQN](rltf/agents/dqn_agent.py)   |
+| [DQN-IDS](https://arxiv.org/abs/1812.07544)               | [DQN-IDS](rltf/models/dqn_ids.py)               | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [C51-IDS](https://arxiv.org/abs/1812.07544)               | [C51-IDS](rltf/models/c51_ids.py)               | [AgentDQN](rltf/agents/dqn_agent.py)   |
 | [DDPG](https://arxiv.org/abs/1509.02971)                  | [DDPG](rltf/models/ddpg.py)                     | [AgentDDPG](rltf/agents/ddpg_agent.py) |
 | [REINFORCE](http://www-anw.cs.umass.edu/~barto/courses/cs687/williams92simple.pdf) | [REINFORCE](rltf/models/reinforce.py)           | [AgentPG](rltf/agents/pg_agent.py)     |
@@ -26,7 +26,6 @@ RLTF is a research framework that provides high-quality implementations of commo
 
 
 Coming additions:
- - Official release for DQN-IDS and C51-IDS
  - MPI support for policy gradients
  - Dueling DQN
  - Prioritized Experience Replay

@@ -106,6 +106,20 @@ def preprocess_input(x, norm=True, training=None, momentum=0.0):
   return x
 
 
+def gate_gradients(gradsvars):
+  """Make sure that all gradients are computed before being used
+  Args:
+    grads: list of tuples (grad, var)
+  Returns:
+    list of the same structure are grads
+  """
+  grads, variables = zip(*gradsvars)
+  grads = tf.tuple(list(grads))
+  variables = list(variables)
+  gradsvars = list(zip(grads, variables))
+  return gradsvars
+
+
 # ------------------------------------ INITIALIZERS ------------------------------------
 
 

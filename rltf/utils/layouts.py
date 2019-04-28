@@ -113,6 +113,144 @@ qrdqn_layout = {
 }
 
 
+ids_homoscedastic_layout = {
+  "width": 800,
+  "height": 300,
+  "obs_align": dict(vertical='center', horizontal='left'),
+  # "obs_scale": 1.0,
+  "figures": {
+    "train_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 620,
+      "height": -1,
+      "fig": {
+        "subplots": dict(nrows=3, ncols=1, sharex=True),
+        "subplots_conf": OrderedDict(
+          a_mean={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="MEAN", size=6),
+          },
+          a_std={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="STD", size=6),
+          },
+          a_ids={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="IDS", size=6),
+          },
+        ),
+        "subplots_common": {
+          "grid": dict(linewidth=0.2),
+          "tick_params": dict(axis='x', labelsize=6.5),
+        },
+        "fig_conf": {
+          "tight_layout": dict(pad=1.0, h_pad=0.0),
+        },
+      },
+      "plot_function": plot_highlight_bars,
+    },
+    "eval_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 620,
+      "height": -1,
+      "fig": {
+        "subplots": dict(nrows=1, ncols=1),
+        "subplots_conf": OrderedDict(
+          a_mean={
+            "set_title": dict(label="MEANS", size=8),
+            "tick_params": dict(axis='y', labelsize=8),
+          },
+          # a_vote={
+          #   "set_title": dict(label="VOTES", size=8),
+          #   "tick_params": dict(axis='y', labelsize=8),
+          # },
+        ),
+        "subplots_common": {
+          "tick_params": dict(axis='x', labelsize=6.5),
+        },
+        "fig_conf": {
+          "tight_layout": dict(pad=1.0, h_pad=0.0),
+        },
+      },
+      "plot_function": plot_highlight_bars,
+    },
+  }
+}
+
+
+ids_heteroscedastic_layout = {
+  "width": 840,
+  "height": 440,
+  "obs_align": dict(vertical='center', horizontal='left'),
+  # "obs_scale": 1.0,
+  "figures": {
+    "train_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 660,
+      "height": -1,
+      "fig": {
+        "subplots": dict(nrows=4, ncols=1, sharex=True),
+        "subplots_conf": OrderedDict(
+          a_mean={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="MEAN", size=6),
+          },
+          a_std={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="STD", size=6),
+          },
+          a_rho2={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label=r'$RHO^2$', size=6),
+          },
+          a_ids={
+            "tick_params": dict(axis='y', labelsize=5.5),
+            "set_title": dict(label="IDS", size=6),
+          },
+        ),
+        "subplots_common": {
+          "grid": dict(linewidth=0.2),
+          "tick_params": dict(axis='x', labelsize=6.5),
+        },
+        "fig_conf": {
+          "tight_layout": dict(pad=1.0, h_pad=0.0),
+        },
+      },
+      "plot_function": plot_highlight_bars,
+    },
+    "eval_actions": {
+      "align": dict(vertical='center', horizontal='right'),
+      "width": 660,
+      "height": -1,
+      "fig": {
+        "subplots": dict(nrows=1, ncols=1),
+        "subplots_conf": OrderedDict(
+          a_mean={
+            "set_title": dict(label="MEANS", size=8),
+            "tick_params": dict(axis='y', labelsize=8),
+          },
+          # a_vote={
+          #   "set_title": dict(label="VOTES", size=8),
+          #   "tick_params": dict(axis='y', labelsize=8),
+          # },
+        ),
+        "subplots_common": {
+          "tick_params": dict(axis='x', labelsize=6.5),
+        },
+        "fig_conf": {
+          "tight_layout": dict(pad=1.0, h_pad=0.0),
+        },
+      },
+      "plot_function": plot_highlight_bars,
+    },
+  }
+}
+
+
 layouts = {
   "QRDQN": qrdqn_layout,
+  "DQN_IDS": ids_homoscedastic_layout,
+  "BDQN_IDS": ids_homoscedastic_layout,
+  "C51_IDS": ids_heteroscedastic_layout,
+  "QRDQN_IDS": ids_heteroscedastic_layout,
 }

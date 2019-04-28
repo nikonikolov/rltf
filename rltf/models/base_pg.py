@@ -188,8 +188,8 @@ class BasePG(Model):
   def _build_train_op(self, loss, pi_vars, vf_vars, name=None):
     pi_opt    = self.pi_opt_conf.build()
     vf_opt    = self.vf_opt_conf.build()
-    train_pi  = pi_opt.minimize(loss, var_list=pi_vars)
-    train_vf  = vf_opt.minimize(loss, var_list=vf_vars)
+    train_pi  = pi_opt.minimize(loss, var_list=pi_vars, gate_gradients=pi_opt.GATE_GRAPH)
+    train_vf  = vf_opt.minimize(loss, var_list=vf_vars, gate_gradients=vf_opt.GATE_GRAPH)
     train_op  = tf.group(train_pi, train_vf, name=name)
 
     self.ops_dict["train_pi"] = train_pi

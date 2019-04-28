@@ -125,7 +125,7 @@ class BaseBstrapDQN(BaseDQN):
     return losses
 
 
-  def _build_train_op(self, optimizer, loss, agent_vars, name):
+  def _compute_gradients(self, optimizer, loss, agent_vars, gate_grads=True):
     x_heads = self._conv_out
 
     # Get the conv net and the heads variables
@@ -149,9 +149,11 @@ class BaseBstrapDQN(BaseDQN):
     # Group grads and apply them
     head_grads  = list(zip(head_grads, head_vars))
     grads       = head_grads + conv_grads
-    train_op    = optimizer.apply_gradients(grads, name=name)
 
-    return train_op
+    if gate_grads:
+      grads = tf_utils.gate_gradients(grads)
+
+    return grads
 
 
   def reset(self, sess):
